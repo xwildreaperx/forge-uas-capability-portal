@@ -6,6 +6,12 @@ import { getPortalData } from '../lib/data/portal.ts';
 import { findRelatedProblems } from '../lib/domain/matching.ts';
 import { filterProjects } from '../lib/domain/search.ts';
 import { formatTrackingId } from '../lib/domain/tracking.ts';
+import {
+  handoffCompleteness,
+  projectHandoffJson,
+  projectHandoffMarkdown,
+  projectHandoffText,
+} from '../lib/domain/handoff.ts';
 
 const createdProblemIds: number[] = [];
 const createdProjectIds: number[] = [];
@@ -210,5 +216,70 @@ describe('search, filtering, and related work', () => {
       },
     ]);
     assert.equal(matches[0]?.id, 'PRB-000001');
+  });
+});
+
+describe('portable AI handoff and governed knowledge', () => {
+  it('persists curated executive, AI-context, and reference-only metadata', async () => {
+    const problem = await db.problem.findFirstOrThrow();
+    const unit = await db.unit.findFirstOrThrow();
+    const project = await createProject({
+      name: 'Reference-only handoff test',
+      executiveSummary: 'Tests governed portable context.',
+      detailedDescription: 'The authoritative procedure is held outside FORGE.',
+      solutionApproach:
+        'Record discoverable metadata without sensitive detail.',
+      leadUnitId: unit.id,
+      problemIds: [problem.id],
+      unitIds: [unit.id],
+      documentationAvailability: 'AVAILABLE_FROM_ORIGINATOR',
+      executiveSummaryPlainLanguage:
+        'Leaders can discover the effort without exposing its procedure.',
+      problemPlainLanguage:
+        'Useful work becomes invisible when it cannot be described safely.',
+      solutionPlainLanguage:
+        'FORGE stores the approved capability-level description.',
+      impactPlainLanguage:
+        'Teams avoid duplicate effort and contact the right originator.',
+      aiContextNotes:
+        'Preserve the distinction between discoverability and possession.',
+      scope: 'Metadata, ownership, and approved capability effect.',
+      nextStep: 'Request the authoritative material through the originator.',
+      keyRisk: 'A receiving AI could invent intentionally withheld detail.',
+      leadershipAction: 'Reinforce approved information-handling channels.',
+      originatorContact: 'Test Unit knowledge manager',
+      accessInstructions:
+        'Contact the originator and follow the approved access process.',
+    });
+    createdProjectIds.push(project.id);
+
+    const persisted = await db.project.findUniqueOrThrow({
+      where: { id: project.id },
+    });
+    assert.equal(
+      persisted.documentationAvailability,
+      'AVAILABLE_FROM_ORIGINATOR',
+    );
+    assert.match(persisted.aiContextNotes ?? '', /discoverability/);
+
+    const data = await getPortalData();
+    const projected = data.projects.find(
+      (item) => item.id === project.trackingId,
+    )!;
+    const generated = new Date('2026-09-07T20:30:00.000Z');
+    const markdown = projectHandoffMarkdown(projected, generated);
+    const plain = projectHandoffText(projected, generated);
+    const json = JSON.parse(projectHandoffJson(projected, generated));
+
+    assert.match(markdown, /FORGE AI PROJECT HANDOFF/);
+    assert.match(markdown, /Do not reconstruct or invent it/);
+    assert.match(markdown, /Test Unit knowledge manager/);
+    assert.match(markdown, /UNCLASSIFIED INFORMATION ONLY/);
+    assert.doesNotMatch(plain, /\*\*/);
+    assert.equal(json.project.id, project.trackingId);
+    assert.equal(json.generated, generated.toISOString());
+    assert.ok(
+      ['Partial', 'Comprehensive'].includes(handoffCompleteness(projected)),
+    );
   });
 });

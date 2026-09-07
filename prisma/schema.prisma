@@ -17,6 +17,15 @@ enum SolutionType {
   HYBRID
 }
 
+enum DocumentationAvailability {
+  AVAILABLE_IN_FORGE
+  EXTERNAL_REFERENCE
+  AVAILABLE_FROM_ORIGINATOR
+  CONTROLLED_ACCESS
+  METADATA_ONLY
+  NOT_YET_DOCUMENTED
+}
+
 model TrackingCounter {
   entity String @id
   value  Int    @default(0)
@@ -73,38 +82,59 @@ model Problem {
 }
 
 model Project {
-  id                     Int               @id @default(autoincrement())
-  trackingId             String            @unique
-  name                   String
-  executiveSummary       String
-  detailedDescription    String
-  solutionApproach       String
-  solutionType           SolutionType      @default(ORGANIC_DEVELOPMENT)
-  status                 String
-  maturity               String
-  completion             Int
-  outcome                String?
-  keyAdvantage           String?
-  keyLimitation          String?
-  latestResult           String?
-  startDate              DateTime
-  expectedCompletionDate DateTime?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  leadUnitId             Int
-  leadUnit               Unit              @relation("LeadUnit", fields: [leadUnitId], references: [id])
-  problemLinks           ProblemProject[]
-  unitLinks              ProjectUnit[]
-  tags                   ProjectTag[]
-  locations              ProjectLocation[]
-  phases                 ProjectPhase[]
-  lessons                LessonLearned[]
-  repositories           RepositoryLink[]
-  activities             ActivityEvent[]
-  helpRequests           HelpRequest[]
-  vendorDetail           VendorDetail?
-  tacticDetail           TacticDetail?
-  trainingDetail         TrainingDetail?
+  id                            Int                       @id @default(autoincrement())
+  trackingId                    String                    @unique
+  name                          String
+  executiveSummary              String
+  detailedDescription           String
+  solutionApproach              String
+  solutionType                  SolutionType              @default(ORGANIC_DEVELOPMENT)
+  documentationAvailability     DocumentationAvailability @default(AVAILABLE_IN_FORGE)
+  executiveSummaryPlainLanguage String?
+  problemPlainLanguage          String?
+  solutionPlainLanguage         String?
+  impactPlainLanguage           String?
+  aiContextNotes                String?
+  scope                         String?
+  outOfScope                    String?
+  intendedUsers                 String?
+  successCriteria               String?
+  constraints                   String?
+  assumptions                   String?
+  architectureSummary           String?
+  methodologySummary            String?
+  decisionsSummary              String?
+  openIssues                    String?
+  nextStep                      String?
+  keyRisk                       String?
+  leadershipAction              String?
+  originatorContact             String?
+  accessInstructions            String?
+  status                        String
+  maturity                      String
+  completion                    Int
+  outcome                       String?
+  keyAdvantage                  String?
+  keyLimitation                 String?
+  latestResult                  String?
+  startDate                     DateTime
+  expectedCompletionDate        DateTime?
+  createdAt                     DateTime                  @default(now())
+  updatedAt                     DateTime                  @updatedAt
+  leadUnitId                    Int
+  leadUnit                      Unit                      @relation("LeadUnit", fields: [leadUnitId], references: [id])
+  problemLinks                  ProblemProject[]
+  unitLinks                     ProjectUnit[]
+  tags                          ProjectTag[]
+  locations                     ProjectLocation[]
+  phases                        ProjectPhase[]
+  lessons                       LessonLearned[]
+  repositories                  RepositoryLink[]
+  activities                    ActivityEvent[]
+  helpRequests                  HelpRequest[]
+  vendorDetail                  VendorDetail?
+  tacticDetail                  TacticDetail?
+  trainingDetail                TrainingDetail?
 }
 
 model VendorDetail {
@@ -289,12 +319,15 @@ model LessonLearned {
 }
 
 model RepositoryLink {
-  id          Int     @id @default(autoincrement())
-  projectId   Int
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name        String
-  url         String
-  description String
+  id                        Int                       @id @default(autoincrement())
+  projectId                 Int
+  project                   Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                      String
+  url                       String
+  description               String
+  artifactType              String?
+  documentationAvailability DocumentationAvailability @default(EXTERNAL_REFERENCE)
+  includeInAiHandoff        Boolean                   @default(true)
 }
 
 model ActivityEvent {

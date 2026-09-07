@@ -4,6 +4,10 @@ import {
   SOLUTION_TYPE_LABELS,
   type SolutionTypeValue,
 } from '../domain/solution-types.ts';
+import {
+  DOCUMENTATION_LABELS,
+  type DocumentationValue,
+} from '../domain/documentation.ts';
 
 const tones: Record<string, string> = {
   Concept: 'amber',
@@ -102,6 +106,34 @@ export async function getPortalData(): Promise<PortalData> {
         SOLUTION_TYPE_LABELS[p.solutionType as SolutionTypeValue],
       updatedAt: p.updatedAt.toISOString(),
       outcome: p.outcome ?? '',
+      documentationAvailability: p.documentationAvailability,
+      documentationLabel:
+        DOCUMENTATION_LABELS[p.documentationAvailability as DocumentationValue],
+      executiveSummaryPlainLanguage:
+        p.executiveSummaryPlainLanguage ?? p.executiveSummary,
+      problemPlainLanguage:
+        p.problemPlainLanguage ?? p.problemLinks[0]?.problem.title ?? '',
+      solutionPlainLanguage: p.solutionPlainLanguage ?? p.solutionApproach,
+      impactPlainLanguage: p.impactPlainLanguage ?? p.keyAdvantage ?? '',
+      aiContextNotes: p.aiContextNotes ?? '',
+      scope: p.scope ?? p.detailedDescription,
+      outOfScope: p.outOfScope ?? '',
+      intendedUsers: p.intendedUsers ?? '',
+      successCriteria: p.successCriteria ?? '',
+      constraints: p.constraints ?? p.keyLimitation ?? '',
+      assumptions: p.assumptions ?? '',
+      architectureSummary: p.architectureSummary ?? '',
+      methodologySummary: p.methodologySummary ?? '',
+      decisionsSummary: p.decisionsSummary ?? '',
+      openIssues: p.openIssues ?? '',
+      nextStep:
+        p.nextStep ??
+        'Review current evidence and plan the next evaluation milestone.',
+      keyRisk: p.keyRisk ?? p.keyLimitation ?? '',
+      leadershipAction:
+        p.leadershipAction ?? 'No leadership action required at this time.',
+      originatorContact: p.originatorContact ?? p.leadUnit.name,
+      accessInstructions: p.accessInstructions ?? '',
       tone: tones[p.maturity] ?? 'blue',
       solutionApproach: p.solutionApproach,
       keyAdvantage: p.keyAdvantage ?? '',
@@ -140,6 +172,13 @@ export async function getPortalData(): Promise<PortalData> {
         name: x.name,
         url: x.url,
         description: x.description,
+        artifactType: x.artifactType ?? 'Repository',
+        documentationAvailability: x.documentationAvailability,
+        documentationLabel:
+          DOCUMENTATION_LABELS[
+            x.documentationAvailability as DocumentationValue
+          ],
+        includeInAiHandoff: x.includeInAiHandoff,
       })),
       vendor: p.vendorDetail
         ? {

@@ -8,6 +8,14 @@ export default async function Page({
 }) {
   const { id } = await params;
   const data = await getPortalData();
-  if (!data.projects.some((x) => x.id === id)) notFound();
-  return <Portal initialData={data} initialView="Project" selectedId={id} />;
+  const project = data.projects.find((item) => item.id === id);
+  if (!project) notFound();
+  return (
+    <Portal
+      key={project.updatedAt}
+      initialData={data}
+      initialView="Project"
+      selectedId={id}
+    />
+  );
 }

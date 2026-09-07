@@ -1478,6 +1478,360 @@ main {
   gap: 7px;
   margin: 0 0 15px;
 }
+.executive-splash {
+  display: grid;
+  gap: 15px;
+}
+.executive-lead {
+  background: linear-gradient(135deg, #17352b, #245b48);
+  color: white;
+  border-radius: 12px;
+  padding: 28px;
+}
+.executive-lead .eyebrow {
+  color: #c9e8da !important;
+}
+.executive-lead h2 {
+  font-size: 25px;
+  line-height: 1.25;
+  max-width: 900px;
+  margin: 8px 0;
+}
+.executive-lead > p {
+  color: #d7e6df;
+  max-width: 800px;
+  line-height: 1.55;
+}
+.executive-status {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 22px;
+}
+.executive-status span {
+  background: #ffffff12;
+  border: 1px solid #ffffff25;
+  border-radius: 8px;
+  padding: 11px;
+}
+.executive-status small,
+.executive-status strong {
+  display: block;
+}
+.executive-status small {
+  color: #b9d0c6;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.executive-status strong {
+  font-size: 12px;
+  margin-top: 5px;
+}
+.executive-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.exec-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  min-height: 155px;
+}
+.exec-card h3 {
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 8px 0;
+}
+.exec-card > p:not(.eyebrow),
+.exec-card li {
+  color: #52605b;
+  line-height: 1.5;
+  font-size: 11px;
+}
+.exec-card ul {
+  padding-left: 18px;
+}
+.problem-card {
+  border-top: 3px solid #b65943;
+}
+.solution-card {
+  border-top: 3px solid var(--blue);
+}
+.risk-card {
+  border-top: 3px solid var(--amber);
+}
+.action-card {
+  background: #eef6f2;
+  border-color: #c9ded4;
+}
+.ownership-card {
+  grid-column: span 2;
+}
+.documentation-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+  color: var(--green);
+}
+.documentation-line small {
+  color: var(--muted);
+}
+.security-callout {
+  display: flex;
+  gap: 10px;
+  background: #fff7e8;
+  border: 1px solid #ead4a9;
+  border-left: 4px solid #a86717;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 13px 0;
+  color: #61461e;
+}
+.security-callout svg {
+  width: 19px;
+  flex: 0 0 auto;
+}
+.security-callout strong {
+  font-size: 11px;
+}
+.security-callout p {
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 3px 0 0 !important;
+  color: #70552c !important;
+}
+.security-callout.prominent {
+  padding: 18px;
+}
+.handoff-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 15px;
+}
+.handoff-intro,
+.handoff-document {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+}
+.handoff-intro h2 {
+  font-size: 22px;
+  margin: 5px 0;
+}
+.handoff-intro > p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.handoff-score {
+  background: var(--green-soft);
+  border-radius: 8px;
+  padding: 13px;
+  margin-top: 14px;
+}
+.handoff-score strong,
+.handoff-score span {
+  display: block;
+}
+.handoff-score strong {
+  color: var(--green);
+  font-size: 17px;
+}
+.handoff-score span {
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.handoff-intro dl {
+  margin: 15px 0;
+}
+.handoff-intro dl div {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+  font-size: 10px;
+}
+.handoff-intro dt {
+  color: var(--muted);
+}
+.handoff-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.handoff-toolbar > div {
+  display: flex;
+  gap: 5px;
+}
+.handoff-toolbar button {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 6px;
+  padding: 7px 9px;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 10px;
+}
+.handoff-toolbar button.selected {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.handoff-toolbar svg {
+  width: 13px;
+}
+.handoff-document pre {
+  margin: 0;
+  background: #182521;
+  color: #dfeae5;
+  border-radius: 8px;
+  padding: 18px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font:
+    11px/1.55 Consolas,
+    monospace;
+  max-height: 680px;
+  overflow: auto;
+}
+.guide-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  background: linear-gradient(135deg, #142f27, #2b6a54);
+  color: white;
+  border-radius: 13px;
+  padding: 31px;
+}
+.guide-hero h1 {
+  font-size: 30px;
+  margin: 6px 0;
+}
+.guide-hero p {
+  color: #cfdfd8;
+  max-width: 650px;
+}
+.guide-actions {
+  display: flex;
+  gap: 7px;
+}
+.guide-actions a {
+  text-decoration: none;
+}
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 13px;
+  margin: 15px 0;
+}
+.guide-grid .panel > svg {
+  color: var(--green);
+}
+.guide-grid p,
+.platform-instruction p {
+  color: #52605b;
+  line-height: 1.6;
+}
+.standalone-guide {
+  display: block;
+  max-width: 1200px;
+  margin: auto;
+  padding: 30px;
+}
+.form-security {
+  grid-column: 1/-1;
+  background: #fff7e8;
+  border-left: 3px solid var(--amber);
+  padding: 9px;
+  color: #6a4d24;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.wide-field {
+  grid-column: span 2;
+}
+.upload-warning {
+  background: #fff7e8;
+  padding: 9px;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #6a4d24;
+}
+.quick-form .checkline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.quick-form .checkline input {
+  width: auto;
+  margin: 0;
+}
+@media (max-width: 1000px) {
+  .executive-status {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .executive-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .handoff-layout {
+    grid-template-columns: 1fr;
+  }
+  .ownership-card {
+    grid-column: auto;
+  }
+}
+@media (max-width: 700px) {
+  .executive-grid,
+  .guide-grid {
+    grid-template-columns: 1fr;
+  }
+  .guide-hero {
+    display: block;
+  }
+  .guide-actions {
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .handoff-toolbar {
+    display: block;
+  }
+  .handoff-toolbar > div {
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+}
+@media print {
+  .sidebar,
+  .topbar,
+  .project-actions,
+  .view-toggle {
+    display: none !important;
+  }
+  .app-shell {
+    display: block;
+  }
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+  .executive-lead {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .executive-splash {
+    font-size: 11pt;
+  }
+  .exec-card {
+    break-inside: avoid;
+  }
+}
 .solution-strip div {
   background: white;
   border: 1px solid var(--line);

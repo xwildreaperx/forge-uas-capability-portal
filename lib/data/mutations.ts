@@ -8,6 +8,10 @@ import {
   validUrl,
 } from '../domain/validation.ts';
 import { solutionType } from '../domain/solution-types.ts';
+import {
+  DOCUMENTATION_LABELS,
+  type DocumentationValue,
+} from '../domain/documentation.ts';
 
 const optional = (value: unknown) =>
   typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -17,6 +21,10 @@ const detail = (input: Record<string, unknown>, key: string) =>
   input[key] && typeof input[key] === 'object'
     ? (input[key] as Record<string, unknown>)
     : {};
+const documentationValue = (value: unknown): DocumentationValue =>
+  typeof value === 'string' && value in DOCUMENTATION_LABELS
+    ? (value as DocumentationValue)
+    : 'AVAILABLE_IN_FORGE';
 
 export async function detectRelatedProblems(input: {
   title: string;
@@ -131,6 +139,22 @@ export async function createProject(input: Record<string, unknown>) {
           input.solutionApproach,
           'Solution approach',
         ),
+        documentationAvailability: documentationValue(
+          input.documentationAvailability,
+        ),
+        executiveSummaryPlainLanguage: optional(
+          input.executiveSummaryPlainLanguage,
+        ),
+        problemPlainLanguage: optional(input.problemPlainLanguage),
+        solutionPlainLanguage: optional(input.solutionPlainLanguage),
+        impactPlainLanguage: optional(input.impactPlainLanguage),
+        aiContextNotes: optional(input.aiContextNotes),
+        scope: optional(input.scope),
+        nextStep: optional(input.nextStep),
+        keyRisk: optional(input.keyRisk),
+        leadershipAction: optional(input.leadershipAction),
+        originatorContact: optional(input.originatorContact),
+        accessInstructions: optional(input.accessInstructions),
         status: typeof input.status === 'string' ? input.status : 'Planning',
         maturity:
           typeof input.maturity === 'string' ? input.maturity : 'Concept',
@@ -263,6 +287,30 @@ export async function updateProject(
       keyAdvantage: optional(input.keyAdvantage) ?? undefined,
       keyLimitation: optional(input.keyLimitation) ?? undefined,
       latestResult: optional(input.latestResult) ?? undefined,
+      documentationAvailability: input.documentationAvailability
+        ? documentationValue(input.documentationAvailability)
+        : undefined,
+      executiveSummaryPlainLanguage:
+        optional(input.executiveSummaryPlainLanguage) ?? undefined,
+      problemPlainLanguage: optional(input.problemPlainLanguage) ?? undefined,
+      solutionPlainLanguage: optional(input.solutionPlainLanguage) ?? undefined,
+      impactPlainLanguage: optional(input.impactPlainLanguage) ?? undefined,
+      aiContextNotes: optional(input.aiContextNotes) ?? undefined,
+      scope: optional(input.scope) ?? undefined,
+      outOfScope: optional(input.outOfScope) ?? undefined,
+      intendedUsers: optional(input.intendedUsers) ?? undefined,
+      successCriteria: optional(input.successCriteria) ?? undefined,
+      constraints: optional(input.constraints) ?? undefined,
+      assumptions: optional(input.assumptions) ?? undefined,
+      architectureSummary: optional(input.architectureSummary) ?? undefined,
+      methodologySummary: optional(input.methodologySummary) ?? undefined,
+      decisionsSummary: optional(input.decisionsSummary) ?? undefined,
+      openIssues: optional(input.openIssues) ?? undefined,
+      nextStep: optional(input.nextStep) ?? undefined,
+      keyRisk: optional(input.keyRisk) ?? undefined,
+      leadershipAction: optional(input.leadershipAction) ?? undefined,
+      originatorContact: optional(input.originatorContact) ?? undefined,
+      accessInstructions: optional(input.accessInstructions) ?? undefined,
     },
   });
 }
@@ -328,6 +376,15 @@ export async function addRepository(
       name: requiredString(input.name, 'Name'),
       url: validUrl(input.url),
       description: requiredString(input.description, 'Description'),
+      artifactType: optional(input.artifactType),
+      documentationAvailability: documentationValue(
+        input.documentationAvailability || 'EXTERNAL_REFERENCE',
+      ),
+      includeInAiHandoff:
+        input.includeInAiHandoff === false ||
+        input.includeInAiHandoff === 'false'
+          ? false
+          : true,
     },
   });
 }

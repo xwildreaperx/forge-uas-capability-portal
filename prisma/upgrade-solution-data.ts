@@ -33,6 +33,108 @@ async function main() {
       where: { trackingId: item.id },
       data: { name: item.name, solutionType: item.solutionType },
     });
+  await db.project.update({
+    where: { trackingId: 'PRJ-000001' },
+    data: {
+      executiveSummaryPlainLanguage:
+        'This Project is testing an airborne relay that can carry control and video signals around terrain that blocks the current ground system.',
+      problemPlainLanguage:
+        'Teams lose reliable communications when distance or terrain blocks the direct link to an aircraft.',
+      solutionPlainLanguage:
+        'We are building and field-testing an additional airborne communications node.',
+      impactPlainLanguage:
+        'Reliable communications increase usable range and flexibility without replacing the entire ground system.',
+      aiContextNotes:
+        'Use recorded evidence and distinguish demonstrated results from planned outcomes. All information is fictional and approved for this unclassified prototype.',
+      scope:
+        'Assess an airborne relay against the linked communications Problem and identify a practical transition recommendation.',
+      intendedUsers:
+        'UAS operators, capability developers, and decision-makers',
+      successCriteria:
+        'Repeatable control and video continuity around a terrain obstruction.',
+      architectureSummary:
+        'Ground control connects to an airborne relay, which forwards control and video links to the operating aircraft.',
+      methodologySummary:
+        'Staged bench integration followed by repeatable fictional field evaluation against documented criteria.',
+      decisionsSummary:
+        'The team selected an airborne relay after direct ground placement could not address the terrain mask.',
+      openIssues:
+        'Additional airborne-node burden and final mounting configuration.',
+      nextStep:
+        'Complete the next multi-unit field event and decide whether to transition the relay package.',
+      keyRisk:
+        'The additional airborne node adds equipment and operator burden.',
+      leadershipAction:
+        'Approve testing support for the next multi-unit event.',
+    },
+  });
+  await db.project.update({
+    where: { trackingId: 'PRJ-000004' },
+    data: {
+      executiveSummaryPlainLanguage:
+        'This Project is evaluating an existing commercial radio before leaders decide whether it is worth buying.',
+      problemPlainLanguage:
+        'Current communications do not remain reliable in all required terrain and distance conditions.',
+      solutionPlainLanguage:
+        'We are evaluating a commercially available networked radio.',
+      impactPlainLanguage:
+        'A suitable commercial product could provide capability sooner, but cost, integration, and sustainment must be understood first.',
+      aiContextNotes:
+        'Do not equate commercial availability with suitability. Retain test caveats and procurement uncertainty.',
+      scope:
+        'Evaluate performance, interoperability, cost, and sustainment before any procurement recommendation.',
+      architectureSummary:
+        'Commercial radios are evaluated as a networked replacement or adjunct to the current link.',
+      methodologySummary:
+        'Staged bench and field evaluation against documented performance and integration criteria.',
+      decisionsSummary:
+        'The team is evaluating before procurement rather than assuming commercial availability equals suitability.',
+      openIssues: 'Long-term support cost and full interoperability evidence.',
+      nextStep:
+        'Complete interoperability testing and prepare a procurement recommendation.',
+      keyRisk:
+        'The product may perform well but create unacceptable integration or sustainment costs.',
+      leadershipAction:
+        'No procurement decision is requested until evaluation evidence is complete.',
+    },
+  });
+  await db.project.update({
+    where: { trackingId: 'PRJ-000008' },
+    data: {
+      documentationAvailability: 'AVAILABLE_FROM_ORIGINATOR',
+      executiveSummaryPlainLanguage:
+        'This Project records a validated way to improve communications with equipment units already possess; the authoritative technique remains with the originator.',
+      problemPlainLanguage:
+        'Existing equipment can underperform when antennas are placed or aimed without accounting for terrain.',
+      solutionPlainLanguage:
+        'We are validating a different way to position and employ existing antennas.',
+      impactPlainLanguage:
+        'A reusable technique may improve performance quickly without buying new equipment.',
+      aiContextNotes:
+        'This is a metadata-only discovery record. Do not reconstruct or invent the authoritative technique.',
+      scope:
+        'Preserve approved metadata, validation status, general effect, and the route to the information owner.',
+      decisionsSummary:
+        'The originator retains the authoritative procedure; FORGE stores approved discovery metadata and general effect only.',
+      openIssues:
+        'Access to the authoritative technique requires coordination with the originator.',
+      nextStep:
+        'Coordinate with the originator for authorized access and adoption support.',
+      keyRisk:
+        'Units may apply an incomplete version if they do not obtain the authoritative documentation.',
+      leadershipAction: 'No leadership action required at this time.',
+      originatorContact: 'Fictional Unit H Capability Integration Office',
+      accessInstructions:
+        'Contact the originating Unit through the listed FORGE coordination channel to request approved supporting documentation.',
+    },
+  });
+  await db.repositoryLink.updateMany({
+    data: {
+      artifactType: 'Repository',
+      documentationAvailability: 'EXTERNAL_REFERENCE',
+      includeInAiHandoff: true,
+    },
+  });
   const vendor = await db.project.findUniqueOrThrow({
     where: { trackingId: 'PRJ-000004' },
   });

@@ -19,6 +19,20 @@ Persistent operations are server-side:
 - `lib/domain/` contains pure matching, search, validation, and tracking-ID logic.
 - `app/api/` exposes mutations and duplicate-work lookup. `app/page.tsx` loads the initial server projection.
 
+## Three knowledge experiences
+
+- **Executive** is a one-minute, plain-language brief with the problem, approach, demonstrated result, risk, next step, and leadership action.
+- **Technical** retains implementation detail, evidence, phases, Lessons Learned, artifact metadata, and relationship context.
+- **AI Handoff** generates a versioned, timestamped, portable Project package in Markdown, plain text, or JSON. Copy and download are explicit user actions; FORGE never transmits a handoff automatically.
+
+The canonical platform handoff is [`docs/FORGE_AI_USER_MANUAL.md`](docs/FORGE_AI_USER_MANUAL.md). It is available in the app through **Help & guidance** and **Give FORGE to My AI**.
+
+## Information handling and reference-only knowledge
+
+FORGE is designed for UNCLASSIFIED INFORMATION ONLY and is not a classification, declassification, sanitization, release, or security-review authority. Sensitive operational context should move through an authorized review and become an approved capability-level requirement before it is entered into FORGE.
+
+Projects and artifacts carry a Documentation Availability status. A record may deliberately contain only metadata, an originator, and access instructions. This is valid institutional knowledge: users and receiving AIs must contact the originator or approved source and must not reconstruct intentionally absent procedures.
+
 The database—not browser storage—is the source of truth. Client state is limited to navigation, filters, and view preferences.
 
 ## Important relationships
@@ -65,13 +79,13 @@ pnpm test
 pnpm build
 ```
 
-Tests cover both many-to-many relationships, the Lead Unit, tracking formats, persisted Problem/Project creation, conditional organic/vendor/TTP/training detail persistence, multi-Problem and multi-Unit links, exact ID/keyword search, solution-type/vendor filtering, and deterministic duplicate detection.
+Tests cover both many-to-many relationships, the Lead Unit, tracking formats, persisted Problem/Project creation, conditional organic/vendor/TTP/training detail persistence, multi-Problem and multi-Unit links, exact ID/keyword search, solution-type/vendor filtering, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
 
 ## Seed and persistence
 
 The fictional seed contains 12 Problems, 20 Solution Efforts, 12 Units across 8 locations, 40 phases, 20 Lessons Learned, and 44 activities. `PRB-000001 — Short RF Range` has five deliberately different pathways: organic relay development, a commercial radio evaluation, a directional-antenna technique, an RF-planning training package, and an existing-radio configuration improvement.
 
-Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems and conditional Solution Efforts persist through server routes and survive refresh/restart. Detail pages are addressable at `/problems/[id]`, `/projects/[id]`, and `/units/[id]`; project pages expose edit, phase, Lesson, and repository forms.
+Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical/AI Handoff views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems and conditional Solution Efforts persist through server routes and survive refresh/restart. Detail pages are addressable at `/problems/[id]`, `/projects/[id]`, and `/units/[id]`; project pages expose edit, phase, Lesson, and repository forms. `/guide` explains the operating model and provides the portable platform manual.
 
 All records are fictional and non-sensitive.
 
@@ -84,8 +98,7 @@ All records are fictional and non-sensitive.
 
 ## Recommended next pass
 
-1. Add URL-addressable Problem, Project, and Unit detail routes with missing-record states.
-2. Build forms over existing server mutations for Projects, edits, phases, Lessons, and repositories.
-3. Run integration tests against an isolated temporary database.
-4. Add visibility-aware authorization boundaries before authentication.
-5. Replace illustrative map/graph rendering only after relational workflows are complete.
+1. Run integration tests against an isolated temporary database.
+2. Add review/approval history for curated executive and AI-context fields.
+3. Add visibility-aware authorization boundaries before authentication.
+4. Replace illustrative map/graph rendering only after relational workflows are complete.

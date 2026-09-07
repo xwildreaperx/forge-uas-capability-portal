@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import type { PortalData } from '@/lib/data/types';
 import { SOLUTION_TYPES } from '@/lib/domain/solution-types';
+import { DOCUMENTATION_OPTIONS } from '@/lib/domain/documentation';
 
 export function CreateProjectModal({
   data,
@@ -47,6 +48,19 @@ export function CreateProjectModal({
             problemIds: form.getAll('problemIds').map(Number),
             tags: form.getAll('tags'),
             locations: form.getAll('locations'),
+            documentationAvailability: form.get('documentationAvailability'),
+            executiveSummaryPlainLanguage: form.get(
+              'executiveSummaryPlainLanguage',
+            ),
+            problemPlainLanguage: form.get('problemPlainLanguage'),
+            solutionPlainLanguage: form.get('solutionPlainLanguage'),
+            impactPlainLanguage: form.get('impactPlainLanguage'),
+            aiContextNotes: form.get('aiContextNotes'),
+            nextStep: form.get('nextStep'),
+            keyRisk: form.get('keyRisk'),
+            leadershipAction: form.get('leadershipAction'),
+            originatorContact: form.get('originatorContact'),
+            accessInstructions: form.get('accessInstructions'),
             vendor: {
               vendorName: form.get('vendorName'),
               productName: form.get('productName'),
@@ -110,6 +124,14 @@ export function CreateProjectModal({
         <p>
           Capture any pathway that addresses one or more capability problems.
         </p>
+        <div className="security-callout">
+          <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
+          <p>
+            Capture only approved capability requirements and information
+            appropriate for this environment. Do not include sensitive
+            operational source context.
+          </p>
+        </div>
         <label>
           Name
           <input name="name" required />
@@ -136,6 +158,69 @@ export function CreateProjectModal({
           Solution approach
           <textarea name="solutionApproach" required />
         </label>
+        <fieldset>
+          <legend>Executive communication</legend>
+          <label>
+            One-sentence summary
+            <textarea name="executiveSummaryPlainLanguage" />
+          </label>
+          <label>
+            The Problem in plain language
+            <textarea name="problemPlainLanguage" />
+          </label>
+          <label>
+            What we are doing
+            <textarea name="solutionPlainLanguage" />
+          </label>
+          <label>
+            Why it matters
+            <textarea name="impactPlainLanguage" />
+          </label>
+          <label>
+            Key risk
+            <input name="keyRisk" />
+          </label>
+          <label>
+            Next step
+            <input name="nextStep" />
+          </label>
+          <label>
+            Leadership action
+            <input
+              name="leadershipAction"
+              placeholder="No leadership action required at this time."
+            />
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Knowledge and AI continuity</legend>
+          <label>
+            Documentation availability
+            <select name="documentationAvailability">
+              {DOCUMENTATION_OPTIONS.map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Originator / contact
+            <input name="originatorContact" />
+          </label>
+          <label>
+            Access instructions
+            <textarea name="accessInstructions" />
+          </label>
+          <label>
+            AI Context Notes
+            <textarea name="aiContextNotes" />
+            <small>
+              Do not enter classified source context, secrets, or intentionally
+              withheld technical details.
+            </small>
+          </label>
+        </fieldset>
         <div className="form-grid">
           <label>
             Status

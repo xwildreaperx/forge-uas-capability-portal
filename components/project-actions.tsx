@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { PortalProject } from '@/lib/data/types';
+import { DOCUMENTATION_OPTIONS } from '@/lib/domain/documentation';
 
 type Action = 'edit' | 'phase' | 'lesson' | 'repository' | null;
 export function ProjectActions({ project }: { project: PortalProject }) {
@@ -51,6 +52,11 @@ export function ProjectActions({ project }: { project: PortalProject }) {
       </div>
       {action && (
         <form className="quick-form" onSubmit={submit}>
+          <p className="form-security">
+            <strong>UNCLASSIFIED INFORMATION ONLY.</strong> Enter only approved
+            capability abstractions and technical information appropriate for
+            this environment.
+          </p>
           {action === 'edit' && (
             <>
               <label>
@@ -83,6 +89,112 @@ export function ProjectActions({ project }: { project: PortalProject }) {
               <label>
                 Outcome
                 <input name="outcome" defaultValue={project.outcome} />
+              </label>
+              <label>
+                One-sentence executive summary
+                <textarea
+                  name="executiveSummaryPlainLanguage"
+                  defaultValue={project.executiveSummaryPlainLanguage}
+                />
+              </label>
+              <label>
+                Problem in plain language
+                <textarea
+                  name="problemPlainLanguage"
+                  defaultValue={project.problemPlainLanguage}
+                />
+              </label>
+              <label>
+                Solution in plain language
+                <textarea
+                  name="solutionPlainLanguage"
+                  defaultValue={project.solutionPlainLanguage}
+                />
+              </label>
+              <label>
+                Why it matters
+                <textarea
+                  name="impactPlainLanguage"
+                  defaultValue={project.impactPlainLanguage}
+                />
+              </label>
+              <label>
+                Key risk
+                <input name="keyRisk" defaultValue={project.keyRisk} />
+              </label>
+              <label>
+                Next step
+                <input name="nextStep" defaultValue={project.nextStep} />
+              </label>
+              <label>
+                Leadership action
+                <input
+                  name="leadershipAction"
+                  defaultValue={project.leadershipAction}
+                />
+              </label>
+              <label>
+                Documentation availability
+                <select
+                  name="documentationAvailability"
+                  defaultValue={project.documentationAvailability}
+                >
+                  {DOCUMENTATION_OPTIONS.map(([value, label]) => (
+                    <option value={value} key={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Originator / contact
+                <input
+                  name="originatorContact"
+                  defaultValue={project.originatorContact}
+                />
+              </label>
+              <label>
+                Access instructions
+                <textarea
+                  name="accessInstructions"
+                  defaultValue={project.accessInstructions}
+                />
+              </label>
+              <label className="wide-field">
+                AI Context Notes
+                <textarea
+                  name="aiContextNotes"
+                  defaultValue={project.aiContextNotes}
+                />
+                <small>
+                  Do not include classified source context, secrets,
+                  credentials, or information withheld from FORGE.
+                </small>
+              </label>
+              <label>
+                Architecture summary
+                <textarea
+                  name="architectureSummary"
+                  defaultValue={project.architectureSummary}
+                />
+              </label>
+              <label>
+                Methodology
+                <textarea
+                  name="methodologySummary"
+                  defaultValue={project.methodologySummary}
+                />
+              </label>
+              <label>
+                Major decisions
+                <textarea
+                  name="decisionsSummary"
+                  defaultValue={project.decisionsSummary}
+                />
+              </label>
+              <label>
+                Open issues
+                <textarea name="openIssues" defaultValue={project.openIssues} />
               </label>
             </>
           )}
@@ -143,6 +255,41 @@ export function ProjectActions({ project }: { project: PortalProject }) {
                 Description
                 <input name="description" required />
               </label>
+              <label>
+                Artifact type
+                <input
+                  name="artifactType"
+                  placeholder="Repository, report, dataset…"
+                />
+              </label>
+              <label>
+                Documentation availability
+                <select
+                  name="documentationAvailability"
+                  defaultValue="EXTERNAL_REFERENCE"
+                >
+                  {DOCUMENTATION_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <input type="hidden" name="includeInAiHandoff" value="false" />
+              <label className="checkline">
+                <input
+                  type="checkbox"
+                  name="includeInAiHandoff"
+                  value="true"
+                  defaultChecked
+                />{' '}
+                Include metadata in AI Handoff
+              </label>
+              <p className="form-security">
+                <strong>Do not upload classified material.</strong> FORGE does
+                not inspect files or determine classification. This prototype
+                stores reference metadata only.
+              </p>
             </>
           )}
           {error && <p className="form-error">{error}</p>}

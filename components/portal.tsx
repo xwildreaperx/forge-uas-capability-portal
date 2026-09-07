@@ -31,6 +31,7 @@ import { SOLUTION_TYPES } from '@/lib/domain/solution-types';
 import { useRouter } from 'next/navigation';
 import { CreateProjectModal } from './create-project-modal';
 import { ProjectActions } from './project-actions';
+import { AiHandoffView } from './ai-handoff-view';
 
 const DataContext = createContext<PortalData | null>(null);
 const useData = () => {
@@ -207,7 +208,7 @@ export function Portal({
           </nav>
           <div className="sidebar-foot">
             <div className="classification">FICTIONAL DATA</div>
-            <button className="nav-item">
+            <button className="nav-item" onClick={() => router.push('/guide')}>
               <HelpCircle size={17} /> Help & guidance
             </button>
             <div className="profile">
@@ -810,7 +811,9 @@ function ProjectView({
   onUnit: () => void;
   onRelated: () => void;
 }) {
-  const [technical, setTechnical] = useState(false);
+  const [experience, setExperience] = useState<
+    'executive' | 'technical' | 'ai'
+  >('executive');
   const { projects, units } = useData();
   const project =
     projects.find((x) => x.id === id) ??
@@ -832,97 +835,173 @@ function ProjectView({
         </div>
         <div className="view-toggle">
           <button
-            className={!technical ? 'selected' : ''}
-            onClick={() => setTechnical(false)}
+            className={experience === 'executive' ? 'selected' : ''}
+            onClick={() => setExperience('executive')}
           >
             Executive
           </button>
           <button
-            className={technical ? 'selected' : ''}
-            onClick={() => setTechnical(true)}
+            className={experience === 'technical' ? 'selected' : ''}
+            onClick={() => setExperience('technical')}
           >
             Technical
+          </button>
+          <button
+            className={experience === 'ai' ? 'selected' : ''}
+            onClick={() => setExperience('ai')}
+          >
+            AI Handoff
           </button>
         </div>
       </div>
       <ProjectActions project={project} />
-      {!technical ? (
-        <div className="detail-grid">
-          <section className="panel hero-summary">
-            <p className="eyebrow">EXECUTIVE SUMMARY</p>
-            <h2>{project.solutionApproach}</h2>
-            <p>
-              {project.keyAdvantage} {project.keyLimitation}
-            </p>
-            <div className="summary-metrics">
-              <div>
-                <strong>{project.progress}%</strong>
-                <span>Complete</span>
-              </div>
-              <div>
-                <strong>{project.phases.length}</strong>
-                <span>Project phases</span>
-              </div>
-              <div>
-                <strong>{project.lessons.length}</strong>
-                <span>Lessons captured</span>
-              </div>
-            </div>
-          </section>
-          <section className="panel">
-            <h2>Ownership & participation</h2>
-            <button className="unit-link" onClick={onUnit}>
-              <span>{lead.abbreviation.replace('Unit ', '')}</span>
-              <div>
-                <strong>{lead.name}</strong>
-                <small>Lead unit · {lead.location}</small>
-              </div>
-              <ChevronRight />
-            </button>
-            <p className="mini-label">PARTICIPATING UNITS</p>
-            <p>
-              {project.units.map((x) => `${x.name} (${x.role})`).join(' · ')}
-            </p>
-          </section>
-          <section className="panel">
-            <h2>Problems addressed</h2>
-            {project.problems.map((p) => (
-              <div className="linked-record" key={p.id}>
-                <AlertTriangle />
-                <div>
-                  <strong>
-                    {p.id} · {p.title}
-                  </strong>
-                  <small>
-                    {p.isPrimary ? 'Primary problem' : 'Related problem'}
-                  </small>
-                </div>
-              </div>
-            ))}
-            <button className="text-action" onClick={onRelated}>
-              Explore related work <ArrowRight />
-            </button>
-          </section>
-          <section className="panel">
-            <h2>Latest result</h2>
-            <span className="outcome good">
-              <Check /> {project.latestResult}
-            </span>
-            <p className="body-copy">
-              {project.keyAdvantage} Current limitation: {project.keyLimitation}
-            </p>
-          </section>
-        </div>
-      ) : (
+      {experience === 'executive' ? (
+        <ExecutiveSplash
+          project={project}
+          lead={lead}
+          onUnit={onUnit}
+          onRelated={onRelated}
+        />
+      ) : experience === 'technical' ? (
         <TechnicalView project={project} />
+      ) : (
+        <AiHandoffView project={project} />
       )}
     </>
+  );
+}
+
+function ExecutiveSplash({
+  project,
+  lead,
+  onUnit,
+  onRelated,
+}: {
+  project: PortalProject;
+  lead: PortalData['units'][number];
+  onUnit: () => void;
+  onRelated: () => void;
+}) {
+  const currentPhase =
+    project.phases.find((p) => p.status !== 'Complete') ??
+    project.phases.at(-1);
+  const copyOriginator = () =>
+    navigator.clipboard.writeText(
+      [project.originatorContact, project.accessInstructions]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  return (
+    <div className="executive-splash">
+      <section className="executive-lead">
+        <p className="eyebrow">ONE-MINUTE EXECUTIVE BRIEF</p>
+        <h2>{project.executiveSummaryPlainLanguage}</h2>
+        <p>{project.impactPlainLanguage}</p>
+        <div className="executive-status">
+          <span>
+            <small>Status</small>
+            <strong>{project.status}</strong>
+          </span>
+          <span>
+            <small>Maturity</small>
+            <strong>{project.maturity}</strong>
+          </span>
+          <span>
+            <small>Complete</small>
+            <strong>{project.progress}%</strong>
+          </span>
+          <span>
+            <small>Current phase</small>
+            <strong>{currentPhase?.name ?? 'Not yet phased'}</strong>
+          </span>
+          <span>
+            <small>Updated</small>
+            <strong>{new Date(project.updatedAt).toLocaleDateString()}</strong>
+          </span>
+        </div>
+      </section>
+      <div className="executive-grid">
+        <section className="exec-card problem-card">
+          <p className="eyebrow">THE PROBLEM</p>
+          <h3>{project.problemPlainLanguage}</h3>
+          <p>
+            {project.problems.map((p) => `${p.id} · ${p.title}`).join(' · ')}
+          </p>
+        </section>
+        <section className="exec-card solution-card">
+          <p className="eyebrow">WHAT WE ARE DOING</p>
+          <h3>{project.solutionPlainLanguage}</h3>
+          <span>{project.solutionTypeLabel}</span>
+        </section>
+        <section className="exec-card">
+          <p className="eyebrow">WHAT WE HAVE DEMONSTRATED</p>
+          <h3>
+            {project.latestResult ||
+              project.outcome ||
+              'Evidence collection is still underway.'}
+          </h3>
+          <ul>
+            {project.lessons.slice(0, 3).map((l) => (
+              <li key={l.id}>{l.finding}</li>
+            ))}
+          </ul>
+        </section>
+        <section className="exec-card risk-card">
+          <p className="eyebrow">KEY RISK / LIMITATION</p>
+          <h3>{project.keyRisk || 'No material risk has been recorded.'}</h3>
+          <p>
+            Uncertainty is retained until evidence supports a stronger claim.
+          </p>
+        </section>
+        <section className="exec-card">
+          <p className="eyebrow">NEXT MEANINGFUL STEP</p>
+          <h3>{project.nextStep}</h3>
+        </section>
+        <section className="exec-card action-card">
+          <p className="eyebrow">LEADERSHIP ACTION</p>
+          <h3>{project.leadershipAction}</h3>
+        </section>
+        <section className="exec-card ownership-card">
+          <p className="eyebrow">OWNERSHIP & KNOWLEDGE</p>
+          <button className="unit-link" onClick={onUnit}>
+            <span>{lead.abbreviation.replace('Unit ', '')}</span>
+            <div>
+              <strong>{lead.name}</strong>
+              <small>Originator · {lead.location}</small>
+            </div>
+            <ChevronRight />
+          </button>
+          <div className="documentation-line">
+            <strong>{project.documentationLabel}</strong>
+            {project.accessInstructions && (
+              <small>{project.accessInstructions}</small>
+            )}
+          </div>
+          {project.documentationAvailability !== 'AVAILABLE_IN_FORGE' && (
+            <button className="create" onClick={copyOriginator}>
+              Contact Originator · Copy Instructions
+            </button>
+          )}
+          <button className="text-action" onClick={onRelated}>
+            Explore related work <ArrowRight />
+          </button>
+        </section>
+      </div>
+    </div>
   );
 }
 
 function TechnicalView({ project }: { project: PortalProject }) {
   return (
     <div className="detail-grid">
+      <div className="security-callout span-2">
+        <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
+        <p>
+          Technical detail is not automatically classified, and generic-looking
+          information is not automatically safe. Record only information
+          approved for this environment.
+        </p>
+      </div>
       <SolutionDetail project={project} />
       <section className="panel span-2">
         <PanelHead
@@ -942,13 +1021,18 @@ function TechnicalView({ project }: { project: PortalProject }) {
       </section>
       <section className="panel">
         <h2>Technical artifacts</h2>
+        <p className="upload-warning">
+          <strong>Reference metadata only.</strong> Do not upload classified
+          material or information not authorized for this system. FORGE does not
+          determine file classification.
+        </p>
         {project.repositories.length ? (
           project.repositories.map((r) => (
             <Artifact
               key={r.id}
               icon={<GitBranch />}
               title={r.name}
-              meta={r.description}
+              meta={`${r.artifactType} · ${r.documentationLabel} · ${r.description}`}
             />
           ))
         ) : (
@@ -1614,6 +1698,14 @@ function CreateModal({
         <p className="eyebrow">NEW RECORD</p>
         <h2>Create capability problem</h2>
         <p>Capture an enduring gap before proposing a solution.</p>
+        <div className="security-callout">
+          <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
+          <p>
+            Enter an approved capability abstraction—not the sensitive
+            operation, mission, source, or scenario that generated the
+            requirement.
+          </p>
+        </div>
         <label>
           Problem title
           <input

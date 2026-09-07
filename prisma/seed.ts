@@ -215,6 +215,114 @@ async function main() {
         trackingId: tracking('PRJ', i + 1),
         name: projectNames[i],
         solutionType,
+        documentationAvailability:
+          i === 7 ? 'AVAILABLE_FROM_ORIGINATOR' : 'AVAILABLE_IN_FORGE',
+        executiveSummaryPlainLanguage:
+          i === 0
+            ? 'This Project is testing an airborne relay that can carry control and video signals around terrain that blocks the current ground system.'
+            : i === 3
+              ? 'This Project is evaluating an existing commercial radio before leaders decide whether it is worth buying.'
+              : i === 7
+                ? 'This Project records a validated way to improve communications with equipment units already possess; the authoritative technique remains with the originator.'
+                : null,
+        problemPlainLanguage:
+          i === 0
+            ? 'Teams lose reliable communications when distance or terrain blocks the direct link to an aircraft.'
+            : i === 3
+              ? 'Current communications do not remain reliable in all required terrain and distance conditions.'
+              : i === 7
+                ? 'Existing equipment can underperform when antennas are placed or aimed without accounting for terrain.'
+                : null,
+        solutionPlainLanguage:
+          i === 0
+            ? 'We are building and field-testing an additional airborne communications node.'
+            : i === 3
+              ? 'We are evaluating a commercially available networked radio.'
+              : i === 7
+                ? 'We are validating a different way to position and employ existing antennas.'
+                : null,
+        impactPlainLanguage:
+          i === 0
+            ? 'Reliable communications increase usable range and flexibility without replacing the entire ground system.'
+            : i === 3
+              ? 'A suitable commercial product could provide capability sooner, but cost, integration, and sustainment must be understood first.'
+              : i === 7
+                ? 'A reusable technique may improve performance quickly without buying new equipment.'
+                : null,
+        aiContextNotes: [0, 3, 7].includes(i)
+          ? 'Use recorded evidence and distinguish demonstrated results from planned outcomes. All information is fictional and approved for this unclassified prototype.'
+          : null,
+        scope: [0, 3, 7].includes(i)
+          ? 'Assess the selected pathway against the linked capability Problem, preserve evidence, and identify a practical transition recommendation.'
+          : null,
+        intendedUsers: [0, 3, 7].includes(i)
+          ? 'UAS operators, capability developers, and decision-makers'
+          : null,
+        successCriteria:
+          i === 0
+            ? 'Repeatable control and video continuity around a terrain obstruction.'
+            : i === 3
+              ? 'Documented performance, interoperability, cost, and sustainment recommendation.'
+              : i === 7
+                ? 'Repeatable improvement using existing authorized equipment.'
+                : null,
+        architectureSummary:
+          i === 0
+            ? 'Ground control connects to an airborne relay, which forwards the control and video links to the operating aircraft.'
+            : i === 3
+              ? 'Commercial radios are evaluated as a networked replacement or adjunct to the current link.'
+              : null,
+        methodologySummary: [0, 3, 7].includes(i)
+          ? 'Staged bench integration followed by repeatable fictional field evaluation against documented criteria.'
+          : null,
+        decisionsSummary:
+          i === 0
+            ? 'The team selected an airborne relay after direct ground placement could not address the terrain mask.'
+            : i === 3
+              ? 'The team is evaluating before procurement rather than assuming commercial availability equals suitability.'
+              : i === 7
+                ? 'The originator retains the authoritative procedure; FORGE stores approved discovery metadata and general effect only.'
+                : null,
+        openIssues:
+          i === 0
+            ? 'Additional airborne-node burden and final mounting configuration.'
+            : i === 3
+              ? 'Long-term support cost and full interoperability evidence.'
+              : i === 7
+                ? 'Access to the authoritative technique requires coordination with the originator.'
+                : null,
+        nextStep:
+          i === 0
+            ? 'Complete the next multi-unit field event and decide whether to transition the relay package.'
+            : i === 3
+              ? 'Complete interoperability testing and prepare a procurement recommendation.'
+              : i === 7
+                ? 'Coordinate with the originator for authorized access and adoption support.'
+                : null,
+        keyRisk:
+          i === 0
+            ? 'The additional airborne node adds equipment and operator burden.'
+            : i === 3
+              ? 'The product may perform well but create unacceptable integration or sustainment costs.'
+              : i === 7
+                ? 'Units may apply an incomplete version if they do not obtain the authoritative documentation.'
+                : null,
+        leadershipAction:
+          i === 0
+            ? 'Approve testing support for the next multi-unit event.'
+            : i === 3
+              ? 'No procurement decision is requested until evaluation evidence is complete.'
+              : i === 7
+                ? 'No leadership action required at this time.'
+                : null,
+        originatorContact:
+          i === 7
+            ? 'Fictional Unit H Capability Integration Office'
+            : lead.name,
+        accessInstructions:
+          i === 7
+            ? 'Contact the originating Unit through the listed FORGE coordination channel to request the approved supporting documentation.'
+            : null,
         executiveSummary: `${projectNames[i]} is a fictional ${maturity.toLowerCase()} effort connecting units, evidence, and lessons around shared capability problems.`,
         detailedDescription: `The team is evaluating a maintainable solution approach, documenting technical results, limitations, and transition considerations for reuse across the capability network.`,
         solutionApproach:
@@ -415,6 +523,9 @@ async function main() {
         url: `https://example.invalid/forge/project-${i + 1}`,
         description:
           'Fictional repository metadata for prototype demonstration.',
+        artifactType: 'Repository',
+        documentationAvailability: 'EXTERNAL_REFERENCE',
+        includeInAiHandoff: true,
       },
     });
     if (i % 6 === 1)
