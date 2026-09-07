@@ -6,6 +6,10 @@ export type PortalProject = {
   maturity: string;
   progress: number;
   status: string;
+  solutionType: string;
+  solutionTypeLabel: string;
+  updatedAt: string;
+  outcome: string;
   tone: string;
   solutionApproach: string;
   keyAdvantage: string;
@@ -15,12 +19,69 @@ export type PortalProject = {
   units: { id: string; name: string; role: string }[];
   tags: string[];
   locations: string[];
-  phases: { id: number; name: string; status: string; completion: number; summary: string; result: string }[];
-  lessons: { id: string; title: string; finding: string; recommendation: string }[];
-  repositories: { id: number; name: string; url: string; description: string }[];
+  phases: {
+    id: number;
+    name: string;
+    status: string;
+    completion: number;
+    summary: string;
+    result: string;
+  }[];
+  lessons: {
+    id: string;
+    title: string;
+    finding: string;
+    recommendation: string;
+  }[];
+  repositories: {
+    id: number;
+    name: string;
+    url: string;
+    description: string;
+  }[];
+  vendor: null | {
+    vendorName: string;
+    productName: string;
+    productUrl: string;
+    commercialAvailability: string;
+    estimatedUnitCost: string | number;
+    estimatedTotalCost: string | number;
+    procurementStatus: string;
+    evaluationStatus: string;
+    quantityEvaluated: string | number;
+    evaluationObjective: string;
+    integrationRequirements: string;
+    sustainmentNotes: string;
+    evaluationResult: string;
+    recommendation: string;
+  };
+  tactic: null | {
+    techniqueTitle: string;
+    techniqueDescription: string;
+    conditionsForUse: string;
+    preconditions: string;
+    requiredEquipment: string;
+    requiredTraining: string;
+    demonstratedEffect: string;
+    limitations: string;
+    validationEvent: string;
+    applicableEnvironments: string;
+    recommendation: string;
+  };
+  training: null | {
+    trainingObjective: string;
+    intendedAudience: string;
+    prerequisites: string;
+    trainingMethod: string;
+    trainingMaterials: string;
+    validationMethod: string;
+    observedEffect: string;
+    recurringFrequency: string;
+  };
 };
 
 export type PortalProblem = {
+  dbId: number;
   id: string;
   title: string;
   description: string;
@@ -33,6 +94,7 @@ export type PortalProblem = {
 };
 
 export type PortalUnit = {
+  dbId: number;
   id: string;
   name: string;
   abbreviation: string;
@@ -48,6 +110,19 @@ export type PortalData = {
   problems: PortalProblem[];
   projects: PortalProject[];
   units: PortalUnit[];
-  activities: { id: number; description: string; eventType: string; timestamp: string; actor: string }[];
-  helpRequests: { id: number; title: string; description: string; projectName: string; unitName: string; createdAt: string }[];
+  activities: {
+    id: number;
+    description: string;
+    eventType: string;
+    timestamp: string;
+    actor: string;
+  }[];
+  helpRequests: {
+    id: number;
+    title: string;
+    description: string;
+    projectName: string;
+    unitName: string;
+    createdAt: string;
+  }[];
 };

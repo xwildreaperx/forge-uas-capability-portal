@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'FORGE — UAS Capability Portal',
-  description: 'A fictional local prototype for discovering UAS capability problems, projects, units, and lessons learned.',
+  description:
+    'A fictional local prototype for discovering UAS capability problems, projects, units, and lessons learned.',
 };
 
 export default function RootLayout({

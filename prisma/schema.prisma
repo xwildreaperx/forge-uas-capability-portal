@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SolutionType {
+  ORGANIC_DEVELOPMENT
+  VENDOR_SOLUTION
+  TACTIC_TECHNIQUE
+  TRAINING
+  INTEGRATION_CONFIGURATION
+  PROCESS_POLICY
+  HYBRID
+}
+
 model TrackingCounter {
   entity String @id
   value  Int    @default(0)
@@ -69,6 +79,7 @@ model Project {
   executiveSummary       String
   detailedDescription    String
   solutionApproach       String
+  solutionType           SolutionType      @default(ORGANIC_DEVELOPMENT)
   status                 String
   maturity               String
   completion             Int
@@ -91,6 +102,60 @@ model Project {
   repositories           RepositoryLink[]
   activities             ActivityEvent[]
   helpRequests           HelpRequest[]
+  vendorDetail           VendorDetail?
+  tacticDetail           TacticDetail?
+  trainingDetail         TrainingDetail?
+}
+
+model VendorDetail {
+  id                      Int     @id @default(autoincrement())
+  projectId               Int     @unique
+  project                 Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendorName              String
+  productName             String
+  productUrl              String?
+  commercialAvailability  String?
+  estimatedUnitCost       Float?
+  estimatedTotalCost      Float?
+  procurementStatus       String?
+  evaluationStatus        String?
+  quantityEvaluated       Int?
+  evaluationObjective     String?
+  integrationRequirements String?
+  sustainmentNotes        String?
+  evaluationResult        String?
+  recommendation          String?
+}
+
+model TacticDetail {
+  id                     Int     @id @default(autoincrement())
+  projectId              Int     @unique
+  project                Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  techniqueTitle         String
+  techniqueDescription   String
+  conditionsForUse       String?
+  preconditions          String?
+  requiredEquipment      String?
+  requiredTraining       String?
+  demonstratedEffect     String?
+  limitations            String?
+  validationEvent        String?
+  applicableEnvironments String?
+  recommendation         String?
+}
+
+model TrainingDetail {
+  id                 Int     @id @default(autoincrement())
+  projectId          Int     @unique
+  project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trainingObjective  String
+  intendedAudience   String
+  prerequisites      String?
+  trainingMethod     String?
+  trainingMaterials  String?
+  validationMethod   String?
+  observedEffect     String?
+  recurringFrequency String?
 }
 
 model ProblemProject {

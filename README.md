@@ -1,10 +1,10 @@
 # FORGE — UAS Capability Portal
 
-FORGE is a local relational prototype for discovering fictional UAS capability Problems, the Projects attempting to solve them, the Units doing the work, and the evidence and Lessons those efforts produce.
+FORGE is a local relational prototype for discovering fictional UAS capability Problems, the Solution Efforts attempting to solve them, the Units doing the work, and the evidence and Lessons those efforts produce.
 
 ## Product philosophy
 
-Problems are enduring capability gaps. Projects are attempts to solve Problems. Multiple Projects can address the same Problem, one Project can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.
+Problems are enduring capability gaps. Projects are broad Solution Efforts: organic development, vendor evaluation, tactics/techniques, training, integration/configuration, process/policy, or hybrid work. Multiple efforts can address the same Problem, one effort can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.
 
 ## Stack and architecture
 
@@ -53,7 +53,7 @@ For a new schema change:
 pnpm db:migrate --name descriptive_change
 ```
 
-Other useful commands are `pnpm db:generate`, `pnpm db:seed`, and `pnpm db:reset`.
+Other useful commands are `pnpm db:generate`, `pnpm db:seed`, and `pnpm db:reset`. For an existing relational prototype database, `pnpm db:upgrade-solutions` applies the idempotent pathway demonstration data without resetting local records.
 
 ## Quality checks
 
@@ -65,20 +65,19 @@ pnpm test
 pnpm build
 ```
 
-Tests cover both many-to-many relationships, the Lead Unit, tracking formats, persisted Problem/Project creation, multi-Problem and multi-Unit links, exact ID/keyword search, filters, and deterministic duplicate detection.
+Tests cover both many-to-many relationships, the Lead Unit, tracking formats, persisted Problem/Project creation, conditional organic/vendor/TTP/training detail persistence, multi-Problem and multi-Unit links, exact ID/keyword search, solution-type/vendor filtering, and deterministic duplicate detection.
 
 ## Seed and persistence
 
-The fictional seed contains 12 Problems, 20 Projects, 12 Units across 8 locations, 40 phases, 20 Lessons Learned, and 44 activities. `PRB-000001 — Short RF Range` has four solution approaches. `PRJ-000001 — Airborne Communications Relay` addresses multiple Problems and involves multiple Units.
+The fictional seed contains 12 Problems, 20 Solution Efforts, 12 Units across 8 locations, 40 phases, 20 Lessons Learned, and 44 activities. `PRB-000001 — Short RF Range` has five deliberately different pathways: organic relay development, a commercial radio evaluation, a directional-antenna technique, an RF-planning training package, and an existing-radio configuration improvement.
 
-Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems persist through `/api/problems` and survive refresh/restart. Possible Existing Work queries persisted Problems. Server mutations also support Project creation with multiple Problems/Units and a Lead Unit, Problem/Project edits, phases, Lessons, and repositories.
+Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems and conditional Solution Efforts persist through server routes and survive refresh/restart. Detail pages are addressable at `/problems/[id]`, `/projects/[id]`, and `/units/[id]`; project pages expose edit, phase, Lesson, and repository forms.
 
 All records are fictional and non-sensitive.
 
 ## Remaining limitations
 
-- The UI currently exposes new Problem creation. Project/edit/phase/Lesson/repository mutations exist and are tested at the server layer but still need dedicated forms.
-- Navigation remains a compact single-route surface rather than URL-addressable detail routes.
+- Conditional create forms currently focus on the highest-value identifying and evaluation fields; the schema retains additional context fields for progressive UI expansion.
 - Map geometry and graph layout are illustrative; their records and relationships are persisted.
 - Authentication, permissions, file storage, synchronization, and external integrations are omitted.
 - SQLite is local-only. PostgreSQL migration requires changing the datasource provider/URL, creating a new migration baseline, and strengthening counter allocation; the relational model and data services can remain.

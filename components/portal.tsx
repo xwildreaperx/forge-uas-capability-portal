@@ -1,9 +1,36 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, ArrowRight, BarChart3, BookOpen, Boxes, Check, ChevronRight, CircleDot, Command, ExternalLink, GitBranch, HelpCircle, Map, MapPin, Network, Plus, Search, Shield, Users, Wrench, X } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  Boxes,
+  Check,
+  ChevronRight,
+  CircleDot,
+  Command,
+  ExternalLink,
+  GitBranch,
+  HelpCircle,
+  Map,
+  MapPin,
+  Network,
+  Plus,
+  Search,
+  Shield,
+  Users,
+  Wrench,
+  X,
+} from 'lucide-react';
 import type { PortalData, PortalProject } from '@/lib/data/types';
 import { filterProjects } from '@/lib/domain/search';
+import { SOLUTION_TYPES } from '@/lib/domain/solution-types';
+import { useRouter } from 'next/navigation';
+import { CreateProjectModal } from './create-project-modal';
+import { ProjectActions } from './project-actions';
 
 const DataContext = createContext<PortalData | null>(null);
 const useData = () => {
@@ -12,110 +39,1624 @@ const useData = () => {
   return value;
 };
 
-const nav = [['Dashboard', BarChart3], ['Explore', Search], ['Problems', AlertTriangle], ['Projects', Wrench], ['Units', Users], ['Map', Map], ['Capability Graph', Network], ['Activity', Activity]] as const;
+const nav = [
+  ['Dashboard', BarChart3],
+  ['Explore', Search],
+  ['Problems', AlertTriangle],
+  ['Projects', Wrench],
+  ['Units', Users],
+  ['Map', Map],
+  ['Capability Graph', Network],
+  ['Activity', Activity],
+] as const;
 
-export function Portal({initialData}:{initialData:PortalData}) {
-  const [data,setData] = useState(initialData);
+export function Portal({
+  initialData,
+  initialView = 'Dashboard',
+  selectedId,
+}: {
+  initialData: PortalData;
+  initialView?: string;
+  selectedId?: string;
+}) {
+  const router = useRouter();
+  const [data, setData] = useState(initialData);
   const [query, setQuery] = useState('');
-  const [active, setActive] = useState('Dashboard');
-  const [creating, setCreating] = useState(false);
+  const [active, setActive] = useState(initialView);
+  const [creating, setCreating] = useState<'problem' | 'project' | false>(
+    false,
+  );
+  const open = (type: 'problems' | 'projects' | 'units', id: string) =>
+    router.push(`/${type}/${id}`);
   const matches = useMemo(() => {
-    const needle=query.trim().toLowerCase(); if(!needle) return [];
-    const problemMatches=data.problems.filter(x=>`${x.id} ${x.title} ${x.category} ${x.tags.join(' ')}`.toLowerCase().includes(needle)).map(x=>({type:'Problem',id:x.id,title:x.title,meta:`${x.projectIds.length} approaches · ${x.unitCount} units`}));
-    const projectMatches=data.projects.filter(x=>`${x.id} ${x.name} ${x.unit} ${x.tags.join(' ')}`.toLowerCase().includes(needle)).map(x=>({type:'Project',id:x.id,title:x.name,meta:`${x.maturity} · ${x.unit}`}));
-    return [...problemMatches,...projectMatches].sort((a,b)=>(a.id.toLowerCase()===needle?-1:b.id.toLowerCase()===needle?1:0)).slice(0,6);
-  }, [query,data]);
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    const problemMatches = data.problems
+      .filter((x) =>
+        `${x.id} ${x.title} ${x.category} ${x.tags.join(' ')}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .map((x) => ({
+        type: 'Problem',
+        id: x.id,
+        title: x.title,
+        meta: `${x.projectIds.length} approaches · ${x.unitCount} units`,
+      }));
+    const projectMatches = data.projects
+      .filter((x) =>
+        `${x.id} ${x.name} ${x.unit} ${x.solutionTypeLabel} ${x.vendor?.vendorName ?? ''} ${x.tags.join(' ')}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .map((x) => ({
+        type: 'Project',
+        id: x.id,
+        title: x.name,
+        meta: `${x.solutionTypeLabel} · ${x.unit}`,
+      }));
+    return [...problemMatches, ...projectMatches]
+      .sort((a, b) =>
+        a.id.toLowerCase() === needle
+          ? -1
+          : b.id.toLowerCase() === needle
+            ? 1
+            : 0,
+      )
+      .slice(0, 6);
+  }, [query, data]);
 
   useEffect(() => {
-    const context = (document as Document & {modelContext?: {registerTool:(tool:unknown, options?:unknown)=>unknown}}).modelContext;
+    const context = (
+      document as Document & {
+        modelContext?: {
+          registerTool: (tool: unknown, options?: unknown) => unknown;
+        };
+      }
+    ).modelContext;
     if (!context?.registerTool) return;
     const lifecycle = new AbortController();
-    void Promise.resolve(context.registerTool({name:'start_problem_creation',title:'Start problem creation',description:'Open the visible form used to create a new capability problem.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},execute:()=>{setCreating(true);return {status:'form_opened'}}},{signal:lifecycle.signal})).catch(()=>{});
+    void Promise.resolve(
+      context.registerTool(
+        {
+          name: 'start_problem_creation',
+          title: 'Start problem creation',
+          description:
+            'Open the visible form used to create a new capability problem.',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            additionalProperties: false,
+          },
+          annotations: { readOnlyHint: false, untrustedContentHint: false },
+          execute: () => {
+            setCreating('problem');
+            return { status: 'form_opened' };
+          },
+        },
+        { signal: lifecycle.signal },
+      ),
+    ).catch(() => {});
     return () => lifecycle.abort();
   }, []);
 
-  const saveProblem = async (title:string,description:string) => {
-    const response=await fetch('/api/problems',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({title,description})});
-    const item=await response.json() as {trackingId:string;title:string;shortDescription:string;category:string;priority:string;status:string;error?:string}; if(!response.ok) throw new Error(item.error||'Unable to create Problem.');
-    setData(current=>({...current,problems:[{id:item.trackingId,title:item.title,description:item.shortDescription,category:item.category,priority:item.priority,status:item.status,projectIds:[],unitCount:0,tags:[]},...current.problems]}));
-    setCreating(false); setActive('Problems');
+  const saveProblem = async (title: string, description: string) => {
+    const response = await fetch('/api/problems', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title, description }),
+    });
+    const item = (await response.json()) as {
+      trackingId: string;
+      title: string;
+      shortDescription: string;
+      category: string;
+      priority: string;
+      status: string;
+      error?: string;
+    };
+    if (!response.ok)
+      throw new Error(item.error || 'Unable to create Problem.');
+    setData((current) => ({
+      ...current,
+      problems: [
+        {
+          dbId: 0,
+          id: item.trackingId,
+          title: item.title,
+          description: item.shortDescription,
+          category: item.category,
+          priority: item.priority,
+          status: item.status,
+          projectIds: [],
+          unitCount: 0,
+          tags: [],
+        },
+        ...current.problems,
+      ],
+    }));
+    setCreating(false);
+    open('problems', item.trackingId);
   };
 
-  return <DataContext.Provider value={data}><div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><span className="brand-mark"><Shield size={18}/></span><div><strong>FORGE</strong><small>UAS Capability Portal</small></div></div>
-      <nav aria-label="Primary navigation">{nav.map(([label, Icon]) => <button key={label} className={active === label ? 'nav-item active' : 'nav-item'} onClick={() => setActive(label)}><Icon size={17}/><span>{label}</span>{label === 'Problems' && <em>{data.problems.length}</em>}</button>)}</nav>
-      <div className="sidebar-foot"><div className="classification">FICTIONAL DATA</div><button className="nav-item"><HelpCircle size={17}/> Help & guidance</button><div className="profile"><span>PA</span><div><strong>Portal Analyst</strong><small>Contributor</small></div></div></div>
-    </aside>
-    <main>
-      <header className="topbar"><div className="search-wrap"><Search size={18}/><input aria-label="Global search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search problems, projects, units, lessons…"/><kbd><Command size={11}/> K</kbd>{query && <div className="search-results"><div className="result-label">Best matches</div>{matches.map(m => <button key={m.id} onClick={() => {setActive(m.type==='Project'?'Project':m.type==='Problem'?'Problem':'Explore');setQuery('')}}><span className="result-icon">{m.type[0]}</span><div><strong>{m.id} — {m.title}</strong><small>{m.type} · {m.meta}</small></div><ArrowRight size={15}/></button>)}</div>}</div><button className="create" onClick={()=>setCreating(true)}><Plus size={16}/> Create</button></header>
-      <div className="page"><View active={active} setActive={setActive}/></div>
-    </main>
-    {creating && <CreateModal onClose={()=>setCreating(false)} onSave={saveProblem}/>} 
-  </div></DataContext.Provider>;
+  return (
+    <DataContext.Provider value={data}>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <span className="brand-mark">
+              <Shield size={18} />
+            </span>
+            <div>
+              <strong>FORGE</strong>
+              <small>UAS Capability Portal</small>
+            </div>
+          </div>
+          <nav aria-label="Primary navigation">
+            {nav.map(([label, Icon]) => (
+              <button
+                key={label}
+                className={active === label ? 'nav-item active' : 'nav-item'}
+                onClick={() => setActive(label)}
+              >
+                <Icon size={17} />
+                <span>{label}</span>
+                {label === 'Problems' && <em>{data.problems.length}</em>}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-foot">
+            <div className="classification">FICTIONAL DATA</div>
+            <button className="nav-item">
+              <HelpCircle size={17} /> Help & guidance
+            </button>
+            <div className="profile">
+              <span>PA</span>
+              <div>
+                <strong>Portal Analyst</strong>
+                <small>Contributor</small>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <main>
+          <header className="topbar">
+            <div className="search-wrap">
+              <Search size={18} />
+              <input
+                aria-label="Global search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search problems, solution types, vendors, units…"
+              />
+              <kbd>
+                <Command size={11} /> K
+              </kbd>
+              {query && (
+                <div className="search-results">
+                  <div className="result-label">Best matches</div>
+                  {matches.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        open(
+                          m.type === 'Project' ? 'projects' : 'problems',
+                          m.id,
+                        );
+                        setQuery('');
+                      }}
+                    >
+                      <span className="result-icon">{m.type[0]}</span>
+                      <div>
+                        <strong>
+                          {m.id} — {m.title}
+                        </strong>
+                        <small>
+                          {m.type} · {m.meta}
+                        </small>
+                      </div>
+                      <ArrowRight size={15} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="create" onClick={() => setCreating('problem')}>
+              <Plus size={16} /> Create
+            </button>
+          </header>
+          <div className="page">
+            <View
+              active={active}
+              setActive={setActive}
+              selectedId={selectedId}
+              open={open}
+              onCreateProject={() => setCreating('project')}
+            />
+          </div>
+        </main>
+        {creating === 'problem' && (
+          <CreateModal
+            onClose={() => setCreating(false)}
+            onSave={saveProblem}
+          />
+        )}
+        {creating === 'project' && (
+          <CreateProjectModal
+            data={data}
+            onClose={() => setCreating(false)}
+            onProblem={() => setCreating('problem')}
+            onCreated={(id) => open('projects', id)}
+          />
+        )}
+      </div>
+    </DataContext.Provider>
+  );
 }
 
-function View({active,setActive}:{active:string,setActive:(v:string)=>void}){
-  if(active==='Problem') return <ProblemView onCompare={()=>setActive('Compare')} onProject={()=>setActive('Project')}/>;
-  if(active==='Compare') return <CompareView/>;
-  if(active==='Project') return <ProjectView onUnit={()=>setActive('Unit')} onRelated={()=>setActive('Explore')}/>;
-  if(active==='Unit'||active==='Units') return <UnitView onMap={()=>setActive('Map')}/>;
-  if(active==='Map') return <MapView onProject={()=>setActive('Project')}/>;
-  if(active==='Capability Graph') return <GraphView onProblem={()=>setActive('Problem')}/>;
-  if(active==='Projects') return <ProjectsView onProject={()=>setActive('Project')}/>;
-  if(active==='Problems') return <ProblemsView onProblem={()=>setActive('Problem')}/>;
-  if(active==='Explore') return <ExploreView onProject={()=>setActive('Project')}/>;
-  if(active==='Activity') return <ActivityView/>;
-  return <Dashboard/>;
+function View({
+  active,
+  setActive,
+  selectedId,
+  open,
+  onCreateProject,
+}: {
+  active: string;
+  setActive: (v: string) => void;
+  selectedId?: string;
+  open: (type: 'problems' | 'projects' | 'units', id: string) => void;
+  onCreateProject: () => void;
+}) {
+  if (active === 'Problem')
+    return (
+      <ProblemView
+        id={selectedId}
+        onCompare={() => setActive('Compare')}
+        onProject={(id) => open('projects', id)}
+      />
+    );
+  if (active === 'Compare') return <CompareView />;
+  if (active === 'Project')
+    return (
+      <ProjectView
+        id={selectedId}
+        onUnit={() => setActive('Unit')}
+        onRelated={() => setActive('Explore')}
+      />
+    );
+  if (active === 'Unit' || active === 'Units')
+    return <UnitView id={selectedId} onMap={() => setActive('Map')} />;
+  if (active === 'Map')
+    return <MapView onProject={() => setActive('Project')} />;
+  if (active === 'Capability Graph')
+    return <GraphView onProblem={() => setActive('Problem')} />;
+  if (active === 'Projects')
+    return (
+      <ProjectsView
+        onProject={(id) => open('projects', id)}
+        onCreate={onCreateProject}
+      />
+    );
+  if (active === 'Problems')
+    return <ProblemsView onProblem={(id) => open('problems', id)} />;
+  if (active === 'Explore')
+    return <ExploreView onProject={() => setActive('Project')} />;
+  if (active === 'Activity') return <ActivityView />;
+  return <Dashboard />;
 }
 
 function Dashboard() {
-  const {problems,projects,units,activities,helpRequests}=useData();
-  return <><div className="page-head"><div><p className="eyebrow">MONDAY · 07 SEPTEMBER 2026</p><h1>Capability development overview</h1><p>See where work is moving, where teams overlap, and where support is needed.</p></div><button className="secondary"><Activity size={16}/> View activity</button></div>
-    <section className="stat-grid"><Stat icon={<AlertTriangle/>} tone="amber" label="Open Problems" value={String(problems.filter(x=>x.status==='Open').length)} note={`${problems.filter(x=>x.projectIds.length===0).length} without linked projects`}/><Stat icon={<Wrench/>} tone="blue" label="Active Projects" value={String(projects.filter(x=>x.status==='Active').length)} note={`${activities.length} recent events`}/><Stat icon={<Users/>} tone="violet" label="Participating Units" value={String(units.length)} note={`Across ${new Set(units.map(x=>x.location)).size} locations`}/><Stat icon={<CircleDot/>} tone="green" label="Validated Solutions" value={String(projects.filter(x=>x.maturity==='Validated').length)} note={`${projects.filter(x=>x.status==='Transitioning').length} ready to transition`}/></section>
-    <div className="dashboard-grid"><section className="panel span-2"><PanelHead title="Current capability activity" note="Most active problem spaces across the network" action="View all problems"/><div className="problem-list">{problems.slice(0,3).map((p,i)=><ProblemRow key={p.id} priority={p.priority.toUpperCase().slice(0,4)} title={`${p.id} · ${p.title}`} meta={`${p.projectIds.length} projects · ${p.unitCount} units · ${p.category}`} updated={i? 'Updated 5h ago':'Updated 2h ago'}/>)}</div></section>
-      <section className="panel"><div className="panel-head"><div><h2>Projects needing help</h2><p>Open assistance requests</p></div><span className="count">{helpRequests.length}</span></div>{helpRequests.slice(0,2).map(h=><Help key={h.id} icon={<Boxes/>} title={h.projectName} text={h.description} meta={`${h.unitName} · open`}/>)}</section>
-      <section className="panel span-2"><PanelHead title="Recently updated projects" note="Progress worth reviewing" action="View all projects"/><div className="project-cards">{projects.slice(0,3).map(p => <div className="project-card" key={p.id}><div><span className={`dot ${p.tone}`}/><small>{p.status}</small></div><strong>{p.name}</strong><p>{p.id} · {p.unit}</p><Progress value={p.progress}/><footer><span>{p.maturity}</span><b>{p.progress}%</b></footer></div>)}</div></section>
-      <section className="panel"><PanelHead title="Network pulse" note="Last 7 days"/><div className="pulse"><div><strong>28</strong><span>Updates</span></div><div><strong>7</strong><span>Lessons</span></div><div><strong>5</strong><span>Tests</span></div></div><div className="spark" aria-label="Activity trend">{[25,38,32,66,54,86,72].map(n=><i key={n} style={{height:`${n}%`}}/>)}</div></section></div></>;
+  const { problems, projects, units, activities, helpRequests } = useData();
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">MONDAY · 07 SEPTEMBER 2026</p>
+          <h1>Capability development overview</h1>
+          <p>
+            See where work is moving, where teams overlap, and where support is
+            needed.
+          </p>
+        </div>
+        <button className="secondary">
+          <Activity size={16} /> View activity
+        </button>
+      </div>
+      <section className="stat-grid">
+        <Stat
+          icon={<AlertTriangle />}
+          tone="amber"
+          label="Open Problems"
+          value={String(problems.filter((x) => x.status === 'Open').length)}
+          note={`${problems.filter((x) => x.projectIds.length === 0).length} without linked projects`}
+        />
+        <Stat
+          icon={<Wrench />}
+          tone="blue"
+          label="Active Projects"
+          value={String(projects.filter((x) => x.status === 'Active').length)}
+          note={`${activities.length} recent events`}
+        />
+        <Stat
+          icon={<Users />}
+          tone="violet"
+          label="Participating Units"
+          value={String(units.length)}
+          note={`Across ${new Set(units.map((x) => x.location)).size} locations`}
+        />
+        <Stat
+          icon={<CircleDot />}
+          tone="green"
+          label="Validated Solutions"
+          value={String(
+            projects.filter((x) => x.maturity === 'Validated').length,
+          )}
+          note={`${projects.filter((x) => x.status === 'Transitioning').length} ready to transition`}
+        />
+      </section>
+      <section
+        className="solution-strip"
+        aria-label="Solution effort distribution"
+      >
+        {SOLUTION_TYPES.map(([value, label]) => (
+          <div key={value}>
+            <strong>
+              {projects.filter((p) => p.solutionType === value).length}
+            </strong>
+            <span>{label}</span>
+          </div>
+        ))}
+      </section>
+      <div className="dashboard-grid">
+        <section className="panel span-2">
+          <PanelHead
+            title="Current capability activity"
+            note="Most active problem spaces across the network"
+            action="View all problems"
+          />
+          <div className="problem-list">
+            {problems.slice(0, 3).map((p, i) => (
+              <ProblemRow
+                key={p.id}
+                priority={p.priority.toUpperCase().slice(0, 4)}
+                title={`${p.id} · ${p.title}`}
+                meta={`${p.projectIds.length} projects · ${p.unitCount} units · ${p.category}`}
+                updated={i ? 'Updated 5h ago' : 'Updated 2h ago'}
+              />
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Projects needing help</h2>
+              <p>Open assistance requests</p>
+            </div>
+            <span className="count">{helpRequests.length}</span>
+          </div>
+          {helpRequests.slice(0, 2).map((h) => (
+            <Help
+              key={h.id}
+              icon={<Boxes />}
+              title={h.projectName}
+              text={h.description}
+              meta={`${h.unitName} · open`}
+            />
+          ))}
+        </section>
+        <section className="panel span-2">
+          <PanelHead
+            title="Recently updated projects"
+            note="Progress worth reviewing"
+            action="View all projects"
+          />
+          <div className="project-cards">
+            {projects.slice(0, 3).map((p) => (
+              <div className="project-card" key={p.id}>
+                <div>
+                  <span className={`dot ${p.tone}`} />
+                  <small>{p.status}</small>
+                </div>
+                <strong>{p.name}</strong>
+                <p>
+                  {p.id} · {p.unit}
+                </p>
+                <Progress value={p.progress} />
+                <footer>
+                  <span>{p.maturity}</span>
+                  <b>{p.progress}%</b>
+                </footer>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <PanelHead title="Network pulse" note="Last 7 days" />
+          <div className="pulse">
+            <div>
+              <strong>28</strong>
+              <span>Updates</span>
+            </div>
+            <div>
+              <strong>7</strong>
+              <span>Lessons</span>
+            </div>
+            <div>
+              <strong>5</strong>
+              <span>Tests</span>
+            </div>
+          </div>
+          <div className="spark" aria-label="Activity trend">
+            {[25, 38, 32, 66, 54, 86, 72].map((n) => (
+              <i key={n} style={{ height: `${n}%` }} />
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
+  );
 }
 
-function Stat({icon,tone,label,value,note}:{icon:React.ReactNode,tone:string,label:string,value:string,note:string}){return <article><span className={`icon ${tone}`}>{icon}</span><div><small>{label}</small><strong>{value}</strong><p>{note}</p></div></article>}
-function PanelHead({title,note,action}:{title:string,note:string,action?:string}){return <div className="panel-head"><div><h2>{title}</h2><p>{note}</p></div>{action&&<button>{action} <ChevronRight size={15}/></button>}</div>}
-function ProblemRow({priority,title,meta,updated}:{priority:string,title:string,meta:string,updated:string}){return <button className="problem-row"><span className={`priority ${priority==='MED'?'med':'high'}`}>{priority}</span><div><strong>{title}</strong><small>{meta}</small></div><span className="updated">{updated}</span><ChevronRight size={17}/></button>}
-function Help({icon,title,text,meta}:{icon:React.ReactNode,title:string,text:string,meta:string}){return <div className="help-card"><span>{icon}</span><div><strong>{title}</strong><p>{text}</p><small>{meta}</small></div></div>}
-function Progress({value}:{value:number}){return <div className="progress"><span style={{width:`${value}%`}}/></div>}
+function Stat({
+  icon,
+  tone,
+  label,
+  value,
+  note,
+}: {
+  icon: React.ReactNode;
+  tone: string;
+  label: string;
+  value: string;
+  note: string;
+}) {
+  return (
+    <article>
+      <span className={`icon ${tone}`}>{icon}</span>
+      <div>
+        <small>{label}</small>
+        <strong>{value}</strong>
+        <p>{note}</p>
+      </div>
+    </article>
+  );
+}
+function PanelHead({
+  title,
+  note,
+  action,
+}: {
+  title: string;
+  note: string;
+  action?: string;
+}) {
+  return (
+    <div className="panel-head">
+      <div>
+        <h2>{title}</h2>
+        <p>{note}</p>
+      </div>
+      {action && (
+        <button>
+          {action} <ChevronRight size={15} />
+        </button>
+      )}
+    </div>
+  );
+}
+function ProblemRow({
+  priority,
+  title,
+  meta,
+  updated,
+}: {
+  priority: string;
+  title: string;
+  meta: string;
+  updated: string;
+}) {
+  return (
+    <button className="problem-row">
+      <span className={`priority ${priority === 'MED' ? 'med' : 'high'}`}>
+        {priority}
+      </span>
+      <div>
+        <strong>{title}</strong>
+        <small>{meta}</small>
+      </div>
+      <span className="updated">{updated}</span>
+      <ChevronRight size={17} />
+    </button>
+  );
+}
+function Help({
+  icon,
+  title,
+  text,
+  meta,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  meta: string;
+}) {
+  return (
+    <div className="help-card">
+      <span>{icon}</span>
+      <div>
+        <strong>{title}</strong>
+        <p>{text}</p>
+        <small>{meta}</small>
+      </div>
+    </div>
+  );
+}
+function Progress({ value }: { value: number }) {
+  return (
+    <div className="progress">
+      <span style={{ width: `${value}%` }} />
+    </div>
+  );
+}
 
-function ProblemView({onCompare,onProject}:{onCompare:()=>void,onProject:()=>void}) {
-  const data=useData(); const problem=data.problems.find(x=>x.id==='PRB-000001')!; const all=data.projects.filter(x=>problem.projectIds.includes(x.id));
-  return <><div className="crumb">Problems <ChevronRight size={14}/> {problem.id}</div><div className="problem-hero"><div><span className="priority high">{problem.priority.toUpperCase()} PRIORITY</span><h1>{problem.title}</h1><p>{problem.id} · {problem.category} · Reported by {problem.unitCount} units</p></div><button className="create" onClick={onCompare}><BarChart3 size={16}/> Compare {all.length} projects</button></div><div className="question-callout"><strong>What is happening?</strong><p>{problem.description}</p></div><h2 className="section-title">Projects addressing this problem <span>{all.length}</span></h2><div className="approach-grid">{all.map(p=><article key={p.id}><div><span className={`dot ${p.tone}`}/><small>{p.status}</small><span className="maturity">{p.maturity}</span></div><h3>{p.name}</h3><p>{p.id} · {p.unit}</p><Progress value={p.progress}/><footer><small>Completion</small><strong>{p.progress}%</strong></footer><button onClick={onProject}>Open project <ArrowRight size={15}/></button></article>)}</div></>;
+function ProblemView({
+  id,
+  onCompare,
+  onProject,
+}: {
+  id?: string;
+  onCompare: () => void;
+  onProject: (id: string) => void;
+}) {
+  const data = useData();
+  const problem =
+    data.problems.find((x) => x.id === id) ??
+    data.problems.find((x) => x.id === 'PRB-000001')!;
+  const all = data.projects.filter((x) => problem.projectIds.includes(x.id));
+  return (
+    <>
+      <div className="crumb">
+        Problems <ChevronRight size={14} /> {problem.id}
+      </div>
+      <div className="problem-hero">
+        <div>
+          <span className="priority high">
+            {problem.priority.toUpperCase()} PRIORITY
+          </span>
+          <h1>{problem.title}</h1>
+          <p>
+            {problem.id} · {problem.category} · Reported by {problem.unitCount}{' '}
+            units
+          </p>
+        </div>
+        <button className="create" onClick={onCompare}>
+          <BarChart3 size={16} /> Compare {all.length} efforts
+        </button>
+      </div>
+      <div className="question-callout">
+        <strong>What is happening?</strong>
+        <p>{problem.description}</p>
+      </div>
+      <h2 className="section-title">
+        Solution efforts addressing this problem <span>{all.length}</span>
+      </h2>
+      <div className="approach-grid">
+        {all.map((p) => (
+          <article key={p.id}>
+            <div>
+              <span className={`dot ${p.tone}`} />
+              <small>{p.status}</small>
+              <span className="maturity">{p.solutionTypeLabel}</span>
+            </div>
+            <h3>{p.name}</h3>
+            <p>
+              {p.id} · {p.unit}
+            </p>
+            <Progress value={p.progress} />
+            <footer>
+              <small>Completion</small>
+              <strong>{p.progress}%</strong>
+            </footer>
+            <button onClick={() => onProject(p.id)}>
+              Open effort <ArrowRight size={15} />
+            </button>
+          </article>
+        ))}
+      </div>
+    </>
+  );
 }
 
 function CompareView() {
-  const data=useData(); const problem=data.problems.find(x=>x.id==='PRB-000001')!; const projects=data.projects.filter(x=>problem.projectIds.includes(x.id));
-  return <><div className="crumb">Problems <ChevronRight size={14}/> {problem.id} <ChevronRight size={14}/> Compare</div><div className="page-head"><div><p className="eyebrow">PROJECT COMPARISON</p><h1>Approaches to {problem.title}</h1><p>Compare maturity, tradeoffs, test evidence, and outcomes side-by-side.</p></div></div><div className="comparison"><table><thead><tr><th>Approach</th>{projects.map(p=><th key={p.id}><small>{p.id}</small><strong>{p.name}</strong></th>)}</tr></thead><tbody><tr><th>Lead unit</th>{projects.map(p=><td key={p.id}>{p.unit}</td>)}</tr><tr><th>Maturity</th>{projects.map(p=><td key={p.id}><span className="maturity">{p.maturity}</span></td>)}</tr><tr><th>Completion</th>{projects.map(p=><td key={p.id}><b>{p.progress}%</b><Progress value={p.progress}/></td>)}</tr><tr><th>Key advantage</th>{projects.map(p=><td key={p.id}>{p.keyAdvantage}</td>)}</tr><tr><th>Key limitation</th>{projects.map(p=><td key={p.id}>{p.keyLimitation}</td>)}</tr><tr><th>Latest result</th>{projects.map(p=><td key={p.id}><span className={`outcome ${p.maturity==='Validated'?'good':''}`}>{p.latestResult}</span></td>)}</tr></tbody></table></div></>;
+  const data = useData();
+  const problem = data.problems.find((x) => x.id === 'PRB-000001')!;
+  const projects = data.projects.filter((x) =>
+    problem.projectIds.includes(x.id),
+  );
+  return (
+    <>
+      <div className="crumb">
+        Problems <ChevronRight size={14} /> {problem.id}{' '}
+        <ChevronRight size={14} /> Compare
+      </div>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">SOLUTION COMPARISON</p>
+          <h1>Approaches to {problem.title}</h1>
+          <p>
+            Compare unlike pathways without forcing vendor, TTP, training, and
+            organic efforts into the same mold.
+          </p>
+        </div>
+      </div>
+      <div className="comparison">
+        <table>
+          <thead>
+            <tr>
+              <th>Approach</th>
+              {projects.map((p) => (
+                <th key={p.id}>
+                  <small>{p.id}</small>
+                  <strong>{p.name}</strong>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>Solution type</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  <span className="maturity">{p.solutionTypeLabel}</span>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Lead unit</th>
+              {projects.map((p) => (
+                <td key={p.id}>{p.unit}</td>
+              ))}
+            </tr>
+            <tr>
+              <th>Vendor / product</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  {p.vendor
+                    ? `${p.vendor.vendorName} · ${p.vendor.productName}`
+                    : '—'}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Cost / procurement</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  {p.vendor
+                    ? `${p.vendor.estimatedTotalCost || p.vendor.estimatedUnitCost || '—'} · ${p.vendor.procurementStatus || '—'}`
+                    : '—'}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Context</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  {p.tactic?.conditionsForUse ||
+                    p.training?.intendedAudience ||
+                    p.solutionApproach}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Maturity</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  <span className="maturity">{p.maturity}</span>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Completion</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  <b>{p.progress}%</b>
+                  <Progress value={p.progress} />
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Key advantage</th>
+              {projects.map((p) => (
+                <td key={p.id}>{p.keyAdvantage || '—'}</td>
+              ))}
+            </tr>
+            <tr>
+              <th>Key limitation</th>
+              {projects.map((p) => (
+                <td key={p.id}>{p.keyLimitation || '—'}</td>
+              ))}
+            </tr>
+            <tr>
+              <th>Outcome / result</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  <span
+                    className={`outcome ${p.maturity === 'Validated' ? 'good' : ''}`}
+                  >
+                    {p.outcome || p.latestResult || '—'}
+                  </span>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Last updated</th>
+              {projects.map((p) => (
+                <td key={p.id}>{new Date(p.updatedAt).toLocaleDateString()}</td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
 }
 
-function ProjectView({onUnit,onRelated}:{onUnit:()=>void,onRelated:()=>void}){
-  const [technical,setTechnical]=useState(false);
-  const {projects,units}=useData(); const project=projects.find(x=>x.id==='PRJ-000001')!; const lead=units.find(x=>x.id===project.unitId)!;
-  return <><div className="crumb">Projects <ChevronRight size={14}/> {project.id}</div><div className="project-title"><div><div className="status-line"><span className={`dot ${project.tone}`}/> {project.status} <span className="maturity">{project.maturity}</span></div><h1>{project.name}</h1><p>{project.id} · Persistent project record</p></div><div className="view-toggle"><button className={!technical?'selected':''} onClick={()=>setTechnical(false)}>Executive</button><button className={technical?'selected':''} onClick={()=>setTechnical(true)}>Technical</button></div></div>
-    {!technical?<div className="detail-grid"><section className="panel hero-summary"><p className="eyebrow">EXECUTIVE SUMMARY</p><h2>{project.solutionApproach}</h2><p>{project.keyAdvantage} {project.keyLimitation}</p><div className="summary-metrics"><div><strong>{project.progress}%</strong><span>Complete</span></div><div><strong>{project.phases.length}</strong><span>Project phases</span></div><div><strong>{project.lessons.length}</strong><span>Lessons captured</span></div></div></section><section className="panel"><h2>Ownership & participation</h2><button className="unit-link" onClick={onUnit}><span>{lead.abbreviation.replace('Unit ','')}</span><div><strong>{lead.name}</strong><small>Lead unit · {lead.location}</small></div><ChevronRight/></button><p className="mini-label">PARTICIPATING UNITS</p><p>{project.units.map(x=>`${x.name} (${x.role})`).join(' · ')}</p></section><section className="panel"><h2>Problems addressed</h2>{project.problems.map(p=><div className="linked-record" key={p.id}><AlertTriangle/><div><strong>{p.id} · {p.title}</strong><small>{p.isPrimary?'Primary problem':'Related problem'}</small></div></div>)}<button className="text-action" onClick={onRelated}>Explore related work <ArrowRight/></button></section><section className="panel"><h2>Latest result</h2><span className="outcome good"><Check/> {project.latestResult}</span><p className="body-copy">{project.keyAdvantage} Current limitation: {project.keyLimitation}</p></section></div>:<TechnicalView project={project}/>} 
-  </>;
+function ProjectView({
+  id,
+  onUnit,
+  onRelated,
+}: {
+  id?: string;
+  onUnit: () => void;
+  onRelated: () => void;
+}) {
+  const [technical, setTechnical] = useState(false);
+  const { projects, units } = useData();
+  const project =
+    projects.find((x) => x.id === id) ??
+    projects.find((x) => x.id === 'PRJ-000001')!;
+  const lead = units.find((x) => x.id === project.unitId)!;
+  return (
+    <>
+      <div className="crumb">
+        Projects <ChevronRight size={14} /> {project.id}
+      </div>
+      <div className="project-title">
+        <div>
+          <div className="status-line">
+            <span className={`dot ${project.tone}`} /> {project.status}{' '}
+            <span className="maturity">{project.solutionTypeLabel}</span>
+          </div>
+          <h1>{project.name}</h1>
+          <p>{project.id} · Persistent solution effort</p>
+        </div>
+        <div className="view-toggle">
+          <button
+            className={!technical ? 'selected' : ''}
+            onClick={() => setTechnical(false)}
+          >
+            Executive
+          </button>
+          <button
+            className={technical ? 'selected' : ''}
+            onClick={() => setTechnical(true)}
+          >
+            Technical
+          </button>
+        </div>
+      </div>
+      <ProjectActions project={project} />
+      {!technical ? (
+        <div className="detail-grid">
+          <section className="panel hero-summary">
+            <p className="eyebrow">EXECUTIVE SUMMARY</p>
+            <h2>{project.solutionApproach}</h2>
+            <p>
+              {project.keyAdvantage} {project.keyLimitation}
+            </p>
+            <div className="summary-metrics">
+              <div>
+                <strong>{project.progress}%</strong>
+                <span>Complete</span>
+              </div>
+              <div>
+                <strong>{project.phases.length}</strong>
+                <span>Project phases</span>
+              </div>
+              <div>
+                <strong>{project.lessons.length}</strong>
+                <span>Lessons captured</span>
+              </div>
+            </div>
+          </section>
+          <section className="panel">
+            <h2>Ownership & participation</h2>
+            <button className="unit-link" onClick={onUnit}>
+              <span>{lead.abbreviation.replace('Unit ', '')}</span>
+              <div>
+                <strong>{lead.name}</strong>
+                <small>Lead unit · {lead.location}</small>
+              </div>
+              <ChevronRight />
+            </button>
+            <p className="mini-label">PARTICIPATING UNITS</p>
+            <p>
+              {project.units.map((x) => `${x.name} (${x.role})`).join(' · ')}
+            </p>
+          </section>
+          <section className="panel">
+            <h2>Problems addressed</h2>
+            {project.problems.map((p) => (
+              <div className="linked-record" key={p.id}>
+                <AlertTriangle />
+                <div>
+                  <strong>
+                    {p.id} · {p.title}
+                  </strong>
+                  <small>
+                    {p.isPrimary ? 'Primary problem' : 'Related problem'}
+                  </small>
+                </div>
+              </div>
+            ))}
+            <button className="text-action" onClick={onRelated}>
+              Explore related work <ArrowRight />
+            </button>
+          </section>
+          <section className="panel">
+            <h2>Latest result</h2>
+            <span className="outcome good">
+              <Check /> {project.latestResult}
+            </span>
+            <p className="body-copy">
+              {project.keyAdvantage} Current limitation: {project.keyLimitation}
+            </p>
+          </section>
+        </div>
+      ) : (
+        <TechnicalView project={project} />
+      )}
+    </>
+  );
 }
 
-function TechnicalView({project}:{project:PortalProject}){return <div className="detail-grid"><section className="panel span-2"><PanelHead title="Project phases" note="Evidence and decisions across the lifecycle"/><div className="timeline">{project.phases.map((p,i)=><Timeline key={p.id} title={`Phase ${i+1} · ${p.name}`} meta={`${p.status} · ${p.completion}%`} text={`${p.summary} ${p.result}`}/>)}</div></section><section className="panel"><h2>Technical artifacts</h2>{project.repositories.length?project.repositories.map(r=><Artifact key={r.id} icon={<GitBranch/>} title={r.name} meta={r.description}/>):<p className="body-copy">No repository links are attached.</p>}</section><section className="panel"><h2>Lessons learned</h2>{project.lessons.length?project.lessons.map(l=><div className="lesson" key={l.id}><BookOpen/><div><strong>{l.title}</strong><p>{l.finding} {l.recommendation}</p></div></div>):<p className="body-copy">No Lessons Learned are currently linked to this Project.</p>}</section></div>}
-function Timeline({title,meta,text}:{title:string,meta:string,text:string}){return <div className="timeline-item"><span/><div><strong>{title}</strong><small>{meta}</small><p>{text}</p></div></div>}
-function Artifact({icon,title,meta}:{icon:React.ReactNode,title:string,meta:string}){return <div className="artifact"><span>{icon}</span><div><strong>{title}</strong><small>{meta}</small></div><ExternalLink/></div>}
+function TechnicalView({ project }: { project: PortalProject }) {
+  return (
+    <div className="detail-grid">
+      <SolutionDetail project={project} />
+      <section className="panel span-2">
+        <PanelHead
+          title="Project phases"
+          note="Evidence and decisions across the lifecycle"
+        />
+        <div className="timeline">
+          {project.phases.map((p, i) => (
+            <Timeline
+              key={p.id}
+              title={`Phase ${i + 1} · ${p.name}`}
+              meta={`${p.status} · ${p.completion}%`}
+              text={`${p.summary} ${p.result}`}
+            />
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Technical artifacts</h2>
+        {project.repositories.length ? (
+          project.repositories.map((r) => (
+            <Artifact
+              key={r.id}
+              icon={<GitBranch />}
+              title={r.name}
+              meta={r.description}
+            />
+          ))
+        ) : (
+          <p className="body-copy">No repository links are attached.</p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Lessons learned</h2>
+        {project.lessons.length ? (
+          project.lessons.map((l) => (
+            <div className="lesson" key={l.id}>
+              <BookOpen />
+              <div>
+                <strong>{l.title}</strong>
+                <p>
+                  {l.finding} {l.recommendation}
+                </p>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="body-copy">
+            No Lessons Learned are currently linked to this Project.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+function SolutionDetail({ project }: { project: PortalProject }) {
+  if (project.vendor)
+    return (
+      <section className="panel span-2">
+        <p className="eyebrow">VENDOR EVALUATION</p>
+        <h2>
+          {project.vendor.vendorName} · {project.vendor.productName}
+        </h2>
+        <div className="fact-grid">
+          <span>
+            <small>Procurement</small>
+            <strong>{project.vendor.procurementStatus || '—'}</strong>
+          </span>
+          <span>
+            <small>Evaluation</small>
+            <strong>{project.vendor.evaluationStatus || '—'}</strong>
+          </span>
+          <span>
+            <small>Estimated unit cost</small>
+            <strong>{project.vendor.estimatedUnitCost || '—'}</strong>
+          </span>
+          <span>
+            <small>Recommendation</small>
+            <strong>{project.vendor.recommendation || '—'}</strong>
+          </span>
+        </div>
+        <p className="body-copy">
+          {project.vendor.evaluationObjective} {project.vendor.evaluationResult}
+        </p>
+      </section>
+    );
+  if (project.tactic)
+    return (
+      <section className="panel span-2">
+        <p className="eyebrow">TACTIC / TECHNIQUE</p>
+        <h2>{project.tactic.techniqueTitle}</h2>
+        <p>{project.tactic.techniqueDescription}</p>
+        <div className="fact-grid">
+          <span>
+            <small>Conditions</small>
+            <strong>{project.tactic.conditionsForUse || '—'}</strong>
+          </span>
+          <span>
+            <small>Demonstrated effect</small>
+            <strong>{project.tactic.demonstratedEffect || '—'}</strong>
+          </span>
+          <span>
+            <small>Limitations</small>
+            <strong>{project.tactic.limitations || '—'}</strong>
+          </span>
+          <span>
+            <small>Recommendation</small>
+            <strong>{project.tactic.recommendation || '—'}</strong>
+          </span>
+        </div>
+      </section>
+    );
+  if (project.training)
+    return (
+      <section className="panel span-2">
+        <p className="eyebrow">TRAINING PACKAGE</p>
+        <h2>{project.training.trainingObjective}</h2>
+        <div className="fact-grid">
+          <span>
+            <small>Audience</small>
+            <strong>{project.training.intendedAudience}</strong>
+          </span>
+          <span>
+            <small>Method</small>
+            <strong>{project.training.trainingMethod || '—'}</strong>
+          </span>
+          <span>
+            <small>Validation</small>
+            <strong>{project.training.validationMethod || '—'}</strong>
+          </span>
+          <span>
+            <small>Frequency</small>
+            <strong>{project.training.recurringFrequency || '—'}</strong>
+          </span>
+        </div>
+      </section>
+    );
+  return (
+    <section className="panel span-2">
+      <p className="eyebrow">{project.solutionTypeLabel.toUpperCase()}</p>
+      <h2>Solution context</h2>
+      <p>{project.solutionApproach}</p>
+    </section>
+  );
+}
+function Timeline({
+  title,
+  meta,
+  text,
+}: {
+  title: string;
+  meta: string;
+  text: string;
+}) {
+  return (
+    <div className="timeline-item">
+      <span />
+      <div>
+        <strong>{title}</strong>
+        <small>{meta}</small>
+        <p>{text}</p>
+      </div>
+    </div>
+  );
+}
+function Artifact({
+  icon,
+  title,
+  meta,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  meta: string;
+}) {
+  return (
+    <div className="artifact">
+      <span>{icon}</span>
+      <div>
+        <strong>{title}</strong>
+        <small>{meta}</small>
+      </div>
+      <ExternalLink />
+    </div>
+  );
+}
 
-function UnitView({onMap}:{onMap:()=>void}){const {units,projects}=useData();const unit=units[0];const portfolio=projects.filter(p=>unit.projectIds.includes(p.id));return <><div className="crumb">Units <ChevronRight size={14}/> {unit.name}</div><div className="problem-hero"><div className="unit-heading"><span>{unit.abbreviation.replace('Unit ','')}</span><div><p className="eyebrow">{unit.type.toUpperCase()} UNIT</p><h1>{unit.name}</h1><p>{unit.location} · {unit.id}</p></div></div><button className="secondary" onClick={onMap}><MapPin/> View on map</button></div><div className="detail-grid"><section className="panel span-2"><PanelHead title="Current portfolio" note={`${portfolio.length} connected projects`}/><div className="project-cards">{portfolio.map(p=><button className="project-card clickable" key={p.id}><span className="maturity">{p.maturity}</span><strong>{p.name}</strong><p>{p.id} · {p.progress}% complete</p><Progress value={p.progress}/></button>)}</div></section><section className="panel"><h2>Capability strengths</h2><div className="tag-cloud">{unit.capabilities.map(x=><span key={x}>{x}</span>)}</div></section><section className="panel"><h2>Institutional knowledge</h2><p className="body-copy">This unit participates across {portfolio.length} relational project records and {unit.capabilities.length} capability areas.</p></section></div></>}
+function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
+  const { units, projects } = useData();
+  const unit = units.find((x) => x.id === id) ?? units[0];
+  const portfolio = projects.filter((p) => unit.projectIds.includes(p.id));
+  return (
+    <>
+      <div className="crumb">
+        Units <ChevronRight size={14} /> {unit.name}
+      </div>
+      <div className="problem-hero">
+        <div className="unit-heading">
+          <span>{unit.abbreviation.replace('Unit ', '')}</span>
+          <div>
+            <p className="eyebrow">{unit.type.toUpperCase()} UNIT</p>
+            <h1>{unit.name}</h1>
+            <p>
+              {unit.location} · {unit.id}
+            </p>
+          </div>
+        </div>
+        <button className="secondary" onClick={onMap}>
+          <MapPin /> View on map
+        </button>
+      </div>
+      <div className="detail-grid">
+        <section className="panel span-2">
+          <PanelHead
+            title="Current portfolio"
+            note={`${portfolio.length} connected solution efforts`}
+          />
+          <div className="project-cards">
+            {portfolio.map((p) => (
+              <div className="project-card" key={p.id}>
+                <span className="maturity">{p.solutionTypeLabel}</span>
+                <strong>{p.name}</strong>
+                <p>
+                  {p.id} · {p.progress}% complete
+                </p>
+                <Progress value={p.progress} />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Capability strengths</h2>
+          <div className="tag-cloud">
+            {unit.capabilities.map((x) => (
+              <span key={x}>{x}</span>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Institutional knowledge</h2>
+          <p className="body-copy">
+            This unit participates across {portfolio.length} relational project
+            records and {unit.capabilities.length} capability areas.
+          </p>
+        </section>
+      </div>
+    </>
+  );
+}
 
-function ProjectsView({onProject}:{onProject:()=>void}){const {projects}=useData();const [query,setQuery]=useState('');const [maturity,setMaturity]=useState('All');const [capability,setCapability]=useState('All capabilities');const [location,setLocation]=useState('All locations');const [status,setStatus]=useState('All statuses');const filtered=filterProjects(projects,{query,maturity,capability,location,status});const capabilities=[...new Set(projects.flatMap(p=>p.tags))];const locations=[...new Set(projects.flatMap(p=>p.locations))];return <><ListHead title="Projects" note={`${projects.length} connected solution efforts`}/><div className="filterbar"><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Filter projects…"/><select value={maturity} onChange={e=>setMaturity(e.target.value)}>{['All','Concept','Prototype','Field Tested','Validated'].map(x=><option key={x}>{x}</option>)}</select><select value={capability} onChange={e=>setCapability(e.target.value)}><option>All capabilities</option>{capabilities.map(x=><option key={x}>{x}</option>)}</select><select value={location} onChange={e=>setLocation(e.target.value)}><option>All locations</option>{locations.map(x=><option key={x}>{x}</option>)}</select><select value={status} onChange={e=>setStatus(e.target.value)}>{['All statuses','Planning','Active','Transitioning'].map(x=><option key={x}>{x}</option>)}</select></div>{filtered.length?<div className="list-table">{filtered.map(p=><button key={p.id} onClick={onProject}><span><small>{p.id}</small><strong>{p.name}</strong></span><span>{p.unit}</span><span className="maturity">{p.maturity}</span><span><Progress value={p.progress}/><b>{p.progress}%</b></span><ChevronRight/></button>)}</div>:<div className="empty-state"><Wrench/><h2>No Projects match these filters.</h2><p>Clear one or more filters to broaden the result set.</p></div>}</>}
-function ProblemsView({onProblem}:{onProblem:()=>void}){const {problems}=useData();return <><ListHead title="Problems" note={`${problems.length} enduring capability gaps`}/><div className="list-table">{problems.map(p=><button key={p.id} onClick={onProblem}><span className={`priority ${p.priority==='High'?'high':'med'}`}>{p.priority.toUpperCase()}</span><span><small>{p.id}</small><strong>{p.title}</strong></span><span>{p.projectIds.length} projects · {p.unitCount} units</span><ChevronRight/></button>)}</div></>}
-function ListHead({title,note}:{title:string,note:string}){return <div className="page-head"><div><p className="eyebrow">KNOWLEDGE BASE</p><h1>{title}</h1><p>{note}</p></div></div>}
+function ProjectsView({
+  onProject,
+  onCreate,
+}: {
+  onProject: (id: string) => void;
+  onCreate: () => void;
+}) {
+  const { projects } = useData();
+  const [query, setQuery] = useState('');
+  const [maturity, setMaturity] = useState('All');
+  const [capability, setCapability] = useState('All capabilities');
+  const [location, setLocation] = useState('All locations');
+  const [status, setStatus] = useState('All statuses');
+  const [solutionType, setSolutionType] = useState('All solution types');
+  const [vendor, setVendor] = useState('All vendors');
+  const [procurement, setProcurement] = useState('All procurement statuses');
+  const [recommendation, setRecommendation] = useState('All recommendations');
+  const filtered = filterProjects(projects, {
+    query,
+    maturity,
+    capability,
+    location,
+    status,
+    solutionType,
+    vendor,
+    procurement,
+    recommendation,
+  });
+  const capabilities = [...new Set(projects.flatMap((p) => p.tags))];
+  const locations = [...new Set(projects.flatMap((p) => p.locations))];
+  const vendors = [
+    ...new Set(projects.map((p) => p.vendor?.vendorName).filter(Boolean)),
+  ] as string[];
+  const procurementStatuses = [
+    ...new Set(
+      projects.map((p) => p.vendor?.procurementStatus).filter(Boolean),
+    ),
+  ] as string[];
+  const recommendations = [
+    ...new Set(
+      projects
+        .flatMap((p) => [p.vendor?.recommendation, p.tactic?.recommendation])
+        .filter(Boolean),
+    ),
+  ] as string[];
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">KNOWLEDGE BASE</p>
+          <h1>Solution Efforts</h1>
+          <p>
+            {projects.length} connected organic, vendor, TTP, training,
+            integration, policy, and hybrid approaches
+          </p>
+        </div>
+        <button className="create" onClick={onCreate}>
+          <Plus size={16} /> Create solution effort
+        </button>
+      </div>
+      <div className="filterbar">
+        <Search />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter efforts, vendors, and types…"
+        />
+        <select
+          value={solutionType}
+          onChange={(e) => setSolutionType(e.target.value)}
+        >
+          <option>All solution types</option>
+          {SOLUTION_TYPES.map(([value, label]) => (
+            <option value={value} key={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select value={vendor} onChange={(e) => setVendor(e.target.value)}>
+          <option>All vendors</option>
+          {vendors.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select
+          value={procurement}
+          onChange={(e) => setProcurement(e.target.value)}
+        >
+          <option>All procurement statuses</option>
+          {procurementStatuses.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select
+          value={recommendation}
+          onChange={(e) => setRecommendation(e.target.value)}
+        >
+          <option>All recommendations</option>
+          {recommendations.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select value={maturity} onChange={(e) => setMaturity(e.target.value)}>
+          {['All', 'Concept', 'Prototype', 'Field Tested', 'Validated'].map(
+            (x) => (
+              <option key={x}>{x}</option>
+            ),
+          )}
+        </select>
+        <select
+          value={capability}
+          onChange={(e) => setCapability(e.target.value)}
+        >
+          <option>All capabilities</option>
+          {capabilities.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select value={location} onChange={(e) => setLocation(e.target.value)}>
+          <option>All locations</option>
+          {locations.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          {['All statuses', 'Planning', 'Active', 'Transitioning'].map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+      </div>
+      {filtered.length ? (
+        <div className="list-table">
+          {filtered.map((p) => (
+            <button key={p.id} onClick={() => onProject(p.id)}>
+              <span>
+                <small>{p.id}</small>
+                <strong>{p.name}</strong>
+              </span>
+              <span>{p.unit}</span>
+              <span className="maturity">{p.solutionTypeLabel}</span>
+              <span>
+                <Progress value={p.progress} />
+                <b>{p.progress}%</b>
+              </span>
+              <ChevronRight />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <Wrench />
+          <h2>No solution efforts match these filters.</h2>
+          <p>Clear one or more filters to broaden the result set.</p>
+        </div>
+      )}
+    </>
+  );
+}
+function ProblemsView({ onProblem }: { onProblem: (id: string) => void }) {
+  const { problems } = useData();
+  return (
+    <>
+      <ListHead
+        title="Problems"
+        note={`${problems.length} enduring capability gaps`}
+      />
+      <div className="list-table">
+        {problems.map((p) => (
+          <button key={p.id} onClick={() => onProblem(p.id)}>
+            <span
+              className={`priority ${p.priority === 'High' ? 'high' : 'med'}`}
+            >
+              {p.priority.toUpperCase()}
+            </span>
+            <span>
+              <small>{p.id}</small>
+              <strong>{p.title}</strong>
+            </span>
+            <span>
+              {p.projectIds.length} efforts · {p.unitCount} units
+            </span>
+            <ChevronRight />
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+function ListHead({ title, note }: { title: string; note: string }) {
+  return (
+    <div className="page-head">
+      <div>
+        <p className="eyebrow">KNOWLEDGE BASE</p>
+        <h1>{title}</h1>
+        <p>{note}</p>
+      </div>
+    </div>
+  );
+}
 
-function MapView({onProject}:{onProject:()=>void}){const {units}=useData();return <><ListHead title="Capability map" note="Explore expertise and project activity geographically"/><div className="map-panel"><div className="map-controls"><strong>{new Set(units.map(x=>x.location)).size} locations</strong><input placeholder="Search locations…"/><label><input type="checkbox" defaultChecked/> Active projects</label><label><input type="checkbox" defaultChecked/> Units</label><label><input type="checkbox"/> Help requests</label></div><div className="map-canvas"><div className="terrain t1"/><div className="terrain t2"/>{units.slice(0,3).map((u,i)=><button key={u.id} className={`map-pin p${i+1}`} onClick={onProject}><span>{u.projectIds.length}</span><small>{u.location}</small></button>)}<div className="map-note"><MapPin/><div><strong>{units[0].name}</strong><small>{units[0].projectIds.length} projects · {units[0].capabilities.join(', ')}</small></div></div></div></div></>}
-function GraphView({onProblem}:{onProblem:()=>void}){const {problems,projects,units}=useData();const problem=problems[0];const project=projects.find(x=>problem.projectIds.includes(x.id))!;const unit=units.find(x=>x.id===project.unitId)!;return <><ListHead title="Capability Graph" note="Trace how problems connect to projects, units, technologies, and outcomes"/><div className="graph-panel"><button className="node problem" onClick={onProblem}><AlertTriangle/>{problem.title}<small>{problem.id}</small></button><span className="edge e1"/><button className="node project"><Wrench/>{project.name}<small>{project.id}</small></button><span className="edge e2"/><button className="node unit"><Users/>{unit.abbreviation}<small>{unit.name}</small></button><span className="edge e3"/><button className="node tech"><Network/>{project.tags[0]}<small>Capability</small></button><span className="edge e4"/><button className="node lesson"><BookOpen/>{project.lessons[0]?.title}<small>Lesson learned</small></button><span className="edge e5"/><button className="node outcome"><Check/>{project.latestResult}<small>Outcome</small></button></div></>}
-function ExploreView({onProject}:{onProject:()=>void}){const {projects}=useData();const focus=projects[0];const related=projects.slice(1).map(p=>({project:p,score:(p.problems.some(x=>focus.problems.some(y=>y.id===x.id))?50:0)+(p.tags.some(x=>focus.tags.includes(x))?25:0)+(p.units.some(x=>focus.units.some(y=>y.id===x.id))?15:0)})).filter(x=>x.score).sort((a,b)=>b.score-a.score);return <><ListHead title="Related work" note="Connections calculated from persisted relationships"/><div className="question-callout"><strong>Why these results?</strong><p>Prioritized by shared Problems, then capabilities and participating Units.</p></div><div className="approach-grid">{related.map(({project:p,score})=><article key={p.id}><span className="maturity">{score}% related</span><h3>{p.name}</h3><p>{p.unit} · {p.tags.join(', ')}</p><button onClick={onProject}>Review connection <ArrowRight/></button></article>)}</div></>}
-function ActivityView(){const {activities}=useData();return <><ListHead title="Recent activity" note={`${activities.length} events across the capability network`}/><section className="panel activity-feed">{activities.map(x=><div key={x.id}><span><Activity/></span><div><strong>{x.description}</strong><small>{new Date(x.timestamp).toLocaleDateString()} · {x.actor}</small></div></div>)}</section></>}
+function MapView({ onProject }: { onProject: () => void }) {
+  const { units } = useData();
+  return (
+    <>
+      <ListHead
+        title="Capability map"
+        note="Explore expertise and project activity geographically"
+      />
+      <div className="map-panel">
+        <div className="map-controls">
+          <strong>
+            {new Set(units.map((x) => x.location)).size} locations
+          </strong>
+          <input placeholder="Search locations…" />
+          <label>
+            <input type="checkbox" defaultChecked /> Active projects
+          </label>
+          <label>
+            <input type="checkbox" defaultChecked /> Units
+          </label>
+          <label>
+            <input type="checkbox" /> Help requests
+          </label>
+        </div>
+        <div className="map-canvas">
+          <div className="terrain t1" />
+          <div className="terrain t2" />
+          {units.slice(0, 3).map((u, i) => (
+            <button
+              key={u.id}
+              className={`map-pin p${i + 1}`}
+              onClick={onProject}
+            >
+              <span>{u.projectIds.length}</span>
+              <small>{u.location}</small>
+            </button>
+          ))}
+          <div className="map-note">
+            <MapPin />
+            <div>
+              <strong>{units[0].name}</strong>
+              <small>
+                {units[0].projectIds.length} projects ·{' '}
+                {units[0].capabilities.join(', ')}
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+function GraphView({ onProblem }: { onProblem: () => void }) {
+  const { problems, projects, units } = useData();
+  const problem = problems[0];
+  const project = projects.find((x) => problem.projectIds.includes(x.id))!;
+  const unit = units.find((x) => x.id === project.unitId)!;
+  return (
+    <>
+      <ListHead
+        title="Capability Graph"
+        note="Trace how problems connect to projects, units, technologies, and outcomes"
+      />
+      <div className="graph-panel">
+        <button className="node problem" onClick={onProblem}>
+          <AlertTriangle />
+          {problem.title}
+          <small>{problem.id}</small>
+        </button>
+        <span className="edge e1" />
+        <button className="node project">
+          <Wrench />
+          {project.name}
+          <small>{project.id}</small>
+        </button>
+        <span className="edge e2" />
+        <button className="node unit">
+          <Users />
+          {unit.abbreviation}
+          <small>{unit.name}</small>
+        </button>
+        <span className="edge e3" />
+        <button className="node tech">
+          <Network />
+          {project.tags[0]}
+          <small>Capability</small>
+        </button>
+        <span className="edge e4" />
+        <button className="node lesson">
+          <BookOpen />
+          {project.lessons[0]?.title}
+          <small>Lesson learned</small>
+        </button>
+        <span className="edge e5" />
+        <button className="node outcome">
+          <Check />
+          {project.latestResult}
+          <small>Outcome</small>
+        </button>
+      </div>
+    </>
+  );
+}
+function ExploreView({ onProject }: { onProject: () => void }) {
+  const { projects } = useData();
+  const focus = projects[0];
+  const related = projects
+    .slice(1)
+    .map((p) => ({
+      project: p,
+      score:
+        (p.problems.some((x) => focus.problems.some((y) => y.id === x.id))
+          ? 50
+          : 0) +
+        (p.tags.some((x) => focus.tags.includes(x)) ? 25 : 0) +
+        (p.units.some((x) => focus.units.some((y) => y.id === x.id)) ? 15 : 0),
+    }))
+    .filter((x) => x.score)
+    .sort((a, b) => b.score - a.score);
+  return (
+    <>
+      <ListHead
+        title="Related work"
+        note="Connections calculated from persisted relationships"
+      />
+      <div className="question-callout">
+        <strong>Why these results?</strong>
+        <p>
+          Prioritized by shared Problems, then capabilities and participating
+          Units.
+        </p>
+      </div>
+      <div className="approach-grid">
+        {related.map(({ project: p, score }) => (
+          <article key={p.id}>
+            <span className="maturity">{score}% related</span>
+            <h3>{p.name}</h3>
+            <p>
+              {p.unit} · {p.tags.join(', ')}
+            </p>
+            <button onClick={onProject}>
+              Review connection <ArrowRight />
+            </button>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+function ActivityView() {
+  const { activities } = useData();
+  return (
+    <>
+      <ListHead
+        title="Recent activity"
+        note={`${activities.length} events across the capability network`}
+      />
+      <section className="panel activity-feed">
+        {activities.map((x) => (
+          <div key={x.id}>
+            <span>
+              <Activity />
+            </span>
+            <div>
+              <strong>{x.description}</strong>
+              <small>
+                {new Date(x.timestamp).toLocaleDateString()} · {x.actor}
+              </small>
+            </div>
+          </div>
+        ))}
+      </section>
+    </>
+  );
+}
 
-function CreateModal({onClose,onSave}:{onClose:()=>void,onSave:(title:string,description:string)=>Promise<void>}){const [title,setTitle]=useState('');const [description,setDescription]=useState('');const [matches,setMatches]=useState<{id:string,title:string,score:number}[]>([]);const [error,setError]=useState('');const [saving,setSaving]=useState(false);useEffect(()=>{if(title.trim().length<3){setTimeout(()=>setMatches([]),0);return}const controller=new AbortController();const timer=setTimeout(()=>fetch(`/api/problems?q=${encodeURIComponent(title)}`,{signal:controller.signal}).then(r=>r.json() as Promise<{id:string,title:string,score:number}[]>).then(setMatches).catch(()=>{}),250);return()=>{clearTimeout(timer);controller.abort()}},[title]);return <div className="modal-backdrop" role="presentation"><form className="modal" onSubmit={async e=>{e.preventDefault();setSaving(true);setError('');try{await onSave(title,description)}catch(value){setError(value instanceof Error?value.message:'Unable to create Problem.');setSaving(false)}}}><button className="modal-x" type="button" onClick={onClose}><X/></button><p className="eyebrow">NEW RECORD</p><h2>Create capability problem</h2><p>Capture an enduring gap before proposing a solution.</p><label>Problem title<input required value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Short RF Range"/></label><label>Description<textarea required value={description} onChange={e=>setDescription(e.target.value)} placeholder="What is happening, who is affected, and why does it matter?"/></label>{matches.length>0&&<div className="possible"><strong>Possible existing work</strong>{matches.map(match=><p key={match.id}><b>{match.id} · {match.title}</b><br/>{Math.round(match.score*100)}% deterministic match</p>)}<button type="button">Review before creating</button></div>}{error&&<p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancel</button><button className="create" disabled={saving}>{saving?'Creating…':'Create problem'}</button></div></form></div>}
+function CreateModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (title: string, description: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [matches, setMatches] = useState<
+    { id: string; title: string; score: number }[]
+  >([]);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (title.trim().length < 3) {
+      setTimeout(() => setMatches([]), 0);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () =>
+        fetch(`/api/problems?q=${encodeURIComponent(title)}`, {
+          signal: controller.signal,
+        })
+          .then(
+            (r) =>
+              r.json() as Promise<
+                { id: string; title: string; score: number }[]
+              >,
+          )
+          .then(setMatches)
+          .catch(() => {}),
+      250,
+    );
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [title]);
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <form
+        className="modal"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setSaving(true);
+          setError('');
+          try {
+            await onSave(title, description);
+          } catch (value) {
+            setError(
+              value instanceof Error
+                ? value.message
+                : 'Unable to create Problem.',
+            );
+            setSaving(false);
+          }
+        }}
+      >
+        <button className="modal-x" type="button" onClick={onClose}>
+          <X />
+        </button>
+        <p className="eyebrow">NEW RECORD</p>
+        <h2>Create capability problem</h2>
+        <p>Capture an enduring gap before proposing a solution.</p>
+        <label>
+          Problem title
+          <input
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Short RF Range"
+          />
+        </label>
+        <label>
+          Description
+          <textarea
+            required
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What is happening, who is affected, and why does it matter?"
+          />
+        </label>
+        {matches.length > 0 && (
+          <div className="possible">
+            <strong>Possible existing work</strong>
+            {matches.map((match) => (
+              <p key={match.id}>
+                <b>
+                  {match.id} · {match.title}
+                </b>
+                <br />
+                {Math.round(match.score * 100)}% deterministic match
+              </p>
+            ))}
+            <button type="button">Review before creating</button>
+          </div>
+        )}
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal-actions">
+          <button type="button" className="secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="create" disabled={saving}>
+            {saving ? 'Creating…' : 'Create problem'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
