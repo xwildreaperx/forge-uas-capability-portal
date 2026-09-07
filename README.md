@@ -1,71 +1,92 @@
 # FORGE — UAS Capability Portal
 
-FORGE is a local, fictional prototype for discovering UAS capability problems, the projects attempting to solve them, the units doing the work, and the evidence and lessons those efforts produce.
+FORGE is a local relational prototype for discovering fictional UAS capability Problems, the Projects attempting to solve them, the Units doing the work, and the evidence and Lessons those efforts produce.
 
 ## Product philosophy
 
-Problems are enduring capability gaps. Projects are attempts to solve Problems. Multiple Projects can address the same Problem, and one Project can address multiple Problems. Failed or alternative work remains valuable institutional knowledge rather than disappearing.
+Problems are enduring capability gaps. Projects are attempts to solve Problems. Multiple Projects can address the same Problem, one Project can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.
 
 ## Stack and architecture
 
-- Vinext / React 19 / TypeScript
-- Tailwind CSS with a product-specific operational theme
-- Lucide icons
-- Seeded TypeScript records with browser `localStorage` for prototype-created Problems
-- Component-level client state for navigation, filters, comparison, and Executive/Technical views
+- Vinext, React 19, TypeScript, Tailwind CSS, and Lucide icons
+- Prisma ORM 6 with local SQLite
+- Node's built-in test runner
 
-The prototype is intentionally local-first. Its record shapes and relationship-driven UI are ready to move behind a relational data access layer (SQLite for the next local phase, PostgreSQL later) without changing the core experience.
+Persistent operations are server-side:
 
-## Run locally
+- `prisma/schema.prisma` defines the relational model; `prisma/migrations/` contains reproducible migrations; `prisma/seed.ts` creates the fictional network.
+- `lib/db.ts` owns the Prisma singleton. `lib/data/portal.ts` queries narrow UI projections. `lib/data/mutations.ts` contains validated transactional mutations.
+- `lib/domain/` contains pure matching, search, validation, and tracking-ID logic.
+- `app/api/` exposes mutations and duplicate-work lookup. `app/page.tsx` loads the initial server projection.
+
+The database—not browser storage—is the source of truth. Client state is limited to navigation, filters, and view preferences.
+
+## Important relationships
+
+- `ProblemProject`: explicit many-to-many Problem ↔ Project junction with `isPrimary` metadata.
+- `ProjectUnit`: explicit many-to-many Project ↔ Unit junction with Lead, Supporting, and Testing roles.
+- `Project.leadUnitId`: distinct required Lead Unit.
+- `ProblemUnit`: Reporter/Affected Unit relationships.
+- Explicit tag and location junctions connect Problems, Projects, Units, and Lessons.
+- Phases, Lessons, repository links, activities, and help requests use foreign keys.
+
+Internal integer keys and public tracking IDs are separate. `TrackingCounter` allocates IDs transactionally as `PRB-000001`, `PRJ-000001`, `UNIT-000001`, and `LES-000001`. SQLite serializes writes for this prototype. A concurrent production deployment should use PostgreSQL row locking or a database sequence while preserving the format.
+
+## Clean local setup
 
 Requirements: Node.js 22.13+ and pnpm.
 
 ```bash
 pnpm install
+copy .env.example .env
+pnpm db:generate
+pnpm exec prisma migrate deploy
+pnpm db:seed
 pnpm dev
 ```
 
-Open `http://localhost:3000`.
+On macOS/Linux, use `cp .env.example .env`. Open `http://localhost:3000`.
 
-Production validation:
+For a new schema change:
 
 ```bash
-pnpm build
-pnpm lint
+pnpm db:migrate --name descriptive_change
 ```
 
-## Implemented
+Other useful commands are `pnpm db:generate`, `pnpm db:seed`, and `pnpm db:reset`.
 
-- Operational dashboard with activity, maturity, help requests, and current problem areas
-- Forgiving global search for RF problems, projects, and capabilities
-- Problem detail and side-by-side Project comparison
-- Project Executive and Technical views
-- Linked Problems, participating Units, phases, artifacts, repository metadata, tests, and Lessons Learned
-- Unit portfolio and capability profile
-- Project maturity/capability/location filters
-- Geographic capability exploration
-- Related Work and Capability Graph prototypes
-- Activity feed
-- Functional new Problem workflow with possible-existing-work detection
-- Device-local persistence for newly created Problems
-- Responsive tablet/mobile behavior
-- Small WebMCP action for opening the visible Problem-creation workflow where supported
+## Quality checks
 
-## Mocked
+```bash
+pnpm exec prisma validate
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
 
-All organizations, locations, operational details, repositories, files, and results are fictional and non-sensitive. Map geometry is illustrative. Repository and file links do not call external services.
+Tests cover both many-to-many relationships, the Lead Unit, tracking formats, persisted Problem/Project creation, multi-Problem and multi-Unit links, exact ID/keyword search, filters, and deterministic duplicate detection.
 
-## Known limitations
+## Seed and persistence
 
-- The first pass uses seeded records rather than Prisma/SQLite.
-- New Problems persist locally; other creation/edit workflows are represented in the connected information architecture but are not yet persisted.
-- Authentication, access control, file storage, and external integrations are intentionally omitted.
-- The map and capability graph are lightweight prototypes rather than full MapLibre/graph-library integrations.
+The fictional seed contains 12 Problems, 20 Projects, 12 Units across 8 locations, 40 phases, 20 Lessons Learned, and 44 activities. `PRB-000001 — Short RF Range` has four solution approaches. `PRJ-000001 — Airborne Communications Relay` addresses multiple Problems and involves multiple Units.
 
-## Recommended next steps
+Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems persist through `/api/problems` and survive refresh/restart. Possible Existing Work queries persisted Problems. Server mutations also support Project creation with multiple Problems/Units and a Lead Unit, Problem/Project edits, phases, Lessons, and repositories.
 
-1. Introduce SQLite with a relational schema for Problems, Projects, Units, phases, lessons, locations, links, artifacts, and activity.
-2. Move all mutations to validated server actions and add edit/delete workflows.
-3. Expand the seed to the complete 12/20/12+ dataset and add Vitest coverage for relationship, search, filtering, and tracking-ID logic.
-4. Add visibility markings and role-ready authorization boundaries.
-5. Replace the illustrative map with MapLibre and implement durable file/object storage.
+All records are fictional and non-sensitive.
+
+## Remaining limitations
+
+- The UI currently exposes new Problem creation. Project/edit/phase/Lesson/repository mutations exist and are tested at the server layer but still need dedicated forms.
+- Navigation remains a compact single-route surface rather than URL-addressable detail routes.
+- Map geometry and graph layout are illustrative; their records and relationships are persisted.
+- Authentication, permissions, file storage, synchronization, and external integrations are omitted.
+- SQLite is local-only. PostgreSQL migration requires changing the datasource provider/URL, creating a new migration baseline, and strengthening counter allocation; the relational model and data services can remain.
+
+## Recommended next pass
+
+1. Add URL-addressable Problem, Project, and Unit detail routes with missing-record states.
+2. Build forms over existing server mutations for Projects, edits, phases, Lessons, and repositories.
+3. Run integration tests against an isolated temporary database.
+4. Add visibility-aware authorization boundaries before authentication.
+5. Replace illustrative map/graph rendering only after relational workflows are complete.
