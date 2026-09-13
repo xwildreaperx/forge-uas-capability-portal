@@ -30,6 +30,9 @@ export type PortalProject = {
     categoryLabel: string;
     description: string;
     contact: string;
+    contactUserId: number | null;
+    contactUserStatus: string;
+    followsProjectLead: boolean;
     status: string;
     createdAt: string;
     createdByName: string;
@@ -221,6 +224,14 @@ export type PortalData = {
     eventType: string;
     timestamp: string;
     actor: string;
+    category: string;
+    actorUserId: number | null;
+    subjectUserId: number | null;
+    subjectUserName: string;
+    unitId: string;
+    unitName: string;
+    projectId: string;
+    projectName: string;
   }[];
   helpRequests: {
     id: number;
@@ -302,6 +313,21 @@ export type PortalData = {
     projectId: string;
     userId: number | null;
   }[];
+  platformIntegrity: {
+    key: string;
+    kind: string;
+    severity: 'action' | 'review';
+    message: string;
+    remediation: string;
+    entityType: 'USER' | 'UNIT' | 'PROJECT' | 'HELP_REQUEST';
+    entityId: string;
+    href: string;
+  }[];
+  systemAdminContinuity: {
+    active: number;
+    pending: number;
+    disabled: number;
+  };
   unitStewardship: {
     unitId: number;
     unitTrackingId: string;
@@ -362,6 +388,7 @@ export type PortalData = {
     identifier: string;
     title: string;
     status: string;
+    role: string;
     primaryUnit: string;
     primaryUnitId: number | null;
   }[];

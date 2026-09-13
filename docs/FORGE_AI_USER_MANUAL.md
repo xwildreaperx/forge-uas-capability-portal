@@ -23,6 +23,10 @@ FORGE separates identity profiles from future authentication. Accounts have Pend
 
 The Administration workspace shows each person’s primary and additional Unit memberships, explicit administrator scopes, current Project roles, open Help-contact responsibilities, and factual continuity warnings. “Needs attention” is a derived operational view, not a performance score or a stored lifecycle state. Disabling a user is permitted after reviewing the warning; Project Leads, active maintainers, Help contacts, and last-Unit-Administrator gaps remain visible for deliberate reassignment. Unit Administrators may manage ordinary memberships inside their scope but cannot grant administrator authority. System Administrators provide recovery when an active Unit has no active Unit Administrator and control Unit activation status.
 
+FORGE must retain at least one active System Administrator through supported mutations and advises when only one remains. Prefer two trusted, externally verified administrators. Active profile status does not prove authentication access. Create and map a replacement, activate and verify access, confirm continuity, and only then disable or downgrade the departing administrator. Unit Administrator role and active administered-Unit scope are kept consistent. Platform Integrity derives factual recovery findings that disappear when corrected; it is not a performance or compliance score.
+
+An active Unit cannot be deactivated while it leads a nonterminal Project. Transfer Lead Unit responsibility or close the effort first. Supported active work, active primary users, active Unit Administrators, and open Help Requests are shown as deactivation impact; inactive Units and their historical relationships remain preserved and may be reactivated.
+
 Primary Unit transfers preserve Project membership and historical attribution. Administrator scope does not move implicitly with a primary Unit. Open Help Requests default to following the Project Lead; a lead change updates that contact. An explicitly entered alternate contact remains explicit and must be reassigned deliberately if it becomes inactive. Administrative changes are recorded in Activity with actor, affected record, Unit context, time, and a plain-language description.
 
 ## Unit stewardship
@@ -42,6 +46,8 @@ Contributors submit potential Problems into a review queue rather than directly 
 The amber **Development Only — Not Authentication** switcher exists solely for local role acceptance. It is gated by environment and cannot operate in a production build. Do not mistake it for password, SSO, CAC, or session security.
 
 `pnpm db:seed:demo` loads fictional demonstration history and representative users for every role. `pnpm db:seed:clean` destructively resets the database to nine approved organizations, twelve initial canonical capability Problems, zero Solution Efforts, and one generic bootstrap System Administrator identity. Set `FORGE_BOOTSTRAP_IDENTIFIER` for the intended deployment context, then replace or map that identity when a real authentication adapter is implemented. Neither seed contains credentials.
+
+Both seeds operate destructively against the configured `DATABASE_URL`; verify it before execution. The bootstrap record is a profile, not credentials. Retire it only after production identity mapping and replacement administrator access are established and at least one other active System Administrator remains. Prefer two verified administrators before retirement.
 
 Missing detailed Problem information is intentional at this stage. A receiving AI should help stakeholders structure approved capability-level refinements when asked; it must not invent operational context, technical requirements, ownership, priority, Unit relationships, or proposed solutions. Demo records remain isolated in the development-only demo seed.
 

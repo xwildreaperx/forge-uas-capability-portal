@@ -248,6 +248,27 @@ test('clean operational initialization, discovery, and authorization remain vali
   const bootstrap = await db.user.findFirstOrThrow();
   const systemAdmin = context(bootstrap);
   assert.equal(hasPermission(systemAdmin, 'platform:admin'), true);
+  assert.equal((await getPortalData(systemAdmin)).systemAdminContinuity.active, 1);
+  assert.equal((await getPortalData(systemAdmin)).needsAttention.some((item) => item.kind === 'ONLY_ONE_ACTIVE_SYSTEM_ADMIN'), true);
+  await assert.rejects(
+    updateUserAccount(systemAdmin, bootstrap.id, { status: 'DISABLED' }),
+    /retain at least one active System Administrator/,
+  );
+  await assert.rejects(
+    updateUserAccount(systemAdmin, bootstrap.id, { role: 'PROJECT_USER' }),
+    /retain at least one active System Administrator/,
+  );
+  const replacementAdmin = await db.user.create({ data: {
+    trackingId: 'USR-000010', displayName: 'Temporary Replacement Administrator',
+    identifier: 'temporary-replacement-admin', role: 'SYSTEM_ADMIN', status: 'ACTIVE',
+  } });
+  assert.equal((await getPortalData(systemAdmin)).needsAttention.some((item) => item.kind === 'ONLY_ONE_ACTIVE_SYSTEM_ADMIN'), false);
+  await updateUserAccount(systemAdmin, replacementAdmin.id, { status: 'DISABLED' });
+  assert.equal((await getPortalData(systemAdmin)).systemAdminContinuity.active, 1);
+  assert.equal((await getPortalData(systemAdmin)).needsAttention.some((item) => item.kind === 'ONLY_ONE_ACTIVE_SYSTEM_ADMIN'), true);
+  await db.user.update({ where: { id: replacementAdmin.id }, data: { role: 'UNIT_ADMIN', status: 'ACTIVE' } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'UNIT_ADMIN_WITHOUT_SCOPE'), true);
+  await db.user.update({ where: { id: replacementAdmin.id }, data: { role: 'SYSTEM_ADMIN', status: 'DISABLED' } });
   const firstUnit = await db.unit.findUniqueOrThrow({
     where: { trackingId: 'UNIT-000001' },
   });
@@ -263,6 +284,20 @@ test('clean operational initialization, discovery, and authorization remain vali
     },
   });
   const contributor = context(contributorRecord, [firstUnit.id]);
+  await db.unitMembership.update({
+    where: { userId_unitId: { userId: contributorRecord.id, unitId: firstUnit.id } },
+    data: { isAdmin: true },
+  });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'NON_ADMIN_WITH_ADMIN_SCOPE'), true);
+  await db.unitMembership.update({
+    where: { userId_unitId: { userId: contributorRecord.id, unitId: firstUnit.id } },
+    data: { isAdmin: false },
+  });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'NON_ADMIN_WITH_ADMIN_SCOPE'), false);
+  await assert.rejects(
+    updateUserAccount(systemAdmin, contributorRecord.id, { role: 'UNIT_ADMIN' }),
+    /at least one active administered Unit/,
+  );
   await assert.rejects(
     submitProblem(contributor, {
       title: 'GPS Denied Navigation',
@@ -313,6 +348,15 @@ test('clean operational initialization, discovery, and authorization remain vali
     problemIds: [problem.id],
   });
   assert.equal(project.trackingId, 'PRJ-000001');
+  await db.problemProject.deleteMany({ where: { projectId: project.id } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'PROJECT_WITHOUT_PROBLEM' && item.entityId === project.trackingId), true);
+  await db.problemProject.create({ data: { projectId: project.id, problemId: problem.id, isPrimary: true } });
+  await db.projectUnit.deleteMany({ where: { projectId: project.id, unitId: firstUnit.id } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'LEAD_UNIT_NOT_PARTICIPATING' && item.entityId === project.trackingId), true);
+  await db.projectUnit.create({ data: { projectId: project.id, unitId: firstUnit.id, role: 'Lead' } });
+  await db.unit.update({ where: { id: firstUnit.id }, data: { isActive: false } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'INACTIVE_LEAD_UNIT' && item.entityId === project.trackingId), true);
+  await db.unit.update({ where: { id: firstUnit.id }, data: { isActive: true } });
   const secondProject = await createProject(projectUser, {
     name: 'Temporary Acceptance Parallel Effort',
     executiveSummary: 'Parallel work remains permitted.',
@@ -446,6 +490,15 @@ test('clean operational initialization, discovery, and authorization remain vali
     contact: 'temporary-project-user',
   });
   assert.equal(help.status, 'OPEN');
+  await updateHelpRequest(projectUser, project.id, help.id, {
+    contactUserId: projectUser.id,
+  });
+  assert.equal((await db.helpRequest.findUniqueOrThrow({ where: { id: help.id } })).contactUserId, projectUser.id);
+  assert.ok((await db.activityEvent.findMany({ where: { projectId: project.id } })).some((event) => event.eventType === 'HELP_REQUEST_CONTACT_CHANGED'));
+  await db.user.update({ where: { id: projectUser.id }, data: { status: 'DISABLED' } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'INVALID_HELP_CONTACT' && item.entityId === String(help.id)), true);
+  await db.user.update({ where: { id: projectUser.id }, data: { status: 'ACTIVE' } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'INVALID_HELP_CONTACT' && item.entityId === String(help.id)), false);
   assert.ok(
     (await db.project.findUniqueOrThrow({ where: { id: project.id } }))
       .lastMeaningfulActivityAt,
@@ -544,9 +597,22 @@ test('clean operational initialization, discovery, and authorization remain vali
     ).isAdmin,
     true,
   );
+  assert.equal((await db.user.findUniqueOrThrow({ where: { id: contributorRecord.id } })).role, 'UNIT_ADMIN');
+  await assert.rejects(
+    setUnitAdminAssignment(systemAdmin, contributorRecord.id, {
+      unitId: secondUnit.id, assigned: false,
+    }),
+    /retain at least one administered Unit/,
+  );
+  await updateUserAccount(systemAdmin, contributorRecord.id, { role: 'PROJECT_USER' });
+  assert.equal(await db.unitMembership.count({ where: { userId: contributorRecord.id, isAdmin: true } }), 0);
   await assert.rejects(
     updateUnitRecord(unitAdmin, firstUnit.id, { isActive: false }),
     /System Administrator/,
+  );
+  await assert.rejects(
+    updateUnitRecord(systemAdmin, firstUnit.id, { isActive: false }),
+    /leads .* nonterminal Project/,
   );
   await updateUnitRecord(unitAdmin, firstUnit.id, {
     forgePointOfContact: 'temporary-unit-poc',
@@ -709,6 +775,10 @@ test('clean operational initialization, discovery, and authorization remain vali
       ?.status,
     'DISABLED',
   );
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'INACTIVE_PROJECT_LEAD' && item.entityId === project.trackingId), true);
+  await db.user.update({ where: { id: projectUser.id }, data: { status: 'DISABLED' } });
+  assert.equal((await getPortalData(systemAdmin)).platformIntegrity.some((item) => item.kind === 'NO_ACTIVE_MAINTAINER' && item.entityId === project.trackingId), true);
+  await db.user.update({ where: { id: projectUser.id }, data: { status: 'ACTIVE' } });
   await manageProjectTeam(unitAdmin, project.id, {
     operation: 'CHANGE_LEAD',
     userId: projectUser.id,
@@ -969,4 +1039,8 @@ test('clean operational initialization, discovery, and authorization remain vali
   });
   assert.equal(superseded.status, 'Superseded');
   assert.equal(superseded.successorProjectId, project.id);
+  await updateUnitRecord(systemAdmin, firstUnit.id, { isActive: false });
+  assert.equal((await db.unit.findUniqueOrThrow({ where: { id: firstUnit.id } })).isActive, false);
+  await updateUnitRecord(systemAdmin, firstUnit.id, { isActive: true });
+  assert.ok((await db.activityEvent.findMany({ where: { unitId: firstUnit.id } })).filter((event) => event.eventType === 'UNIT_ADMIN_UPDATED').length >= 2);
 });

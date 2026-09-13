@@ -1929,6 +1929,7 @@ function Artifact({
 }
 
 function HelpRequests({ project }: { project: PortalProject }) {
+  const { projectDirectoryUsers } = useData();
   const [busy, setBusy] = useState<number | null>(null);
   const active = project.helpRequests.filter((request) =>
     ['OPEN', 'IN_PROGRESS'].includes(request.status),
@@ -1954,6 +1955,19 @@ function HelpRequests({ project }: { project: PortalProject }) {
     if (response.ok) window.location.reload();
     else setBusy(null);
   };
+  const changeContact = async (id: number, contactUserId: number) => {
+    setBusy(id);
+    const response = await fetch(`/api/projects/${project.id}/help-requests/${id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contactUserId }),
+    });
+    if (response.ok) window.location.reload();
+    else {
+      const result = (await response.json()) as { error?: string };
+      window.alert(result.error || 'Unable to update Help Request contact.');
+      setBusy(null);
+    }
+  };
   const card = (request: PortalProject['helpRequests'][number]) => (
     <article className="help-request-card" key={request.id}>
       <header>
@@ -1968,6 +1982,7 @@ function HelpRequests({ project }: { project: PortalProject }) {
       <p>{request.description}</p>
       <p>
         <b>Contact:</b> {request.contact || 'Project Lead'}
+        {' · '}{request.followsProjectLead ? 'Follows Project Lead' : 'Explicit contact'}
       </p>
       {request.resolutionSummary && (
         <p>
@@ -1976,6 +1991,15 @@ function HelpRequests({ project }: { project: PortalProject }) {
       )}
       {['OPEN', 'IN_PROGRESS'].includes(request.status) && (
         <footer>
+          {!request.followsProjectLead && (
+            <select aria-label={`Contact for ${request.title}`} defaultValue={request.contactUserId ?? ''}
+              disabled={busy === request.id}
+              onChange={(event) => void changeContact(request.id, Number(event.target.value))}>
+              <option value="" disabled>Change explicit contact</option>
+              {projectDirectoryUsers.filter((person) => person.status === 'ACTIVE').map((person) =>
+                <option key={person.id} value={person.id}>{person.displayName}</option>)}
+            </select>
+          )}
           {request.status === 'OPEN' && (
             <button
               disabled={busy === request.id}
@@ -2398,7 +2422,66 @@ function UnitStewardshipDashboard() {
   </section>;
 }
 
+function SystemAdminOverview() {
+  const { systemAdminContinuity, platformIntegrity, directoryUsers, activities } = useData();
+  const [activityCategory, setActivityCategory] = useState('ALL');
+  const [activityActor, setActivityActor] = useState('ALL');
+  const [activityUnit, setActivityUnit] = useState('ALL');
+  const [activitySubject, setActivitySubject] = useState('ALL');
+  const [activityProject, setActivityProject] = useState('ALL');
+  const [activitySince, setActivitySince] = useState('');
+  const [activityLimit, setActivityLimit] = useState(20);
+  const elevated = directoryUsers.filter((person) => ['SYSTEM_ADMIN','UNIT_ADMIN'].includes(person.role));
+  const adminActivities = activities.filter((event) => event.category !== 'Project Knowledge');
+  const filteredActivities = adminActivities.filter((event) =>
+    (activityCategory === 'ALL' || event.category === activityCategory) &&
+    (activityActor === 'ALL' || event.actor === activityActor) &&
+    (activityUnit === 'ALL' || event.unitId === activityUnit) &&
+    (activitySubject === 'ALL' || String(event.subjectUserId) === activitySubject) &&
+    (activityProject === 'ALL' || event.projectId === activityProject) &&
+    (!activitySince || event.timestamp >= new Date(`${activitySince}T00:00:00`).toISOString()),
+  );
+  return (
+    <div className="detail-grid two system-admin-overview">
+      <section className="panel span-2">
+        <div className="section-heading"><div><h2>Platform continuity</h2><p>Administrative coverage, not a performance measure. Active profile status does not verify external authentication.</p></div></div>
+        <div className="metrics-grid">
+          <div><strong>{systemAdminContinuity.active}</strong><span>Active System Administrators</span></div>
+          <div><strong>{systemAdminContinuity.pending}</strong><span>Pending System Administrators</span></div>
+          <div><strong>{systemAdminContinuity.disabled}</strong><span>Disabled former System Administrators</span></div>
+        </div>
+        <p className="muted">Handover: create and map a replacement profile, activate it, verify access outside FORGE, confirm this count, then retire the departing administrator.</p>
+      </section>
+      <section className="panel" id="platform-integrity">
+        <h2>Platform Integrity</h2><p>Deterministic relationship and recoverability checks. Findings clear when their source data is corrected.</p>
+        {platformIntegrity.length ? <div className="stack-list">{platformIntegrity.map((finding) => <div key={finding.key}>
+          <span className="maturity">{finding.severity === 'action' ? 'Action Required' : 'Review'}</span>
+          <strong>{finding.kind.replaceAll('_',' ')}</strong><p>{finding.message}</p><small>{finding.remediation}</small><a href={finding.href}>Open remediation</a>
+        </div>)}</div> : <div className="empty-state"><Check/><h3>No actionable integrity failures detected.</h3><p>Core Project, Unit, user, and responsibility relationships passed.</p></div>}
+      </section>
+      <section className="panel" id="elevated-roles">
+        <h2>Elevated roles</h2><p>Global continuity and explicitly administered Unit scopes.</p>
+        <div className="stack-list">{elevated.map((person) => <div key={person.id}><strong>{person.displayName}</strong><small>{person.role.replaceAll('_',' ')} · {person.status} · Primary: {person.primaryUnit}</small><p>{person.role === 'UNIT_ADMIN' ? `Administered Units: ${person.memberships.filter((item) => item.isAdmin).map((item) => item.unitName).join(', ') || 'None'}` : 'Global platform scope'}</p><a href="#responsibility-directory">View responsibilities</a></div>)}</div>
+      </section>
+      <section className="panel span-2" id="administrative-activity">
+        <h2>Recent administrative Activity</h2><p>Up to 200 recent events remain available for bounded, practical review.</p>
+        <div className="quick-form">
+          <select aria-label="Activity category" value={activityCategory} onChange={(event) => setActivityCategory(event.target.value)}><option value="ALL">All categories</option>{[...new Set(adminActivities.map((event) => event.category))].map((value) => <option key={value}>{value}</option>)}</select>
+          <select aria-label="Activity actor" value={activityActor} onChange={(event) => setActivityActor(event.target.value)}><option value="ALL">All actors</option>{[...new Set(adminActivities.map((event) => event.actor))].map((value) => <option key={value}>{value}</option>)}</select>
+          <select aria-label="Activity Unit" value={activityUnit} onChange={(event) => setActivityUnit(event.target.value)}><option value="ALL">All Units</option>{[...new globalThis.Map(adminActivities.filter((event) => event.unitId).map((event) => [event.unitId,event.unitName])).entries()].map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
+          <select aria-label="Affected user" value={activitySubject} onChange={(event) => setActivitySubject(event.target.value)}><option value="ALL">All affected users</option>{[...new globalThis.Map(adminActivities.filter((event) => event.subjectUserId).map((event) => [String(event.subjectUserId),event.subjectUserName])).entries()].map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
+          <select aria-label="Affected Project" value={activityProject} onChange={(event) => setActivityProject(event.target.value)}><option value="ALL">All Projects</option>{[...new globalThis.Map(adminActivities.filter((event) => event.projectId).map((event) => [event.projectId,event.projectName])).entries()].map(([id,name]) => <option key={id} value={id}>{id} — {name}</option>)}</select>
+          <label>Since <input aria-label="Activity since date" type="date" value={activitySince} onChange={(event) => setActivitySince(event.target.value)}/></label>
+        </div>
+        <div className="stack-list">{filteredActivities.slice(0,activityLimit).map((event) => <div key={event.id}><span className="maturity">{event.category}</span><strong>{event.description}</strong><small>{event.actor} · {new Date(event.timestamp).toLocaleString()}</small>{event.projectId ? <a href={`/projects/${event.projectId}`}>Open Project</a> : event.unitId ? <a href={`/units/${event.unitId}`}>Open Unit</a> : event.subjectUserId ? <a href="#responsibility-directory">Open user administration</a> : null}</div>)}</div>
+        {activityLimit < filteredActivities.length && <button className="secondary" onClick={() => setActivityLimit((value) => value + 20)}>Load more Activity</button>}
+      </section>
+    </div>
+  );
+}
+
 function AdministrationView() {
+  const data = useData();
   const {
     directoryUsers,
     submissions,
@@ -2407,14 +2490,24 @@ function AdministrationView() {
     problems,
     needsAttention,
     projectDirectoryUsers,
-  } = useData();
+  } = data;
   const current = session.currentUser;
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL');
+  const [userStatusFilter, setUserStatusFilter] = useState('ALL');
+  const [userUnitFilter, setUserUnitFilter] = useState('ALL');
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const scopedUnits =
     current?.role === 'SYSTEM_ADMIN'
       ? units
       : units.filter((unit) =>
           current?.administeredUnitIds.includes(unit.dbId),
         );
+  const filteredDirectoryUsers = directoryUsers.filter((person) =>
+    (userRoleFilter === 'ALL' || person.role === userRoleFilter) &&
+    (userStatusFilter === 'ALL' || person.status === userStatusFilter) &&
+    (userUnitFilter === 'ALL' || person.unitIds.includes(Number(userUnitFilter))) &&
+    (!attentionOnly || needsAttention.some((signal) => signal.userId === person.id)),
+  );
   const patch = async (url: string, body: Record<string, unknown>) => {
     const response = await fetch(url, {
       method: 'PATCH',
@@ -2454,6 +2547,7 @@ function AdministrationView() {
           </p>
         </div>
       </div>
+      {current?.role === 'SYSTEM_ADMIN' && <SystemAdminOverview />}
       <UnitStewardshipDashboard />
       <div className="detail-grid two">
         <section className="panel">
@@ -2483,9 +2577,24 @@ function AdministrationView() {
         </section>
         <section className="panel" id="responsibility-directory">
           <h2>User directory</h2>
+          <div className="quick-form">
+            <select aria-label="Filter users by role" value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)}>
+              <option value="ALL">All roles</option>
+              {['CONTRIBUTOR','PROJECT_USER','UNIT_ADMIN','SYSTEM_ADMIN'].map((role) => <option key={role}>{role}</option>)}
+            </select>
+            <select aria-label="Filter users by status" value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value)}>
+              <option value="ALL">All statuses</option>
+              {['PENDING','ACTIVE','DISABLED'].map((status) => <option key={status}>{status}</option>)}
+            </select>
+            <select aria-label="Filter users by Unit" value={userUnitFilter} onChange={(event) => setUserUnitFilter(event.target.value)}>
+              <option value="ALL">All Units</option>
+              {scopedUnits.map((unit) => <option key={unit.id} value={unit.dbId}>{unit.name}</option>)}
+            </select>
+            <label><input type="checkbox" checked={attentionOnly} onChange={(event) => setAttentionOnly(event.target.checked)}/> Has attention condition</label>
+          </div>
           {directoryUsers.length ? (
             <div className="stack-list">
-              {directoryUsers.map((item) => (
+              {filteredDirectoryUsers.map((item) => (
                 <details key={item.id}>
                   <summary>
                     <strong>{item.displayName}</strong>
@@ -2602,7 +2711,7 @@ function AdministrationView() {
                       Update membership
                     </button>
                   </form>
-                  {current?.role === 'SYSTEM_ADMIN' && (
+                  {current?.role === 'SYSTEM_ADMIN' && item.role !== 'SYSTEM_ADMIN' && (
                     <form
                       className="quick-form"
                       onSubmit={(event) => {
@@ -2733,8 +2842,10 @@ function AdministrationView() {
           )}
         </section>
       </div>
-      <section className="panel">
+      <section className="panel" id="unit-administration">
         <h2>Unit administration</h2>
+        {current?.role === 'SYSTEM_ADMIN' && !projectDirectoryUsers.some((person) => person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN') &&
+          <p className="form-warning">Create and activate an eligible Unit Administrator before assigning recovery scope.</p>}
         {scopedUnits.length ? (
           <div className="stack-list">
             {scopedUnits.map((unit) => (
@@ -2747,11 +2858,19 @@ function AdministrationView() {
                 {current?.role === 'SYSTEM_ADMIN' && (
                   <button
                     className="secondary"
-                    onClick={() =>
-                      void patch(`/api/admin/units/${unit.dbId}`, {
-                        isActive: !unit.isActive,
-                      })
-                    }
+                    onClick={() => {
+                      if (unit.isActive) {
+                        const activeStatuses = ['Planning','Active','Paused','Transitioning'];
+                        const led = data.projects.filter((project) => project.unitId === unit.id && activeStatuses.includes(project.status));
+                        const supported = data.projects.filter((project) => project.unitId !== unit.id && project.units.some((link) => link.id === unit.id) && activeStatuses.includes(project.status));
+                        const activeUsers = directoryUsers.filter((person) => person.status === 'ACTIVE' && person.primaryUnit === unit.name);
+                        const admins = directoryUsers.filter((person) => person.status === 'ACTIVE' && person.administeredUnitIds.includes(unit.dbId));
+                        const openHelp = data.helpRequests.filter((request) => request.unitName === unit.name).length;
+                        const impact = `${led.length} active led Projects; ${supported.length} active supported Projects; ${activeUsers.length} active primary users; ${admins.length} active Unit Administrators; ${openHelp} open Help Requests.`;
+                        if (!window.confirm(`Deactivate ${unit.name}?\n\n${impact}\n\nLed nonterminal Projects will block this action. Historical relationships will remain.`)) return;
+                      }
+                      void patch(`/api/admin/units/${unit.dbId}`, { isActive: !unit.isActive });
+                    }}
                   >
                     {unit.isActive ? 'Mark inactive' : 'Mark active'}
                   </button>
@@ -2781,7 +2900,7 @@ function AdministrationView() {
                       signal.kind === 'NO_ACTIVE_UNIT_ADMIN' &&
                       signal.unitId === unit.dbId,
                   ) && (
-                    <form
+                    projectDirectoryUsers.some((person) => person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN') ? <form
                       className="quick-form"
                       onSubmit={(event) => {
                         event.preventDefault();
@@ -2797,7 +2916,7 @@ function AdministrationView() {
                     >
                       <select name="userId">
                         {projectDirectoryUsers
-                          .filter((person) => person.status === 'ACTIVE')
+                          .filter((person) => person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN')
                           .map((person) => (
                             <option key={person.id} value={person.id}>
                               {person.displayName}
@@ -2807,7 +2926,7 @@ function AdministrationView() {
                       <button className="secondary" type="submit">
                         Assign recovery administrator
                       </button>
-                    </form>
+                    </form> : null
                   )}
               </div>
             ))}

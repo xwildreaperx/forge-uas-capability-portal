@@ -1354,6 +1354,34 @@ export async function updateHelpRequest(
   const request = await db.helpRequest.findFirstOrThrow({
     where: { id: helpRequestId, projectId },
   });
+  if (input.contactUserId !== undefined) {
+    if (request.followsProjectLead)
+      throw new Error('Lead-following contacts change through Project Lead reassignment.');
+    const contactUserId = Number(input.contactUserId);
+    const nextContact = await db.user.findUniqueOrThrow({ where: { id: contactUserId } });
+    if (nextContact.status !== 'ACTIVE')
+      throw new Error('Select an active Help Request contact.');
+    if (request.contactUserId === nextContact.id)
+      throw new Error('Select a different Help Request contact.');
+    const previous = request.contactUserId
+      ? await db.user.findUnique({ where: { id: request.contactUserId } })
+      : null;
+    const occurredAt = new Date();
+    return db.$transaction(async (tx) => {
+      const updated = await tx.helpRequest.update({
+        where: { id: helpRequestId },
+        data: { contactUserId: nextContact.id, contact: nextContact.identifier, followsProjectLead: false },
+      });
+      await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+      await tx.activityEvent.create({ data: {
+        timestamp: occurredAt, eventType: 'HELP_REQUEST_CONTACT_CHANGED',
+        description: `Help Request contact changed from ${previous?.displayName ?? request.contact ?? 'unassigned'} to ${nextContact.displayName}: ${request.title}.`,
+        actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id,
+        subjectUserId: nextContact.id,
+      } });
+      return updated;
+    });
+  }
   const status = controlled(input.status, HELP_STATUSES, 'Help Request status');
   if (request.status === 'RESOLVED' || request.status === 'CANCELLED')
     throw new Error(
@@ -1522,6 +1550,35 @@ export async function updateUserAccount(
   if (requestedStatus !== target.status)
     changes.push(`status changed from ${target.status} to ${requestedStatus}`);
   return db.$transaction(async (tx) => {
+    const persistedTarget = await tx.user.findUniqueOrThrow({ where: { id: targetId } });
+    const leavesActiveSystemAdmin =
+      persistedTarget.role === 'SYSTEM_ADMIN' && persistedTarget.status === 'ACTIVE' &&
+      (requestedRole !== 'SYSTEM_ADMIN' || requestedStatus !== 'ACTIVE');
+    if (leavesActiveSystemAdmin) {
+      const activeSystemAdmins = await tx.user.count({
+        where: { role: 'SYSTEM_ADMIN', status: 'ACTIVE' },
+      });
+      if (activeSystemAdmins <= 1)
+        throw new Error(
+          'FORGE must retain at least one active System Administrator. Assign and activate another System Administrator before changing this account.',
+        );
+    }
+    if (requestedRole === 'UNIT_ADMIN') {
+      const scopes = await tx.unitMembership.count({
+        where: { userId: targetId, isAdmin: true, unit: { isActive: true } },
+      });
+      if (!scopes)
+        throw new Error(
+          'A Unit Administrator must have at least one active administered Unit. Assign a Unit Admin scope first.',
+        );
+    }
+    const removedScopes = requestedRole !== 'UNIT_ADMIN'
+      ? await tx.unitMembership.count({ where: { userId: targetId, isAdmin: true } })
+      : 0;
+    if (removedScopes)
+      await tx.unitMembership.updateMany({
+        where: { userId: targetId, isAdmin: true }, data: { isAdmin: false },
+      });
     const updated = await tx.user.update({
       where: { id: targetId },
       data: {
@@ -1534,6 +1591,8 @@ export async function updateUserAccount(
         lastActivityAt: new Date(),
       },
     });
+    if (removedScopes)
+      changes.push(`${removedScopes} Unit Administrator scope${removedScopes === 1 ? '' : 's'} removed automatically`);
     if (changes.length)
       await tx.activityEvent.create({
         data: {
@@ -1561,6 +1620,9 @@ export async function createUserAccount(
   if (!Number.isInteger(unitId) || !canAccessUnit(actor, unitId))
     throw new Error('Select a Unit within your administrative scope.');
   const role = controlled(input.role || 'CONTRIBUTOR', USER_ROLES, 'Role');
+  const selectedUnit = await db.unit.findUniqueOrThrow({ where: { id: unitId } });
+  if (role === 'UNIT_ADMIN' && !selectedUnit.isActive)
+    throw new Error('A Unit Administrator must be assigned to an active Unit.');
   if (
     actor.role !== 'SYSTEM_ADMIN' &&
     !['CONTRIBUTOR', 'PROJECT_USER'].includes(role)
@@ -1702,16 +1764,33 @@ export async function setUnitAdminAssignment(
     throw new Error(
       'Only an active user can be assigned as a Unit Administrator.',
     );
+  if (assigned && target.role === 'SYSTEM_ADMIN')
+    throw new Error(
+      'System Administrators already have global scope. Downgrade safely before assigning a Unit Administrator role and scope.',
+    );
+  if (assigned && !unit.isActive)
+    throw new Error('A Unit Administrator must be assigned to an active Unit.');
   return db.$transaction(async (tx) => {
+    if (!assigned && target.role === 'UNIT_ADMIN') {
+      const remainingScopes = await tx.unitMembership.count({
+        where: { userId: targetId, isAdmin: true, unitId: { not: unitId }, unit: { isActive: true } },
+      });
+      if (!remainingScopes)
+        throw new Error(
+          'A Unit Administrator must retain at least one administered Unit. Assign another Unit or change the role first.',
+        );
+    }
     const membership = await tx.unitMembership.upsert({
       where: { userId_unitId: { userId: targetId, unitId } },
       update: { isAdmin: assigned },
       create: { userId: targetId, unitId, isAdmin: assigned },
     });
+    if (assigned && target.role !== 'UNIT_ADMIN')
+      await tx.user.update({ where: { id: targetId }, data: { role: 'UNIT_ADMIN' } });
     await tx.activityEvent.create({
       data: {
         eventType: assigned ? 'UNIT_ADMIN_ASSIGNED' : 'UNIT_ADMIN_REMOVED',
-        description: `${target.displayName} ${assigned ? 'assigned as' : 'removed as'} Unit Administrator for ${unit.name}.`,
+        description: `${target.displayName} ${assigned ? `assigned as Unit Administrator for ${unit.name}${target.role !== 'UNIT_ADMIN' ? ' and promoted to Unit Administrator' : ''}` : `removed as Unit Administrator for ${unit.name}`}.`,
         actor: actor.displayName,
         userId: actor.id,
         subjectUserId: target.id,
@@ -1734,8 +1813,23 @@ export async function updateUnitRecord(
     throw new Error(
       'Only a System Administrator may change Unit active status.',
     );
-  const unit = await db.unit.findUniqueOrThrow({ where: { id: unitId } });
+  const unit = await db.unit.findUniqueOrThrow({
+    where: { id: unitId },
+    include: {
+      leadProjects: { where: { status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] } }, select: { trackingId: true, name: true } },
+    },
+  });
   return db.$transaction(async (tx) => {
+    if (input.isActive === false && unit.isActive) {
+      const activeLedProjects = await tx.project.findMany({
+        where: { leadUnitId: unitId, status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] } },
+        select: { trackingId: true, name: true },
+      });
+      if (activeLedProjects.length)
+        throw new Error(
+          `This Unit leads ${activeLedProjects.length} nonterminal Project${activeLedProjects.length === 1 ? '' : 's'} (${activeLedProjects.map((item) => item.trackingId).join(', ')}). Transfer Lead Unit responsibility or close the Project before deactivation.`,
+        );
+    }
     const updated = await tx.unit.update({
       where: { id: unitId },
       data: {

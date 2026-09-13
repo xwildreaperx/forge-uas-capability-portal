@@ -45,3 +45,9 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - Treat Unit stewardship as a derived view over Projects, memberships, Problems, Lessons, Help Requests, submissions, and Activity. Project teams maintain underlying work; Unit Administrators manage continuity, scoped people, exceptions, and approved Unit contact data.
 - Keep Unit-led and Unit-supported portfolios distinct, preserve active and historical work, and never infer that a Project-linked Problem affects a Unit. Unit dashboards must not rank Units or users, calculate success rates, or penalize unsuccessful work.
 - Unit Administrators review Unit-originated Problem context and recommend canonical relationships. Only System/global governance controls creation and material edits of canonical Problems.
+- Supported mutations must always retain at least one active System Administrator. Prefer two verified trusted administrators operationally.
+- A Unit Administrator must have at least one active administered-Unit scope; non-Unit-Administrator roles must not retain Unit Admin scopes. Reconcile role and scope transactionally.
+- System Administrator authority never bypasses controlled-value validation and does not imply access to underlying controlled documentation.
+- An active Unit cannot be deactivated while it leads a nonterminal Project.
+- Integrity and attention findings are derived from source data and clear automatically; they are continuity safeguards, not performance scores.
+- Administrative recovery must preserve tracking IDs, historical authorship, and actor/record provenance.

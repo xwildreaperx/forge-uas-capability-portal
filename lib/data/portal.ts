@@ -19,6 +19,12 @@ const tones: Record<string, string> = {
   'Field Tested': 'green',
   Validated: 'purple',
 };
+const administrativeActivityCategory = (eventType: string) =>
+  eventType.startsWith('USER_') ? 'User Administration'
+    : eventType.includes('ADMIN') ? 'Role / Permission'
+      : eventType.startsWith('UNIT_') ? 'Unit Administration'
+        : eventType.includes('HELP') || eventType.includes('LEAD') || eventType.includes('RELATIONSHIP')
+          ? 'Project Recovery' : 'Project Knowledge';
 
 export async function getPortalData(
   currentUser: CurrentUserContext | null = null,
@@ -47,7 +53,7 @@ export async function getPortalData(
     db.project.findMany({
       orderBy: { trackingId: 'asc' },
       include: {
-        leadUnit: { select: { trackingId: true, name: true } },
+        leadUnit: { select: { trackingId: true, name: true, isActive: true } },
         problemLinks: {
           orderBy: { isPrimary: 'desc' },
           select: {
@@ -104,7 +110,16 @@ export async function getPortalData(
         },
       },
     }),
-    db.activityEvent.findMany({ orderBy: { timestamp: 'desc' }, take: 44 }),
+    db.activityEvent.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: 200,
+      include: {
+        user: { select: { id: true, displayName: true } },
+        subjectUser: { select: { id: true, displayName: true } },
+        unit: { select: { trackingId: true, name: true } },
+        project: { select: { trackingId: true, name: true } },
+      },
+    }),
     db.helpRequest.findMany({
       where: { status: { in: ['OPEN', 'IN_PROGRESS'] } },
       orderBy: { createdAt: 'desc' },
@@ -176,12 +191,31 @@ export async function getPortalData(
     'Transitioning',
   ]);
   const needsAttention: PortalData['needsAttention'] = [];
+  const platformIntegrity: PortalData['platformIntegrity'] = [];
+  const systemAdmins = directoryUsers.filter(
+    (person) => person.role === 'SYSTEM_ADMIN',
+  );
+  const activeSystemAdmins = systemAdmins.filter(
+    (person) => person.status === 'ACTIVE',
+  );
+  if (currentUser?.role === 'SYSTEM_ADMIN' && activeSystemAdmins.length === 1)
+    needsAttention.push({
+      key: 'single-active-system-admin',
+      kind: 'ONLY_ONE_ACTIVE_SYSTEM_ADMIN',
+      severity: 'warning',
+      message:
+        'Only one active System Administrator remains. Add and verify another trusted System Administrator to reduce platform lockout risk.',
+      unitId: null,
+      projectId: '',
+      userId: activeSystemAdmins[0]!.id,
+    });
   for (const unit of units.filter(
     (item) => visibleUnitIds.includes(item.id) && item.isActive,
   )) {
     const activeAdmins = directoryUsers.filter(
       (person) =>
         person.status === 'ACTIVE' &&
+        person.role === 'UNIT_ADMIN' &&
         person.unitMemberships.some(
           (membership) => membership.unitId === unit.id && membership.isAdmin,
         ),
@@ -287,6 +321,54 @@ export async function getPortalData(
           userId: person.id,
         });
   }
+  if (currentUser?.role === 'SYSTEM_ADMIN') {
+    for (const person of directoryUsers) {
+      const scopes = person.unitMemberships.filter((item) => item.isAdmin);
+      const activeScopes = scopes.filter((scope) =>
+        units.some((unit) => unit.id === scope.unitId && unit.isActive),
+      );
+      if (person.role === 'UNIT_ADMIN' && !activeScopes.length) {
+        const message = `${person.displayName} has the Unit Administrator role but no administered Unit.`;
+        needsAttention.push({
+          key: `unit-admin-no-scope-${person.id}`,
+          kind: 'UNIT_ADMIN_WITHOUT_SCOPE', severity: 'critical', message,
+          unitId: person.primaryUnitId, projectId: '', userId: person.id,
+        });
+        platformIntegrity.push({
+          key: `unit-admin-no-scope-${person.id}`, kind: 'UNIT_ADMIN_WITHOUT_SCOPE',
+          severity: 'action', message,
+          remediation: 'Assign an administered Unit or change the user role.',
+          entityType: 'USER', entityId: person.trackingId,
+          href: '#responsibility-directory',
+        });
+      }
+      if (!['UNIT_ADMIN', 'SYSTEM_ADMIN'].includes(person.role) && scopes.length) {
+        const message = `${person.displayName} retains Unit Administrator scope without an administrator role.`;
+        needsAttention.push({
+          key: `non-admin-scope-${person.id}`, kind: 'NON_ADMIN_WITH_ADMIN_SCOPE',
+          severity: 'critical', message, unitId: scopes[0]!.unitId,
+          projectId: '', userId: person.id,
+        });
+        platformIntegrity.push({
+          key: `non-admin-scope-${person.id}`, kind: 'NON_ADMIN_WITH_ADMIN_SCOPE',
+          severity: 'action', message,
+          remediation: 'Remove the administered-Unit scope or restore the intended role.',
+          entityType: 'USER', entityId: person.trackingId,
+          href: '#responsibility-directory',
+        });
+      }
+      for (const scope of scopes.filter((item) =>
+        units.some((unit) => unit.id === item.unitId && !unit.isActive),
+      ))
+        platformIntegrity.push({
+          key: `inactive-admin-scope-${person.id}-${scope.unitId}`,
+          kind: 'ADMIN_SCOPE_ON_INACTIVE_UNIT', severity: 'review',
+          message: `${person.displayName} retains administrator scope for an inactive Unit.`,
+          remediation: 'Review whether the Unit should be reactivated, the user reassigned, or the scope removed.',
+          entityType: 'USER', entityId: person.trackingId, href: '#responsibility-directory',
+        });
+    }
+  }
   for (const submission of submissions.filter((item) =>
     ['PENDING', 'UNDER_REVIEW'].includes(item.status),
   ))
@@ -299,6 +381,37 @@ export async function getPortalData(
       projectId: '',
       userId: submission.submitterId,
     });
+
+  if (currentUser?.role === 'SYSTEM_ADMIN') {
+    for (const project of projects) {
+      const active = activeStatuses.has(project.status);
+      const lead = project.userMemberships.find((member) => member.role === 'PROJECT_LEAD');
+      const maintainers = project.userMemberships.filter((member) => member.user.status === 'ACTIVE');
+      const participatingLead = project.unitLinks.some((link) => link.unit.id === project.leadUnitId);
+      const addProjectFinding = (kind: string, message: string, remediation: string) =>
+        platformIntegrity.push({ key: `${kind}-${project.id}`, kind, severity: 'action', message,
+          remediation, entityType: 'PROJECT', entityId: project.trackingId,
+          href: `/projects/${project.trackingId}` });
+      if (!project.problemLinks.length) addProjectFinding('PROJECT_WITHOUT_PROBLEM', `${project.trackingId} has no canonical Problem.`, 'Open Project Relationships and add a canonical Problem.');
+      if (!participatingLead) addProjectFinding('LEAD_UNIT_NOT_PARTICIPATING', `${project.trackingId}'s Lead Unit is not a participating Unit.`, 'Open Project Relationships and restore the Lead Unit relationship.');
+      if (active && !project.leadUnit.isActive) {
+        const message = `${project.trackingId} is active while its Lead Unit, ${project.leadUnit.name}, is inactive.`;
+        addProjectFinding('INACTIVE_LEAD_UNIT', message, 'Transfer Lead Unit responsibility or reactivate the Unit.');
+        needsAttention.push({ key: `inactive-lead-unit-${project.id}`, kind: 'INACTIVE_UNIT_LEADS_ACTIVE_PROJECT', severity: 'critical', message, unitId: project.leadUnitId, projectId: project.trackingId, userId: lead?.userId ?? null });
+      }
+      if (active && (!lead || lead.user.status !== 'ACTIVE')) addProjectFinding('INACTIVE_PROJECT_LEAD', `${project.trackingId} has no active Project Lead.`, 'Open Manage Team and assign an active Project Lead.');
+      if (active && !maintainers.length) addProjectFinding('NO_ACTIVE_MAINTAINER', `${project.trackingId} has no active maintainer.`, 'Open Manage Team and assign an active maintainer.');
+      for (const request of project.helpRequests.filter((item) => ['OPEN','IN_PROGRESS'].includes(item.status))) {
+        if ((!request.contact && !request.contactUserId) || (request.contactUser && request.contactUser.status !== 'ACTIVE'))
+          platformIntegrity.push({ key: `help-contact-${request.id}`, kind: 'INVALID_HELP_CONTACT', severity: 'action', message: `Help Request “${request.title}” does not have an active contact.`, remediation: 'Open the Project and correct the Help Request contact.', entityType: 'HELP_REQUEST', entityId: String(request.id), href: `/projects/${project.trackingId}#help-requests` });
+      }
+    }
+    for (const person of directoryUsers.filter((item) => item.status === 'ACTIVE' && item.primaryUnitId)) {
+      const primary = units.find((unit) => unit.id === person.primaryUnitId);
+      if (primary && !primary.isActive)
+        platformIntegrity.push({ key: `inactive-primary-unit-${person.id}`, kind: 'ACTIVE_USER_IN_INACTIVE_UNIT', severity: 'review', message: `${person.displayName}'s Primary Unit is inactive.`, remediation: 'Transfer the user or reactivate the Unit.', entityType: 'USER', entityId: person.trackingId, href: '#responsibility-directory' });
+    }
+  }
 
   for (const unitId of visibleUnitIds) {
     const associated = projects.filter(
@@ -492,6 +605,13 @@ export async function getPortalData(
       };
     });
 
+  const visibleActivities = activities.filter((activity) => {
+    const administrative = administrativeActivityCategory(activity.eventType) !== 'Project Knowledge';
+    if (!administrative || currentUser?.role === 'SYSTEM_ADMIN') return true;
+    return currentUser?.role === 'UNIT_ADMIN' && Boolean(
+      activity.unitId && currentUser.administeredUnitIds.includes(activity.unitId),
+    );
+  });
   return {
     datasetMode:
       projects.length > 0 ||
@@ -559,6 +679,9 @@ export async function getPortalData(
           .replace('Testing Support Location', 'Testing Support / Location'),
         description: request.description,
         contact: request.contact ?? '',
+        contactUserId: request.contactUserId,
+        contactUserStatus: request.contactUser?.status ?? '',
+        followsProjectLead: request.followsProjectLead,
         status: request.status,
         createdAt: request.createdAt.toISOString(),
         createdByName: request.createdBy.displayName,
@@ -752,12 +875,20 @@ export async function getPortalData(
       parentOrganization: u.parentOrganization ?? '',
       hasLocation: Boolean(u.location),
     })),
-    activities: activities.map((a) => ({
+    activities: visibleActivities.map((a) => ({
       id: a.id,
       description: a.description,
       eventType: a.eventType,
       timestamp: a.timestamp.toISOString(),
       actor: a.actor ?? 'System',
+      category: administrativeActivityCategory(a.eventType),
+      actorUserId: a.user?.id ?? null,
+      subjectUserId: a.subjectUser?.id ?? null,
+      subjectUserName: a.subjectUser?.displayName ?? '',
+      unitId: a.unit?.trackingId ?? '',
+      unitName: a.unit?.name ?? '',
+      projectId: a.project?.trackingId ?? '',
+      projectName: a.project?.name ?? '',
     })),
     helpRequests: helpRequests.map((h) => ({
       id: h.id,
@@ -793,6 +924,12 @@ export async function getPortalData(
       availableUsers,
     },
     needsAttention,
+    platformIntegrity,
+    systemAdminContinuity: {
+      active: activeSystemAdmins.length,
+      pending: systemAdmins.filter((person) => person.status === 'PENDING').length,
+      disabled: systemAdmins.filter((person) => person.status === 'DISABLED').length,
+    },
     unitStewardship,
     directoryUsers: directoryUsers.map((user) => ({
       id: user.id,
@@ -880,6 +1017,7 @@ export async function getPortalData(
               directoryUsers.filter(
                 (person) =>
                   person.status === 'ACTIVE' &&
+                  person.role === 'UNIT_ADMIN' &&
                   person.unitMemberships.some(
                     (candidate) =>
                       candidate.unitId === membership.unitId &&
@@ -900,6 +1038,7 @@ export async function getPortalData(
       identifier: user.identifier,
       title: user.title ?? '',
       status: user.status,
+      role: user.role,
       primaryUnit: user.primaryUnit?.name ?? 'No primary Unit',
       primaryUnitId: user.primaryUnitId,
     })),

@@ -36,6 +36,10 @@ Persistent operations are server-side:
 
 Accounts are Pending, Active, or Disabled. Unit membership, Unit-administrator scope, and Project membership are separate relational concepts. Disabled users retain attribution but cannot exercise permissions. Server mutations enforce permissions even when a UI control is hidden. Candidate Problem submissions remain separate from canonical Problem records until review.
 
+System administration prevents supported role or status changes from leaving FORGE with zero active System Administrators and advises when only one remains. Maintain at least one active System Administrator and preferably two verified trusted administrators. A `UNIT_ADMIN` must retain an active administered-Unit scope; downgrades remove administrative scopes transactionally. Platform Integrity presents derived, automatically clearing responsibility checks without scoring Units, users, or Projects.
+
+Unit deactivation preserves the Unit, tracking ID, Activity, and historical relationships. A Unit cannot be deactivated while it leads a Planning, Active, Paused, or Transitioning Project; transfer or close that responsibility first. The confirmation also reports supported active work, active primary users, Unit Administrators, and open Help Requests.
+
 Every Project has exactly one current Project Lead and may have multiple Contributors. Creation records the creator as the initial Lead; later Lead changes preserve the creator and all historical authorship. Current Project Leads, the Lead Unit's administrators, and System Administrators may manage the team. Assigned active contributors may maintain Project content, while removing an assignment removes that edit scope. Disabled members remain visible as inactive historical participants until an authorized maintainer reassigns or removes them.
 
 ## Project lifecycle and institutional knowledge
@@ -98,6 +102,8 @@ pnpm db:migrate --name descriptive_change
 Other useful commands are `pnpm db:generate`, `pnpm db:seed`, and `pnpm db:reset`. For an existing relational prototype database, `pnpm db:upgrade-solutions` applies the idempotent pathway demonstration data without resetting local records.
 
 Use `pnpm db:seed:demo` for fictional review history. Use `pnpm db:seed:clean` only when intentionally resetting the current database to the approved sparse operational baseline described below. It creates no credentials or secrets. Set `FORGE_BOOTSTRAP_IDENTIFIER` before clean seeding and map or replace that identity during future authentication integration.
+
+Both seed commands are destructive and operate against the currently configured `DATABASE_URL`. Verify that URL and the intended demo-versus-operational mode before running either command. The bootstrap administrator is an identity profile, not a credential. Do not retire it until production authentication is integrated, replacement administrator access is verified, and another active System Administrator exists. Recovery from an externally corrupted zero-admin database remains a deployment-owner emergency procedure; supported product mutations prevent that state.
 
 ## Quality checks
 

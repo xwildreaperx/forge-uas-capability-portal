@@ -892,6 +892,29 @@ main {
   grid-template-columns: 2fr 1fr;
   gap: 15px;
 }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.metrics-grid > div {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.metrics-grid strong { font-size: 1.5rem; }
+.metrics-grid span { color: var(--muted-foreground); font-size: 0.85rem; }
+
+@media (max-width: 700px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .system-admin-overview .quick-form { grid-template-columns: 1fr; }
+}
 .hero-summary h2 {
   font-size: 21px;
   max-width: 620px;
