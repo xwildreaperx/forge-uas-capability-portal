@@ -20,7 +20,9 @@ const tones: Record<string, string> = {
   Validated: 'purple',
 };
 const administrativeActivityCategory = (eventType: string) =>
-  eventType.startsWith('USER_') ? 'User Administration'
+  eventType.startsWith('PROBLEM_') || eventType.startsWith('SUBMISSION_') ? 'Problem Governance'
+    : eventType.startsWith('TAG_') ? 'Taxonomy Governance'
+    : eventType.startsWith('USER_') ? 'User Administration'
     : eventType.includes('ADMIN') ? 'Role / Permission'
       : eventType.startsWith('UNIT_') ? 'Unit Administration'
         : eventType.includes('HELP') || eventType.includes('LEAD') || eventType.includes('RELATIONSHIP')
@@ -39,6 +41,8 @@ export async function getPortalData(
     directoryUsers,
     submissions,
     projectDirectoryUsers,
+    tagInventory,
+    locations,
   ] = await Promise.all([
     db.problem.findMany({
       orderBy: { trackingId: 'asc' },
@@ -48,6 +52,10 @@ export async function getPortalData(
         },
         unitLinks: true,
         tags: { select: { tag: { select: { name: true } } } },
+        steward: { select: { id: true, displayName: true, status: true } },
+        supersededBy: { select: { id: true, trackingId: true, title: true } },
+        outgoingRelationships: { include: { targetProblem: { select: { trackingId: true, title: true } } } },
+        incomingRelationships: { include: { sourceProblem: { select: { trackingId: true, title: true } } } },
       },
     }),
     db.project.findMany({
@@ -169,7 +177,7 @@ export async function getPortalData(
               ? {}
               : { unitId: { in: currentUser?.administeredUnitIds ?? [] } },
           orderBy: { createdAt: 'desc' },
-          include: { submitter: true, unit: true, relatedProblem: true },
+          include: { submitter: true, unit: true, relatedProblem: true, reviews: { orderBy: { createdAt: 'asc' }, include: { reviewer: true } } },
         })
       : Promise.resolve([]),
     currentUser
@@ -177,6 +185,12 @@ export async function getPortalData(
           orderBy: { displayName: 'asc' },
           include: { primaryUnit: true },
         })
+      : Promise.resolve([]),
+    currentUser?.role === 'SYSTEM_ADMIN'
+      ? db.tag.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { problems: true, projects: true, units: true, lessons: true } } } })
+      : Promise.resolve([]),
+    currentUser?.role === 'SYSTEM_ADMIN'
+      ? db.location.findMany({ orderBy: { name: 'asc' } })
       : Promise.resolve([]),
   ]);
 
@@ -198,6 +212,16 @@ export async function getPortalData(
   const activeSystemAdmins = systemAdmins.filter(
     (person) => person.status === 'ACTIVE',
   );
+  if (currentUser?.role === 'SYSTEM_ADMIN') {
+    const validProblemStatuses = new Set(['Open', 'Under Review', 'Addressed — Viable Efforts Exist', 'Closed', 'Superseded']);
+    const validProblemPriorities = new Set(['Unprioritized', 'Low', 'Medium', 'High', 'Critical']);
+    for (const problem of problems) {
+      const invalid = !problem.title.trim() || !problem.shortDescription.trim() || !problem.detailedDescription.trim() || !problem.problemStatement.trim() || !problem.category.trim() || !validProblemStatuses.has(problem.status) || !validProblemPriorities.has(problem.priority) || (problem.status === 'Superseded' && !problem.supersededById);
+      if (invalid) platformIntegrity.push({ key: `problem-${problem.id}`, kind: 'INVALID_CANONICAL_PROBLEM', severity: 'action', message: `${problem.trackingId} has invalid or incomplete canonical governance data.`, remediation: 'Correct the controlled lifecycle, priority, successor, or required descriptive fields.', entityType: 'PROBLEM', entityId: problem.trackingId, href: `/problems/${problem.trackingId}` });
+      if (problem.priority === 'Unprioritized' || !problem.stewardUserId) needsAttention.push({ key: `problem-refinement-${problem.id}`, kind: 'PROBLEM_NEEDS_REFINEMENT', severity: 'warning', message: `${problem.trackingId} needs ${problem.priority === 'Unprioritized' ? 'priority review' : 'a named steward'}.`, unitId: null, projectId: '', userId: problem.stewardUserId });
+    }
+    for (const unit of units) if (!unit.name.trim() || !unit.abbreviation.trim() || !unit.unitType.trim()) platformIntegrity.push({ key: `unit-canonical-${unit.id}`, kind: 'INVALID_CANONICAL_UNIT', severity: 'action', message: `${unit.trackingId} has incomplete canonical identity data.`, remediation: 'Correct the Unit name, abbreviation, and controlled type.', entityType: 'UNIT', entityId: unit.trackingId, href: `/units/${unit.trackingId}` });
+  }
   if (currentUser?.role === 'SYSTEM_ADMIN' && activeSystemAdmins.length === 1)
     needsAttention.push({
       key: 'single-active-system-admin',
@@ -625,6 +649,7 @@ export async function getPortalData(
       description: p.shortDescription,
       detailedDescription: p.detailedDescription,
       problemStatement: p.problemStatement,
+      impact: p.impact ?? '',
       owner: p.owner ?? 'Unassigned',
       category: p.category,
       priority: p.priority,
@@ -632,6 +657,15 @@ export async function getPortalData(
       projectIds: p.projectLinks.map((x) => x.project.trackingId),
       unitCount: p.unitLinks.length,
       tags: p.tags.map((x) => x.tag.name),
+      stewardUserId: p.stewardUserId,
+      steward: p.steward?.displayName ?? '',
+      stewardStatus: p.steward?.status ?? '',
+      supersededById: p.supersededBy?.trackingId ?? '',
+      supersededByTitle: p.supersededBy?.title ?? '',
+      relationships: [
+        ...p.outgoingRelationships.map((item) => ({ direction: 'OUTGOING' as const, type: item.relationship, problemId: item.targetProblem.trackingId, title: item.targetProblem.title })),
+        ...p.incomingRelationships.map((item) => ({ direction: 'INCOMING' as const, type: item.relationship, problemId: item.sourceProblem.trackingId, title: item.sourceProblem.title })),
+      ],
     })),
     projects: projects.map((p) => ({
       dbId: p.id,
@@ -873,6 +907,8 @@ export async function getPortalData(
       isActive: u.isActive,
       forgePointOfContact: u.forgePointOfContact ?? '',
       parentOrganization: u.parentOrganization ?? '',
+      description: u.description ?? '',
+      locationId: u.locationId,
       hasLocation: Boolean(u.location),
     })),
     activities: visibleActivities.map((a) => ({
@@ -1054,6 +1090,7 @@ export async function getPortalData(
       unitId: item.unitId,
       createdAt: item.createdAt.toISOString(),
       relatedProblemId: item.relatedProblem?.trackingId ?? '',
+      reviews: item.reviews.map((review) => ({ stage: review.stage, decision: review.decision, note: review.note ?? '', reviewer: review.reviewer.displayName, createdAt: review.createdAt.toISOString() })),
       matches: findRelatedProblems(
         {
           title: item.title,
@@ -1071,5 +1108,7 @@ export async function getPortalData(
         })),
       ),
     })),
+    tagInventory: tagInventory.map((tag) => ({ id: tag.id, name: tag.name, usageCount: tag._count.problems + tag._count.projects + tag._count.units + tag._count.lessons })),
+    locations: locations.map((location) => ({ id: location.id, name: location.name, region: location.region ?? '' })),
   };
 }

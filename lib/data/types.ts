@@ -187,6 +187,7 @@ export type PortalProblem = {
   description: string;
   detailedDescription: string;
   problemStatement: string;
+  impact: string;
   owner: string;
   category: string;
   priority: string;
@@ -194,6 +195,12 @@ export type PortalProblem = {
   projectIds: string[];
   unitCount: number;
   tags: string[];
+  stewardUserId: number | null;
+  steward: string;
+  stewardStatus: string;
+  supersededById: string;
+  supersededByTitle: string;
+  relationships: { direction: 'OUTGOING' | 'INCOMING'; type: string; problemId: string; title: string }[];
 };
 
 export type PortalUnit = {
@@ -210,6 +217,8 @@ export type PortalUnit = {
   isActive: boolean;
   forgePointOfContact: string;
   parentOrganization: string;
+  description: string;
+  locationId: number | null;
   hasLocation: boolean;
 };
 
@@ -319,7 +328,7 @@ export type PortalData = {
     severity: 'action' | 'review';
     message: string;
     remediation: string;
-    entityType: 'USER' | 'UNIT' | 'PROJECT' | 'HELP_REQUEST';
+    entityType: 'USER' | 'UNIT' | 'PROJECT' | 'PROBLEM' | 'HELP_REQUEST';
     entityId: string;
     href: string;
   }[];
@@ -404,6 +413,7 @@ export type PortalData = {
     unitId: number | null;
     createdAt: string;
     relatedProblemId: string;
+    reviews: { stage: string; decision: string; note: string; reviewer: string; createdAt: string }[];
     matches: {
       dbId?: number;
       id: string;
@@ -416,4 +426,6 @@ export type PortalData = {
       reasons: string[];
     }[];
   }[];
+  tagInventory: { id: number; name: string; usageCount: number }[];
+  locations: { id: number; name: string; region: string }[];
 };

@@ -39,6 +39,12 @@ Needs Attention contains factual, automatically clearing conditions such as inac
 
 Problem authority remains divided: Contributors submit potential Problems; Unit Administrators review Unit context and recommend an existing canonical relationship, likely duplicate, clarification, or global review; System/global governance controls creation and material edits of canonical Problems.
 
+System Administrators govern canonical Units and Problems in the Administration workspace. A new Unit receives a permanent `UNIT-` identifier and records its canonical name, abbreviation, type, optional parent, general approved location, POC, description, capabilities/tags, and active state. A new Problem receives a permanent `PRB-` identifier and separates its progressive title, executive summary, detailed description, Problem statement, operational impact, controlled category, priority, lifecycle, tags, and named steward. Stewardship is metadata and does not grant edit authority.
+
+Problem priorities are Unprioritized, Low, Medium, High, and Critical. Lifecycle values are Open, Under Review, Addressed — Viable Efforts Exist, Closed, and Superseded. Superseded records remain discoverable and must point to their canonical successor. RELATED TO and VARIANT OF relationships preserve nearby work without collapsing distinct Problems. Unprioritized or unstewarded Problems appear as refinement attention, not data-integrity failures.
+
+Final approval of a submission as a new canonical Problem is atomic. FORGE performs a final duplicate check, creates the new Problem, links the unchanged source submission, records the System final decision, and adds Activity provenance together. Earlier Unit review is retained as a separate review-history stage. Linking to an existing Problem and duplicate disposition remain available when new canonical creation is not appropriate.
+
 Parent-command inheritance, receiving-Unit transfer acknowledgment, Unit-level AI handoff, external notifications, advanced analytics, reminders, and portfolio export remain future enhancements for consideration after the controlled pilot.
 
 Contributors submit potential Problems into a review queue rather than directly editing canonical Problems. Reviewers may accept and link a submission, associate it with existing work as a duplicate, or reject it. Project Users can create solution efforts and edit only created/assigned work. System Administrators have global scope. UI controls reflect these rules, but server mutations are the enforcement boundary.

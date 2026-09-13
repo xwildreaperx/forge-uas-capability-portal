@@ -2480,6 +2480,45 @@ function SystemAdminOverview() {
   );
 }
 
+function CanonicalGovernance() {
+  const { units, problems, projectDirectoryUsers, tagInventory, locations } = useData();
+  const send = async (event: React.SyntheticEvent<HTMLFormElement>, url: string, method = 'POST') => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const body: Record<string, unknown> = Object.fromEntries(data);
+    body.tags = data.getAll('tags');
+    if (body.duplicateReviewed === 'true') body.duplicateReviewed = true;
+    const options: RequestInit = { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
+    const response = await fetch(url, options);
+    const result = await response.json() as { error?: string };
+    if (!response.ok) window.alert(result.error || 'Unable to save governed record.'); else window.location.reload();
+  };
+  const activeUsers = projectDirectoryUsers.filter((person) => person.status === 'ACTIVE');
+  return <section className="canonical-governance">
+    <div className="detail-grid two">
+      <section className="panel"><h2>Create canonical Unit</h2><p>System-governed identity. The permanent FORGE Unit ID is assigned transactionally.</p>
+        <form className="quick-form" onSubmit={(event) => void send(event, '/api/admin/units')}>
+          <input name="name" required placeholder="Canonical Unit name"/><input name="abbreviation" required placeholder="Abbreviation"/><input name="unitType" required placeholder="Controlled Unit type"/>
+          <input name="parentOrganization" placeholder="Parent organization (optional)"/><select name="locationId"><option value="">Location unavailable</option>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}{item.region ? `, ${item.region}` : ''}</option>)}</select>
+          <input name="forgePointOfContact" placeholder="FORGE point of contact"/><textarea name="description" placeholder="Plain-language Unit description"/>
+          <select name="tags" multiple aria-label="Unit capabilities">{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><button type="submit">Create Unit</button>
+        </form>
+      </section>
+      <section className="panel"><h2>Create canonical Problem</h2><p>Direct System Administrator creation with duplicate review and controlled lifecycle fields.</p>
+        <form className="quick-form" onSubmit={(event) => void send(event, '/api/admin/problems')}>
+          <input name="title" required placeholder="Progressive title"/><textarea name="description" required placeholder="Executive summary"/><textarea name="detailedDescription" required placeholder="Detailed description"/><textarea name="problemStatement" required placeholder="Problem statement"/><textarea name="impact" placeholder="Operational impact"/>
+          <select name="category" defaultValue="Uncategorized">{['Navigation','Autonomy / Control','RF / Communications','Identification / Sensing','Guidance','RF / Signature Management','Uncategorized'].map((item) => <option key={item}>{item}</option>)}</select><select name="priority" defaultValue="Unprioritized">{['Unprioritized','Low','Medium','High','Critical'].map((item) => <option key={item}>{item}</option>)}</select>
+          <select name="stewardUserId"><option value="">No steward yet</option>{activeUsers.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select><select name="tags" multiple aria-label="Problem tags">{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><label><input name="duplicateReviewed" type="checkbox" value="true"/> I reviewed existing canonical Problems</label><button type="submit">Create Problem</button>
+        </form>
+      </section>
+    </div>
+    <section className="panel"><h2>Canonical Unit profiles</h2><p>Tracking IDs remain immutable. Unit Administrators may maintain only their scoped POC profile; canonical identity changes remain System-only.</p><div className="stack-list">{units.map((unit) => <details key={unit.id}><summary><strong>{unit.id} — {unit.name}</strong><small>{unit.abbreviation} · {unit.type} · {unit.isActive ? 'ACTIVE' : 'INACTIVE'}</small></summary><form className="quick-form" onSubmit={(event) => void send(event, `/api/admin/units/${unit.dbId}`, 'PATCH')}><input name="name" defaultValue={unit.name} required/><input name="abbreviation" defaultValue={unit.abbreviation} required/><input name="unitType" defaultValue={unit.type} required/><input name="parentOrganization" defaultValue={unit.parentOrganization}/><textarea name="description" defaultValue={unit.description}/><select name="locationId" defaultValue={unit.locationId ?? ''}><option value="">Location unavailable</option>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select name="tags" multiple defaultValue={unit.capabilities}>{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><button type="submit" className="secondary">Save canonical profile</button></form></details>)}</div></section>
+      <section className="panel"><h2>Canonical Problem registry</h2><p>Lifecycle, priority, stewardship, supersession, relationships, and refinement remain explicit.</p><div className="stack-list">{problems.map((problem) => <details key={problem.id}><summary><strong>{problem.id} — {problem.title}</strong><small>{problem.status} · {problem.priority} · Steward: {problem.steward || 'Needs refinement'}</small></summary><form className="quick-form" onSubmit={(event) => void send(event, `/api/admin/problems/${problem.id}`, 'PATCH')}><input name="title" defaultValue={problem.title} required/><textarea name="description" defaultValue={problem.description} required/><textarea name="detailedDescription" defaultValue={problem.detailedDescription} required/><textarea name="problemStatement" defaultValue={problem.problemStatement} required/><textarea name="impact" defaultValue={problem.impact}/><select name="category" defaultValue={problem.category}>{['Navigation','Autonomy / Control','RF / Communications','Identification / Sensing','Guidance','RF / Signature Management','Uncategorized'].map((item) => <option key={item}>{item}</option>)}</select><select name="priority" defaultValue={problem.priority}>{['Unprioritized','Low','Medium','High','Critical'].map((item) => <option key={item}>{item}</option>)}</select><select name="status" defaultValue={problem.status}>{['Open','Under Review','Addressed — Viable Efforts Exist','Closed','Superseded'].map((item) => <option key={item}>{item}</option>)}</select><select name="stewardUserId" defaultValue={problem.stewardUserId ?? ''}><option value="">No steward yet</option>{activeUsers.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select><select name="supersededById" defaultValue={problems.find((item) => item.id === problem.supersededById)?.dbId ?? ''}><option value="">No successor</option>{problems.filter((item) => item.id !== problem.id).map((item) => <option key={item.id} value={item.dbId}>{item.id} — {item.title}</option>)}</select><select name="tags" multiple defaultValue={problem.tags}>{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><button type="submit" className="secondary">Save Problem governance</button></form><form className="quick-form" onSubmit={(event) => void send(event, `/api/admin/problems/${problem.id}/relationships`, 'PATCH')}><select name="relationship"><option value="RELATED_TO">Related to</option><option value="VARIANT_OF">Variant of</option></select><select name="targetProblemId" required><option value="">Select canonical Problem</option>{problems.filter((item) => item.id !== problem.id).map((item) => <option key={item.id} value={item.dbId}>{item.id} — {item.title}</option>)}</select><button type="submit" className="secondary">Add relationship</button></form>{problem.relationships.map((item) => <p key={`${item.direction}-${item.type}-${item.problemId}`}>{item.direction === 'INCOMING' ? 'Referenced by' : item.type.replaceAll('_',' ')} <a href={`/problems/${item.problemId}`}>{item.problemId} — {item.title}</a></p>)}</details>)}</div></section>
+    <section className="panel"><h2>Governed tag inventory</h2><form className="quick-form" onSubmit={(event) => void send(event, '/api/admin/tags')}><input name="name" required placeholder="New governed tag"/><button type="submit">Create tag</button></form><div className="stack-list">{tagInventory.map((tag) => <form key={tag.id} className="quick-form" onSubmit={(event) => void send(event, `/api/admin/tags/${tag.id}`, 'PATCH')}><input name="name" defaultValue={tag.name} required/><small>{tag.usageCount} linked records</small><button type="submit" className="secondary">Rename</button></form>)}</div></section>
+  </section>;
+}
+
 function AdministrationView() {
   const data = useData();
   const {
@@ -2548,6 +2587,7 @@ function AdministrationView() {
         </div>
       </div>
       {current?.role === 'SYSTEM_ADMIN' && <SystemAdminOverview />}
+      {current?.role === 'SYSTEM_ADMIN' && <CanonicalGovernance />}
       <UnitStewardshipDashboard />
       <div className="detail-grid two">
         <section className="panel">
@@ -2831,6 +2871,27 @@ function AdministrationView() {
                       Save review
                     </button>
                   </form>
+                  {current?.role === 'SYSTEM_ADMIN' && item.status !== 'APPROVED_NEW' && (
+                    <form className="quick-form" onSubmit={(event) => {
+                      event.preventDefault();
+                      const form = event.currentTarget;
+                      const data = new FormData(form);
+                      const body: Record<string, unknown> = Object.fromEntries(data);
+                      body.tags = data.getAll('tags');
+                      body.duplicateReviewed = data.get('duplicateReviewed') === 'true';
+                      void fetch(`/api/problem-submissions/${item.trackingId}/convert`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async (response) => {
+                        const result = await response.json() as { error?: string };
+                        if (!response.ok) window.alert(result.error || 'Unable to approve as a new canonical Problem.'); else window.location.reload();
+                      });
+                    }}>
+                      <strong>System final review — approve as new canonical Problem</strong>
+                      <input name="title" defaultValue={item.title} required/><textarea name="description" defaultValue={item.description} required/><textarea name="detailedDescription" defaultValue={item.description} required/><textarea name="problemStatement" defaultValue={item.description} required/>
+                      <select name="category" defaultValue={item.category}>{['Navigation','Autonomy / Control','RF / Communications','Identification / Sensing','Guidance','RF / Signature Management','Uncategorized'].map((value) => <option key={value}>{value}</option>)}</select><select name="priority" defaultValue="Unprioritized">{['Unprioritized','Low','Medium','High','Critical'].map((value) => <option key={value}>{value}</option>)}</select>
+                      <select name="stewardUserId"><option value="">No steward yet</option>{projectDirectoryUsers.filter((person) => person.status === 'ACTIVE').map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select>
+                      <select name="tags" multiple>{data.tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><input name="reviewNote" placeholder="Final governance note"/><label><input type="checkbox" name="duplicateReviewed" value="true"/> Final duplicate check completed</label><button type="submit">Approve as new canonical Problem</button>
+                    </form>
+                  )}
+                  {item.reviews.length > 0 && <details><summary>Review history ({item.reviews.length})</summary>{item.reviews.map((review) => <p key={`${review.createdAt}-${review.stage}`}><strong>{review.stage.replaceAll('_',' ')}</strong> · {review.decision.replaceAll('_',' ')} · {review.reviewer} · {new Date(review.createdAt).toLocaleString()}{review.note ? ` — ${review.note}` : ''}</p>)}</details>}
                 </div>
               ))}
             </div>

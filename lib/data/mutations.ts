@@ -1,4 +1,5 @@
 import { db } from '../db.ts';
+import type { Prisma } from '@prisma/client';
 import { findRelatedProblems } from '../domain/matching.ts';
 import { nextTrackingId } from '../domain/tracking.ts';
 import {
@@ -90,6 +91,21 @@ const USER_ROLES = [
   'SYSTEM_ADMIN',
 ] as const;
 const ACCOUNT_STATUSES = ['PENDING', 'ACTIVE', 'DISABLED'] as const;
+export const PROBLEM_STATUSES = [
+  'Open',
+  'Under Review',
+  'Addressed — Viable Efforts Exist',
+  'Closed',
+  'Superseded',
+] as const;
+export const PROBLEM_PRIORITIES = [
+  'Unprioritized', 'Low', 'Medium', 'High', 'Critical',
+] as const;
+export const PROBLEM_CATEGORIES = [
+  'Navigation', 'Autonomy / Control', 'RF / Communications',
+  'Identification / Sensing', 'Guidance', 'RF / Signature Management',
+  'Uncategorized',
+] as const;
 const controlled = <T extends readonly string[]>(
   value: unknown,
   values: T,
@@ -136,32 +152,34 @@ export async function createProblem(
   user: CurrentUserContext | null,
   input: Record<string, unknown>,
 ) {
-  requirePermission(user, 'submission:review');
+  const actor = requirePermission(user, 'platform:admin');
   const title = requiredString(input.title, 'Title');
-  const description = requiredString(input.description, 'Description');
+  const description = requiredString(input.description, 'Executive summary');
+  const detailedDescription = requiredString(input.detailedDescription, 'Detailed description');
+  const problemStatement = requiredString(input.problemStatement, 'Problem statement');
+  const matches = await detectRelatedProblems({ title, description, category: typeof input.category === 'string' ? input.category : '' });
+  if (matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') && input.duplicateReviewed !== true)
+    throw new ProblemMatchReviewRequired(matches);
   return db.$transaction(async (tx) => {
     const trackingId = await nextTrackingId(tx, 'Problem');
-    return tx.problem.create({
+    const problem = await tx.problem.create({
       data: {
         trackingId,
         title,
         shortDescription: description,
-        detailedDescription:
-          typeof input.detailedDescription === 'string'
-            ? input.detailedDescription
-            : description,
-        problemStatement:
-          typeof input.problemStatement === 'string'
-            ? input.problemStatement
-            : description,
-        category:
-          typeof input.category === 'string' ? input.category : 'Uncategorized',
-        priority:
-          typeof input.priority === 'string' ? input.priority : 'Medium',
-        status: 'Open',
+        detailedDescription,
+        problemStatement,
+        impact: optional(input.impact),
+        category: controlled(input.category || 'Uncategorized', PROBLEM_CATEGORIES, 'Category'),
+        priority: controlled(input.priority || 'Unprioritized', PROBLEM_PRIORITIES, 'Priority'),
+        status: controlled(input.status || 'Open', PROBLEM_STATUSES, 'Status'),
+        stewardUserId: optionalNumber(input.stewardUserId),
         dateIdentified: new Date(),
+        tags: { create: await governedTagConnections(tx, input.tags) },
       },
     });
+    await tx.activityEvent.create({ data: { eventType: 'PROBLEM_CREATED', description: `${trackingId} canonical Problem created: ${title}.`, actor: actor.displayName, userId: actor.id, problemId: problem.id } });
+    return problem;
   });
 }
 
@@ -170,18 +188,34 @@ export async function updateProblem(
   id: string,
   input: Record<string, unknown>,
 ) {
-  requirePermission(user, 'submission:review');
-  return db.problem.update({
-    where: { trackingId: id },
-    data: {
-      title: input.title ? requiredString(input.title, 'Title') : undefined,
-      shortDescription: input.description
-        ? requiredString(input.description, 'Description')
-        : undefined,
-      priority: typeof input.priority === 'string' ? input.priority : undefined,
-      status: typeof input.status === 'string' ? input.status : undefined,
-    },
+  const actor = requirePermission(user, 'platform:admin');
+  const existing = await db.problem.findUniqueOrThrow({ where: { trackingId: id } });
+  const status = input.status === undefined ? existing.status : controlled(input.status, PROBLEM_STATUSES, 'Status');
+  const supersededById = input.supersededById === undefined ? existing.supersededById : optionalNumber(input.supersededById);
+  if (status === 'Superseded' && !supersededById) throw new Error('A superseded Problem must identify its canonical successor.');
+  if (supersededById === existing.id) throw new Error('A Problem cannot supersede itself.');
+  return db.$transaction(async (tx) => {
+    const updated = await tx.problem.update({ where: { trackingId: id }, data: {
+      title: input.title === undefined ? undefined : requiredString(input.title, 'Title'),
+      shortDescription: input.description === undefined ? undefined : requiredString(input.description, 'Executive summary'),
+      detailedDescription: input.detailedDescription === undefined ? undefined : requiredString(input.detailedDescription, 'Detailed description'),
+      problemStatement: input.problemStatement === undefined ? undefined : requiredString(input.problemStatement, 'Problem statement'),
+      impact: input.impact === undefined ? undefined : optional(input.impact),
+      category: input.category === undefined ? undefined : controlled(input.category, PROBLEM_CATEGORIES, 'Category'),
+      priority: input.priority === undefined ? undefined : controlled(input.priority, PROBLEM_PRIORITIES, 'Priority'),
+      status, stewardUserId: input.stewardUserId === undefined ? undefined : optionalNumber(input.stewardUserId), supersededById,
+      tags: input.tags === undefined ? undefined : { deleteMany: {}, create: await governedTagConnections(tx, input.tags) },
+    }});
+    await tx.activityEvent.create({ data: { eventType: 'PROBLEM_UPDATED', description: `${id} canonical Problem governance fields updated.`, actor: actor.displayName, userId: actor.id, problemId: existing.id } });
+    return updated;
   });
+}
+
+async function governedTagConnections(tx: Prisma.TransactionClient, value: unknown) {
+  const names = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean) : [];
+  const tags = await tx.tag.findMany({ where: { name: { in: names } }, select: { id: true, name: true } });
+  if (tags.length !== new Set(names).size) throw new Error('Select only tags from the governed tag inventory.');
+  return tags.map((tag) => ({ tagId: tag.id }));
 }
 
 export async function createProject(
@@ -1500,15 +1534,89 @@ export async function reviewProblemSubmission(
     throw new Error(
       'Accepted or duplicate submissions must link to a canonical Problem.',
     );
-  return db.problemSubmission.update({
-    where: { trackingId },
-    data: {
-      status: status as never,
-      relatedProblemId,
-      reviewerId: actor.id,
-      reviewNote: optional(input.reviewNote),
-      reviewedAt: new Date(),
-    },
+  return db.$transaction(async (tx) => {
+    const updated = await tx.problemSubmission.update({ where: { trackingId }, data: {
+      status: status as never, relatedProblemId, reviewerId: actor.id,
+      reviewNote: optional(input.reviewNote), reviewedAt: new Date(),
+    }});
+    await tx.submissionReview.create({ data: {
+      submissionId: submission.id, reviewerId: actor.id,
+      stage: actor.role === 'SYSTEM_ADMIN' ? 'SYSTEM_FINAL' : 'UNIT_REVIEW',
+      decision: status, note: optional(input.reviewNote),
+    }});
+    await tx.activityEvent.create({ data: { eventType: 'SUBMISSION_REVIEWED', description: `${trackingId} review recorded as ${status}.`, actor: actor.displayName, userId: actor.id, unitId: submission.unitId } });
+    return updated;
+  });
+}
+
+export async function convertSubmissionToCanonicalProblem(
+  user: CurrentUserContext | null,
+  trackingId: string,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'platform:admin');
+  const submission = await db.problemSubmission.findUniqueOrThrow({ where: { trackingId } });
+  if (submission.status === 'APPROVED_NEW') throw new Error('This submission has already been converted.');
+  const title = requiredString(input.title ?? submission.title, 'Title');
+  const description = requiredString(input.description ?? submission.description, 'Executive summary');
+  const matches = (await detectRelatedProblems({ title, description, category: typeof input.category === 'string' ? input.category : submission.category }))
+    .filter((match) => match.classification === 'POSSIBLE_DUPLICATE');
+  if (matches.length && input.duplicateReviewed !== true) throw new ProblemMatchReviewRequired(matches);
+  return db.$transaction(async (tx) => {
+    const problem = await tx.problem.create({ data: {
+      trackingId: await nextTrackingId(tx, 'Problem'), title, shortDescription: description,
+      detailedDescription: requiredString(input.detailedDescription ?? submission.supportingContext ?? description, 'Detailed description'),
+      problemStatement: requiredString(input.problemStatement ?? description, 'Problem statement'),
+      impact: optional(input.impact ?? submission.operationalImpact),
+      category: controlled(input.category ?? submission.category, PROBLEM_CATEGORIES, 'Category'),
+      priority: controlled(input.priority || 'Unprioritized', PROBLEM_PRIORITIES, 'Priority'),
+      status: controlled(input.status || 'Open', PROBLEM_STATUSES, 'Status'),
+      stewardUserId: optionalNumber(input.stewardUserId), dateIdentified: new Date(),
+      tags: { create: await governedTagConnections(tx, input.tags) },
+    }});
+    await tx.problemSubmission.update({ where: { id: submission.id }, data: { status: 'APPROVED_NEW', relatedProblemId: problem.id, reviewerId: actor.id, reviewNote: optional(input.reviewNote), reviewedAt: new Date() } });
+    await tx.submissionReview.create({ data: { submissionId: submission.id, reviewerId: actor.id, stage: 'SYSTEM_FINAL', decision: 'APPROVED_NEW', note: optional(input.reviewNote) } });
+    await tx.activityEvent.create({ data: { eventType: 'SUBMISSION_CONVERTED', description: `${trackingId} approved as new canonical Problem ${problem.trackingId}; original submission retained.`, actor: actor.displayName, userId: actor.id, problemId: problem.id, unitId: submission.unitId } });
+    return problem;
+  });
+}
+
+export async function setProblemRelationship(user: CurrentUserContext | null, trackingId: string, input: Record<string, unknown>) {
+  const actor = requirePermission(user, 'platform:admin');
+  const relationship = controlled(input.relationship, ['RELATED_TO', 'VARIANT_OF'] as const, 'Relationship');
+  const targetId = Number(input.targetProblemId);
+  const source = await db.problem.findUniqueOrThrow({ where: { trackingId } });
+  if (source.id === targetId) throw new Error('A Problem cannot relate to itself.');
+  await db.problem.findUniqueOrThrow({ where: { id: targetId } });
+  return db.$transaction(async (tx) => {
+    const result = input.remove === true
+      ? await tx.problemRelationship.delete({ where: { sourceProblemId_targetProblemId_relationship: { sourceProblemId: source.id, targetProblemId: targetId, relationship } } })
+      : await tx.problemRelationship.upsert({ where: { sourceProblemId_targetProblemId_relationship: { sourceProblemId: source.id, targetProblemId: targetId, relationship } }, update: {}, create: { sourceProblemId: source.id, targetProblemId: targetId, relationship } });
+    await tx.activityEvent.create({ data: { eventType: 'PROBLEM_RELATIONSHIP_UPDATED', description: `${trackingId}: ${relationship} relationship ${input.remove === true ? 'removed' : 'recorded'}.`, actor: actor.displayName, userId: actor.id, problemId: source.id } });
+    return result;
+  });
+}
+
+export async function createTag(user: CurrentUserContext | null, input: Record<string, unknown>) {
+  const actor = requirePermission(user, 'platform:admin');
+  const name = requiredString(input.name, 'Tag name');
+  if (await db.tag.findFirst({ where: { name: { equals: name } } })) throw new Error('That governed tag already exists.');
+  return db.$transaction(async (tx) => {
+    const tag = await tx.tag.create({ data: { name } });
+    await tx.activityEvent.create({ data: { eventType: 'TAG_CREATED', description: `Governed tag created: ${name}.`, actor: actor.displayName, userId: actor.id } });
+    return tag;
+  });
+}
+
+export async function renameTag(user: CurrentUserContext | null, tagId: number, input: Record<string, unknown>) {
+  const actor = requirePermission(user, 'platform:admin');
+  const name = requiredString(input.name, 'Tag name');
+  const prior = await db.tag.findUniqueOrThrow({ where: { id: tagId } });
+  if (await db.tag.findFirst({ where: { name: { equals: name }, id: { not: tagId } } })) throw new Error('That governed tag already exists.');
+  return db.$transaction(async (tx) => {
+    const tag = await tx.tag.update({ where: { id: tagId }, data: { name } });
+    await tx.activityEvent.create({ data: { eventType: 'TAG_RENAMED', description: `Governed tag renamed from ${prior.name} to ${name}; linked records retained.`, actor: actor.displayName, userId: actor.id } });
+    return tag;
   });
 }
 
@@ -1819,6 +1927,13 @@ export async function updateUnitRecord(
       leadProjects: { where: { status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] } }, select: { trackingId: true, name: true } },
     },
   });
+  if (actor.role === 'SYSTEM_ADMIN' && (input.name !== undefined || input.abbreviation !== undefined)) {
+    const proposedName = input.name === undefined ? unit.name : requiredString(input.name, 'Unit name');
+    const proposedAbbreviation = input.abbreviation === undefined ? unit.abbreviation : requiredString(input.abbreviation, 'Abbreviation');
+    const peers = await db.unit.findMany({ where: { id: { not: unitId } }, select: { name: true, abbreviation: true } });
+    if (peers.some((item) => item.name.toLocaleLowerCase() === proposedName.toLocaleLowerCase())) throw new Error('A Unit with that canonical name already exists.');
+    if (peers.some((item) => item.abbreviation.toLocaleLowerCase() === proposedAbbreviation.toLocaleLowerCase())) throw new Error('A Unit with that abbreviation already exists.');
+  }
   return db.$transaction(async (tx) => {
     if (input.isActive === false && unit.isActive) {
       const activeLedProjects = await tx.project.findMany({
@@ -1836,6 +1951,13 @@ export async function updateUnitRecord(
         isActive:
           typeof input.isActive === 'boolean' ? input.isActive : undefined,
         forgePointOfContact: optional(input.forgePointOfContact) ?? undefined,
+        name: actor.role === 'SYSTEM_ADMIN' && input.name !== undefined ? requiredString(input.name, 'Unit name') : undefined,
+        abbreviation: actor.role === 'SYSTEM_ADMIN' && input.abbreviation !== undefined ? requiredString(input.abbreviation, 'Abbreviation') : undefined,
+        unitType: actor.role === 'SYSTEM_ADMIN' && input.unitType !== undefined ? requiredString(input.unitType, 'Unit type') : undefined,
+        parentOrganization: actor.role === 'SYSTEM_ADMIN' && input.parentOrganization !== undefined ? optional(input.parentOrganization) : undefined,
+        description: actor.role === 'SYSTEM_ADMIN' && input.description !== undefined ? optional(input.description) : undefined,
+        locationId: actor.role === 'SYSTEM_ADMIN' && input.locationId !== undefined ? optionalNumber(input.locationId) : undefined,
+        capabilities: actor.role === 'SYSTEM_ADMIN' && input.tags !== undefined ? { deleteMany: {}, create: await governedTagConnections(tx, input.tags) } : undefined,
       },
     });
     const changes = [
@@ -1845,6 +1967,8 @@ export async function updateUnitRecord(
       input.forgePointOfContact !== undefined
         ? 'FORGE point of contact updated'
         : '',
+      actor.role === 'SYSTEM_ADMIN' && ['name', 'abbreviation', 'unitType', 'parentOrganization', 'description', 'locationId', 'tags'].some((key) => input[key] !== undefined)
+        ? 'canonical Unit profile updated' : '',
     ].filter(Boolean);
     if (changes.length)
       await tx.activityEvent.create({
@@ -1857,5 +1981,27 @@ export async function updateUnitRecord(
         },
       });
     return updated;
+  });
+}
+
+export async function createUnitRecord(user: CurrentUserContext | null, input: Record<string, unknown>) {
+  const actor = requirePermission(user, 'platform:admin');
+  const name = requiredString(input.name, 'Unit name');
+  const abbreviation = requiredString(input.abbreviation, 'Abbreviation');
+  const unitType = requiredString(input.unitType, 'Unit type');
+  const existing = await db.unit.findMany({ select: { name: true, abbreviation: true } });
+  if (existing.some((unit) => unit.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('A Unit with that canonical name already exists.');
+  if (existing.some((unit) => unit.abbreviation.toLocaleLowerCase() === abbreviation.toLocaleLowerCase())) throw new Error('A Unit with that abbreviation already exists.');
+  return db.$transaction(async (tx) => {
+    const trackingId = await nextTrackingId(tx, 'Unit');
+    const unit = await tx.unit.create({ data: {
+      trackingId, name, abbreviation, unitType,
+      parentOrganization: optional(input.parentOrganization), description: optional(input.description),
+      forgePointOfContact: optional(input.forgePointOfContact), locationId: optionalNumber(input.locationId),
+      isActive: input.isActive !== false,
+      capabilities: { create: await governedTagConnections(tx, input.tags) },
+    }});
+    await tx.activityEvent.create({ data: { eventType: 'UNIT_CREATED', description: `${trackingId} canonical Unit created: ${name}.`, actor: actor.displayName, userId: actor.id, unitId: unit.id } });
+    return unit;
   });
 }

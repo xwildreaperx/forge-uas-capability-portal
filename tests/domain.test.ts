@@ -111,6 +111,10 @@ describe('tracking IDs and creation', () => {
     const problem = await createProblem(await testUser('USR-000004'), {
       title: 'Test persistent capability gap',
       description: 'Created by automated persistence verification.',
+      detailedDescription: 'Detailed evidence created by automated persistence verification.',
+      problemStatement: 'A canonical persistence path must be verified.',
+      category: 'Guidance',
+      duplicateReviewed: true,
     });
     createdProblemIds.push(problem.id);
     assert.match(problem.trackingId, /^PRB-\d{6}$/);

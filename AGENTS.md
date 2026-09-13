@@ -48,6 +48,9 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - Supported mutations must always retain at least one active System Administrator. Prefer two verified trusted administrators operationally.
 - A Unit Administrator must have at least one active administered-Unit scope; non-Unit-Administrator roles must not retain Unit Admin scopes. Reconcile role and scope transactionally.
 - System Administrator authority never bypasses controlled-value validation and does not imply access to underlying controlled documentation.
+- Canonical Unit and Problem creation and material identity/governance edits require System Administrator scope. Tracking IDs are immutable and counter-backed; Unit Administrators may update only approved scoped operational fields such as the FORGE point of contact.
+- Preserve every Problem submission and its staged review history. Approval as a new canonical Problem must be one transaction that performs a final duplicate review, creates the Problem, links the submission, and records provenance.
+- Treat `Unprioritized` and missing Problem stewardship as refinement signals, not integrity failures. Invalid controlled values and a Superseded Problem without a successor are integrity failures.
 - An active Unit cannot be deactivated while it leads a nonterminal Project.
 - Integrity and attention findings are derived from source data and clear automatically; they are continuity safeguards, not performance scores.
 - Administrative recovery must preserve tracking IDs, historical authorship, and actor/record provenance.

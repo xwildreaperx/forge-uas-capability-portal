@@ -7,17 +7,23 @@ import {
   addProjectUpdate,
   closeOutProject,
   createHelpRequest,
+  createProblem,
   createProject,
+  createTag,
+  createUnitRecord,
+  convertSubmissionToCanonicalProblem,
   manageProjectTeam,
   manageUserUnitMembership,
   ProblemMatchReviewRequired,
   setUnitAdminAssignment,
+  setProblemRelationship,
   submitProblem,
   updateHelpRequest,
   updateProject,
   updateProjectPhase,
   updateProjectRelationships,
   updateUnitRecord,
+  updateProblem,
   updateUserAccount,
 } from '../lib/data/mutations.ts';
 import { getPortalData } from '../lib/data/portal.ts';
@@ -1043,4 +1049,30 @@ test('clean operational initialization, discovery, and authorization remain vali
   assert.equal((await db.unit.findUniqueOrThrow({ where: { id: firstUnit.id } })).isActive, false);
   await updateUnitRecord(systemAdmin, firstUnit.id, { isActive: true });
   assert.ok((await db.activityEvent.findMany({ where: { unitId: firstUnit.id } })).filter((event) => event.eventType === 'UNIT_ADMIN_UPDATED').length >= 2);
+});
+
+test('System Administrators govern canonical Units, Problems, taxonomy, and atomic submission conversion', async () => {
+  const adminRecord = await db.user.findFirstOrThrow({ where: { role: 'SYSTEM_ADMIN', status: 'ACTIVE' } });
+  const admin = context(adminRecord, (await db.unit.findMany({ select: { id: true } })).map((unit) => unit.id));
+  admin.administeredUnitIds = admin.unitIds;
+  const ordinaryRecord = await db.user.findFirstOrThrow({ where: { role: { not: 'SYSTEM_ADMIN' }, status: 'ACTIVE' } });
+  const ordinary = context(ordinaryRecord, ordinaryRecord.primaryUnitId ? [ordinaryRecord.primaryUnitId] : []);
+  await assert.rejects(createUnitRecord(ordinary, { name: 'Unauthorized Unit', abbreviation: 'NOPE', unitType: 'Command' }), /permission/);
+  const tag = await createTag(admin, { name: 'Temporary Governance Tag' });
+  const unit = await createUnitRecord(admin, { name: 'Temporary Governance Unit', abbreviation: 'TGU', unitType: 'Command', description: 'Temporary isolated-test Unit.', tags: [tag.name] });
+  assert.match(unit.trackingId, /^UNIT-\d{6}$/);
+  await assert.rejects(createUnitRecord(admin, { name: unit.name.toUpperCase(), abbreviation: 'OTHER', unitType: 'Command' }), /canonical name already exists/);
+  const problem = await createProblem(admin, { title: 'Temporary canonical governance problem', description: 'A distinct temporary summary.', detailedDescription: 'Detailed temporary evidence.', problemStatement: 'The isolated test needs governed canonical behavior.', category: 'Guidance', priority: 'High', tags: [tag.name], duplicateReviewed: true });
+  assert.match(problem.trackingId, /^PRB-\d{6}$/);
+  await assert.rejects(updateProblem(admin, problem.trackingId, { status: 'Superseded' }), /successor/);
+  const target = await db.problem.findFirstOrThrow({ where: { id: { not: problem.id } } });
+  await updateProblem(admin, problem.trackingId, { status: 'Superseded', supersededById: target.id, stewardUserId: admin.id });
+  await setProblemRelationship(admin, problem.trackingId, { relationship: 'RELATED_TO', targetProblemId: target.id });
+  const submission = await db.problemSubmission.create({ data: { trackingId: 'SUB-999999', title: 'Temporary conversion candidate', description: 'Unique submission created for atomic conversion.', category: 'Guidance', submitterId: ordinary.id, unitId: ordinary.primaryUnitId } });
+  const converted = await convertSubmissionToCanonicalProblem(admin, submission.trackingId, { detailedDescription: submission.description, problemStatement: submission.description, category: 'Guidance', priority: 'Unprioritized', duplicateReviewed: true, tags: [tag.name] });
+  const retained = await db.problemSubmission.findUniqueOrThrow({ where: { id: submission.id }, include: { reviews: true } });
+  assert.equal(retained.status, 'APPROVED_NEW');
+  assert.equal(retained.relatedProblemId, converted.id);
+  assert.equal(retained.reviews.at(-1)?.stage, 'SYSTEM_FINAL');
+  assert.ok((await getPortalData(admin)).tagInventory.some((item) => item.id === tag.id && item.usageCount >= 3));
 });
