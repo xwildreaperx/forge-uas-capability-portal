@@ -62,6 +62,29 @@ const PROJECT_OUTCOMES = [
   'SUPERSEDED',
   'CANCELLED',
 ] as const;
+export const CLOSEOUT_OUTCOMES = {
+  Completed: [
+    'SUCCESSFUL',
+    'PARTIALLY_SUCCESSFUL',
+    'UNSUCCESSFUL',
+    'INCONCLUSIVE',
+  ],
+  Cancelled: ['CANCELLED', 'INCONCLUSIVE'],
+  Superseded: ['SUPERSEDED', 'PARTIALLY_SUCCESSFUL'],
+} as const;
+
+export function validateCloseoutCompatibility(
+  status: keyof typeof CLOSEOUT_OUTCOMES,
+  outcome: (typeof PROJECT_OUTCOMES)[number],
+) {
+  const allowed = CLOSEOUT_OUTCOMES[status] as readonly string[];
+  if (!allowed.includes(outcome)) {
+    const label = outcome.replaceAll('_', ' ').toLowerCase();
+    throw new Error(
+      `${status} Projects cannot be closed with a ${label} outcome. Choose an outcome that reflects the final disposition.`,
+    );
+  }
+}
 const PHASE_STATUSES = ['Planned', 'In Progress', 'Complete'] as const;
 const LESSON_TYPES = [
   'CONFIRMED_FINDING',
@@ -1378,6 +1401,7 @@ export async function closeOutProject(
     PROJECT_OUTCOMES,
     'Outcome',
   );
+  validateCloseoutCompatibility(status, outcomeDisposition);
   const finalResult = requiredString(input.finalResult, 'Final result');
   const successorProjectId = input.successorProjectId
     ? Number(input.successorProjectId)

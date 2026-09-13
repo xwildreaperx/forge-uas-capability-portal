@@ -152,8 +152,9 @@ export function CreateProjectModal({
         <p className="eyebrow">NEW RECORD</p>
         <h2>Create solution effort</h2>
         <p>
-          Capture any pathway that addresses one or more capability problems.
+          A FORGE Project is the record for a Solution Effort. Create it with enough information for discovery and ownership; technical detail, Phases, Lessons, evidence, and Executive narrative can be added as work progresses.
         </p>
+        <p className="form-success"><strong>You will become the initial Project Lead</strong> and can reassign responsibility later.</p>
         <div className="security-callout">
           <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
           <p>
@@ -177,17 +178,19 @@ export function CreateProjectModal({
           </select>
         </label>
         <label>
-          Executive summary <small>Optional — enrich later</small>
-          <textarea name="executiveSummary" />
-        </label>
-        <label>
-          Short description
+          Short summary / description
           <textarea name="detailedDescription" required value={description} onChange={(event) => setDescription(event.target.value)} />
         </label>
-        <label>
-          Solution approach <small>Optional — enrich later</small>
-          <textarea name="solutionApproach" />
-        </label>
+        <details className="optional-details">
+          <summary>Add more context <small>Optional — enrich later</small></summary>
+          <label>
+            Executive summary
+            <textarea name="executiveSummary" />
+          </label>
+          <label>
+            Solution approach
+            <textarea name="solutionApproach" />
+          </label>
         <fieldset>
           <legend>Executive communication</legend>
           <label>
@@ -222,8 +225,11 @@ export function CreateProjectModal({
             />
           </label>
         </fieldset>
+        </details>
+        <details className="optional-details">
+          <summary>Knowledge and AI continuity <small>Optional — enrich later</small></summary>
         <fieldset>
-          <legend>Knowledge and AI continuity</legend>
+          <legend>Documentation and handoff context</legend>
           <label>
             Documentation availability
             <select name="documentationAvailability">
@@ -251,6 +257,7 @@ export function CreateProjectModal({
             </small>
           </label>
         </fieldset>
+        </details>
         <div className="form-grid">
           <label>
             Status

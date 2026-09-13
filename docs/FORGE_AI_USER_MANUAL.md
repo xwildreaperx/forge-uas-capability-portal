@@ -3,6 +3,14 @@
 Version: 1.0  
 Environment: Unclassified local prototype
 
+## Pilot trust and terminology
+
+A **FORGE Project is the record for a Solution Effort**. “Solution Effort” describes the capability-development work; “Project” identifies the durable record, team, tracking ID, Updates, and administrative responsibility. Project creation requires only enough context for discovery and ownership. Technical detail, Phases, evidence, Lessons, Executive narrative, and AI context should be enriched as the work progresses. The creator becomes the initial Project Lead and can deliberately transfer that responsibility later.
+
+Closeout keeps lifecycle status separate from result. Completed Projects may be Successful, Partially Successful, Unsuccessful, or Inconclusive. Cancelled Projects may be Cancelled or Inconclusive. Superseded Projects may be Superseded or Partially Successful. Unsupported combinations are rejected so historical reporting cannot imply a contradictory disposition.
+
+Platform Integrity reports internally inconsistent or unsafe relationships. **Needs Attention** reports legitimate setup, refinement, staffing, or continuity work; it does not mean the database is corrupt and is not a performance score. A clean initial environment can therefore have zero integrity failures while still showing Unit-administrator, System-administrator redundancy, and Problem-refinement advisories.
+
 ## Collaboration and pilot workflow
 
 Project maintainers use **Request Help** to publish an approved capability-level assistance need. Select a practical category, enter a short description, and reuse the Project Lead or another existing contact. Move the request to In Progress when assistance begins, then resolve or cancel it with a short summary. Closed requests remain institutional history. FORGE does not provide internal messaging; collaborators use the displayed contact through approved channels.

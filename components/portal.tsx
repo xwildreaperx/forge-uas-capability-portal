@@ -30,6 +30,7 @@ import type { PortalData, PortalProject } from '@/lib/data/types';
 import { filterProjects } from '@/lib/domain/search';
 import { SOLUTION_TYPES } from '@/lib/domain/solution-types';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { CreateProjectModal } from './create-project-modal';
 import { ProjectActions } from './project-actions';
 import { AiHandoffView } from './ai-handoff-view';
@@ -50,6 +51,10 @@ const useData = () => {
   const value = useContext(DataContext);
   if (!value) throw new Error('Portal data is unavailable.');
   return value;
+};
+const reloadWithSuccess = (message = 'Changes saved.') => {
+  window.sessionStorage.setItem('forge-success', message);
+  window.location.reload();
 };
 
 const baseNav = [
@@ -79,6 +84,7 @@ export function Portal({
   const [creating, setCreating] = useState<'problem' | 'project' | false>(
     false,
   );
+  const [feedback, setFeedback] = useState('');
   const user = data.session.currentUser;
   const canCreateProject = Boolean(
     user &&
@@ -146,6 +152,14 @@ export function Portal({
   }, [query, data]);
 
   useEffect(() => {
+    const message = window.sessionStorage.getItem('forge-success');
+    if (message) {
+      window.sessionStorage.removeItem('forge-success');
+      setTimeout(() => setFeedback(message), 0);
+    }
+  }, []);
+
+  useEffect(() => {
     const context = (
       document as Document & {
         modelContext?: {
@@ -197,6 +211,9 @@ export function Portal({
     };
     if (!response.ok) return { ok: false as const, ...item };
     setCreating(false);
+    setFeedback(
+      'Potential Problem submitted for governance review. It is not yet a new canonical Problem.',
+    );
     router.refresh();
     setActive('Problems');
     return { ok: true as const, ...item };
@@ -290,6 +307,9 @@ export function Portal({
               {query && (
                 <div className="search-results">
                   <div className="result-label">Best matches</div>
+                  {!matches.length && (
+                    <p className="search-empty">No direct matches. Try another capability term; related knowledge may still exist.</p>
+                  )}
                   {matches.map((m) => (
                     <button
                       key={m.id}
@@ -329,6 +349,7 @@ export function Portal({
             </button>
           </header>
           <div className="page">
+            {feedback && <output className="form-success">{feedback}</output>}
             <View
               active={active}
               setActive={setActive}
@@ -397,11 +418,11 @@ function View({
       />
     );
   if (active === 'Unit' || active === 'Units')
-    return <UnitView id={selectedId} onMap={() => setActive('Map')} />;
+    return <UnitView id={selectedId} onMap={() => setActive('Map')} onProject={(id) => open('projects', id)} />;
   if (active === 'Map')
-    return <MapView onProject={() => setActive('Project')} />;
+    return <MapView onUnit={(id) => open('units', id)} />;
   if (active === 'Capability Graph')
-    return <GraphView onProblem={() => setActive('Problem')} />;
+    return <GraphView onProblem={(id) => open('problems', id)} onProject={(id) => open('projects', id)} onUnit={(id) => open('units', id)} />;
   if (active === 'Projects')
     return (
       <ProjectsView
@@ -421,10 +442,10 @@ function View({
     );
   if (active === 'Activity') return <ActivityView />;
   if (active === 'Administration') return <AdministrationView />;
-  return <Dashboard />;
+  return <Dashboard setActive={setActive} open={open} />;
 }
 
-function Dashboard() {
+function Dashboard({ setActive, open }: { setActive: (view: string) => void; open: (type: 'problems' | 'projects' | 'units', id: string) => void }) {
   const { problems, projects, units, activities, helpRequests, session } =
     useData();
   const mine = projects.filter((project) =>
@@ -455,7 +476,7 @@ function Dashboard() {
             needed.
           </p>
         </div>
-        <button className="secondary">
+        <button className="secondary" onClick={() => setActive('Activity')}>
           <Activity size={16} /> View activity
         </button>
       </div>
@@ -529,7 +550,7 @@ function Dashboard() {
           <div className="project-cards">
             {mine.length ? (
               mine.map((project) => (
-                <div className="project-card" key={project.id}>
+                <button className="project-card" key={project.id} onClick={() => open('projects', project.id)}>
                   <span className="maturity">
                     {project.team.find(
                       (member) => member.userId === session.currentUser?.id,
@@ -547,7 +568,7 @@ function Dashboard() {
                       {project.openHelpRequestCount === 1 ? '' : 's'}
                     </small>
                   )}
-                </div>
+                </button>
               ))
             ) : (
               <p className="body-copy">
@@ -561,6 +582,7 @@ function Dashboard() {
             title="Current capability activity"
             note="Most active problem spaces across the network"
             action="View all problems"
+            onAction={() => setActive('Problems')}
           />
           <div className="problem-list">
             {problems.slice(0, 3).map((p, i) => (
@@ -576,6 +598,7 @@ function Dashboard() {
                       : 'Latest update'
                     : 'Awaiting stakeholder refinement'
                 }
+                onClick={() => open('problems', p.id)}
               />
             ))}
           </div>
@@ -595,6 +618,7 @@ function Dashboard() {
               title={h.projectName}
               text={h.description}
               meta={`${h.unitName} · open`}
+              onClick={() => open('projects', h.projectId)}
             />
           ))}
         </section>
@@ -605,7 +629,7 @@ function Dashboard() {
           />
           {relevantLessons.length ? (
             relevantLessons.map((lesson) => (
-              <div className="lesson" key={`${lesson.project.id}-${lesson.id}`}>
+              <button className="lesson" key={`${lesson.project.id}-${lesson.id}`} onClick={() => open('projects', lesson.project.id)}>
                 <BookOpen />
                 <div>
                   <span className="lesson-type">{lesson.lessonTypeLabel}</span>
@@ -614,7 +638,7 @@ function Dashboard() {
                     {lesson.project.id} · {lesson.project.name}
                   </small>
                 </div>
-              </div>
+              </button>
             ))
           ) : (
             <p className="body-copy">No relevant Lessons are recorded yet.</p>
@@ -625,6 +649,7 @@ function Dashboard() {
             title="Recently updated projects"
             note="Progress worth reviewing"
             action="View all projects"
+            onAction={() => setActive('Projects')}
           />
           <div className="project-cards">
             {[...projects]
@@ -635,7 +660,7 @@ function Dashboard() {
               )
               .slice(0, 3)
               .map((p) => (
-                <div className="project-card" key={p.id}>
+                <button className="project-card" key={p.id} onClick={() => open('projects', p.id)}>
                   <div>
                     <span className={`dot ${p.tone}`} />
                     <small>{p.status}</small>
@@ -649,7 +674,7 @@ function Dashboard() {
                     <span>{p.maturity}</span>
                     <b>{p.progress}%</b>
                   </footer>
-                </div>
+                </button>
               ))}
           </div>
         </section>
@@ -722,10 +747,12 @@ function PanelHead({
   title,
   note,
   action,
+  onAction,
 }: {
   title: string;
   note: string;
   action?: string;
+  onAction?: () => void;
 }) {
   return (
     <div className="panel-head">
@@ -734,7 +761,7 @@ function PanelHead({
         <p>{note}</p>
       </div>
       {action && (
-        <button>
+        <button onClick={onAction}>
           {action} <ChevronRight size={15} />
         </button>
       )}
@@ -746,14 +773,16 @@ function ProblemRow({
   title,
   meta,
   updated,
+  onClick,
 }: {
   priority: string;
   title: string;
   meta: string;
   updated: string;
+  onClick?: () => void;
 }) {
   return (
-    <button className="problem-row">
+    <button className="problem-row" onClick={onClick}>
       <span className={`priority ${priority === 'MED' ? 'med' : 'high'}`}>
         {priority}
       </span>
@@ -771,21 +800,23 @@ function Help({
   title,
   text,
   meta,
+  onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   text: string;
   meta: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="help-card">
+    <button className="help-card" onClick={onClick}>
       <span>{icon}</span>
       <div>
         <strong>{title}</strong>
         <p>{text}</p>
         <small>{meta}</small>
       </div>
-    </div>
+    </button>
   );
 }
 function Progress({ value }: { value: number }) {
@@ -865,7 +896,7 @@ function ProblemView({
   return (
     <>
       <div className="crumb">
-        Problems <ChevronRight size={14} /> {problem.id}
+        <Link href="/">Home</Link> <ChevronRight size={14} /> <Link href="/?view=Problems">Problems</Link> <ChevronRight size={14} /> {problem.id}
       </div>
       <div className="problem-hero">
         <div>
@@ -1354,7 +1385,7 @@ function ProjectView({
   return (
     <>
       <div className="crumb">
-        Projects <ChevronRight size={14} /> {project.id}
+        <Link href="/">Home</Link> <ChevronRight size={14} /> <Link href="/?view=Projects">Projects</Link> <ChevronRight size={14} /> {project.id}
       </div>
       <div className="project-title">
         <div>
@@ -1618,7 +1649,7 @@ function TechnicalView({
     const result = (await response.json()) as { error?: string };
     if (!response.ok)
       window.alert(result.error || 'Unable to save correction.');
-    else window.location.reload();
+    else reloadWithSuccess();
   };
   const projectLead = project.team.find(
     (member) => member.role === 'PROJECT_LEAD',
@@ -2185,7 +2216,7 @@ function HelpRequests({ project }: { project: PortalProject }) {
         body: JSON.stringify({ status, resolutionSummary }),
       },
     );
-    if (response.ok) window.location.reload();
+    if (response.ok) reloadWithSuccess('Help Request updated.');
     else setBusy(null);
   };
   const changeContact = async (id: number, contactUserId: number) => {
@@ -2198,7 +2229,7 @@ function HelpRequests({ project }: { project: PortalProject }) {
         body: JSON.stringify({ contactUserId }),
       },
     );
-    if (response.ok) window.location.reload();
+    if (response.ok) reloadWithSuccess('Help Request contact updated.');
     else {
       const result = (await response.json()) as { error?: string };
       window.alert(result.error || 'Unable to update Help Request contact.');
@@ -2251,7 +2282,7 @@ function HelpRequests({ project }: { project: PortalProject }) {
                   window.alert(
                     result.error || 'Unable to correct Help Request.',
                   );
-                else window.location.reload();
+                else reloadWithSuccess('Help Request correction saved.');
               });
             }}
           >
@@ -2361,7 +2392,7 @@ function HelpRequests({ project }: { project: PortalProject }) {
   );
 }
 
-function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
+function UnitView({ id, onMap, onProject }: { id?: string; onMap: () => void; onProject: (id: string) => void }) {
   const { units, projects } = useData();
   const unit = units.find((x) => x.id === id) ?? units[0];
   if (!unit)
@@ -2376,7 +2407,7 @@ function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
   return (
     <>
       <div className="crumb">
-        Units <ChevronRight size={14} /> {unit.name}
+        <Link href="/">Home</Link> <ChevronRight size={14} /> <Link href="/?view=Units">Units</Link> <ChevronRight size={14} /> {unit.name}
       </div>
       <div className="problem-hero">
         <div className="unit-heading">
@@ -2402,14 +2433,14 @@ function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
           <div className="project-cards">
             {portfolio.length ? (
               portfolio.map((p) => (
-                <div className="project-card" key={p.id}>
+                <button className="project-card" key={p.id} onClick={() => onProject(p.id)}>
                   <span className="maturity">{p.solutionTypeLabel}</span>
                   <strong>{p.name}</strong>
                   <p>
                     {p.id} · {p.progress}% complete
                   </p>
                   <Progress value={p.progress} />
-                </div>
+                </button>
               ))
             ) : (
               <div className="empty-state">
@@ -3382,7 +3413,7 @@ function SystemAdminOverview() {
             <Check />
             <h3>No actionable integrity failures detected.</h3>
             <p>
-              Core Project, Unit, user, and responsibility relationships passed.
+              FORGE is operational and internally consistent. Pilot setup and governance attention may remain before user onboarding.
             </p>
           </div>
         )}
@@ -3607,7 +3638,7 @@ function CanonicalGovernance() {
     const result = (await response.json()) as { error?: string };
     if (!response.ok)
       window.alert(result.error || 'Unable to save governed record.');
-    else window.location.reload();
+    else reloadWithSuccess();
   };
   const activeUsers = projectDirectoryUsers.filter(
     (person) => person.status === 'ACTIVE',
@@ -4038,7 +4069,7 @@ function CanonicalGovernance() {
                     };
                     if (!response.ok)
                       window.alert(result.error || 'Unable to merge Tag.');
-                    else window.location.reload();
+                    else reloadWithSuccess();
                   });
                 }}
               >
@@ -4192,7 +4223,7 @@ function AdministrationView() {
     });
     const result = (await response.json()) as { error?: string };
     if (!response.ok) window.alert(result.error || 'Unable to save.');
-    else window.location.reload();
+    else reloadWithSuccess();
   };
   const createUser = async (event: React.SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -4204,7 +4235,7 @@ function AdministrationView() {
     });
     const result = (await response.json()) as { error?: string };
     if (!response.ok) window.alert(result.error || 'Unable to create user.');
-    else window.location.reload();
+    else reloadWithSuccess('User created. Review Unit assignment and responsibilities.');
   };
   return (
     <>
@@ -4259,7 +4290,7 @@ function AdministrationView() {
                                 result.error ||
                                   'Unable to acknowledge transfer.',
                               );
-                            else window.location.reload();
+                            else reloadWithSuccess('Receiving Unit review acknowledged.');
                           })
                         }
                       >
@@ -4599,7 +4630,7 @@ function AdministrationView() {
                                 result.error ||
                                   'Unable to approve as a new canonical Problem.',
                               );
-                            else window.location.reload();
+                            else reloadWithSuccess('Problem governance review saved.');
                           });
                         }}
                       >
@@ -4925,7 +4956,7 @@ function ListHead({ title, note }: { title: string; note: string }) {
   );
 }
 
-function MapView({ onProject }: { onProject: () => void }) {
+function MapView({ onUnit }: { onUnit: (id: string) => void }) {
   const { units } = useData();
   const geolocatedUnits = units.filter((unit) => unit.hasLocation);
   if (!geolocatedUnits.length)
@@ -4956,16 +4987,7 @@ function MapView({ onProject }: { onProject: () => void }) {
           <strong>
             {new Set(geolocatedUnits.map((x) => x.location)).size} locations
           </strong>
-          <input placeholder="Search locations…" />
-          <label>
-            <input type="checkbox" defaultChecked /> Active projects
-          </label>
-          <label>
-            <input type="checkbox" defaultChecked /> Units
-          </label>
-          <label>
-            <input type="checkbox" /> Help requests
-          </label>
+          <span>Approved general Unit locations</span>
         </div>
         <div className="map-canvas">
           <div className="terrain t1" />
@@ -4974,7 +4996,8 @@ function MapView({ onProject }: { onProject: () => void }) {
             <button
               key={u.id}
               className={`map-pin p${i + 1}`}
-              onClick={onProject}
+              onClick={() => onUnit(u.id)}
+              aria-label={`Open ${u.name}`}
             >
               <span>{u.projectIds.length}</span>
               <small>{u.location}</small>
@@ -4995,7 +5018,7 @@ function MapView({ onProject }: { onProject: () => void }) {
     </>
   );
 }
-function GraphView({ onProblem }: { onProblem: () => void }) {
+function GraphView({ onProblem, onProject, onUnit }: { onProblem: (id: string) => void; onProject: (id: string) => void; onUnit: (id: string) => void }) {
   const { problems, projects, units } = useData();
   const problem = problems[0];
   const project =
@@ -5025,41 +5048,41 @@ function GraphView({ onProblem }: { onProblem: () => void }) {
         note="Trace how problems connect to projects, units, technologies, and outcomes"
       />
       <div className="graph-panel">
-        <button className="node problem" onClick={onProblem}>
+        <button className="node problem" onClick={() => onProblem(problem.id)}>
           <AlertTriangle />
           {problem.title}
           <small>{problem.id}</small>
         </button>
         <span className="edge e1" />
-        <button className="node project">
+        <button className="node project" onClick={() => onProject(project.id)}>
           <Wrench />
           {project.name}
           <small>{project.id}</small>
         </button>
         <span className="edge e2" />
-        <button className="node unit">
+        <button className="node unit" onClick={() => onUnit(unit.id)}>
           <Users />
           {unit.abbreviation}
           <small>{unit.name}</small>
         </button>
         <span className="edge e3" />
-        <button className="node tech">
+        <div className="node tech">
           <Network />
           {project.tags[0]}
           <small>Capability</small>
-        </button>
+        </div>
         <span className="edge e4" />
-        <button className="node lesson">
+        <div className="node lesson">
           <BookOpen />
           {project.lessons[0]?.title}
           <small>Lesson learned</small>
-        </button>
+        </div>
         <span className="edge e5" />
-        <button className="node outcome">
+        <div className="node outcome">
           <Check />
           {project.latestResult}
           <small>Outcome</small>
-        </button>
+        </div>
       </div>
     </>
   );

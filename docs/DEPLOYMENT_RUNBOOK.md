@@ -37,6 +37,8 @@ FORGE stores reference metadata, not production file blobs. External repositorie
 
 ## Deployment checklist
 
+Before inviting pilot users: push the latest stable checkpoint; establish two verified System Administrators; select two or three pilot Units; assign a Unit Administrator to each; refine the relevant canonical Problems; add three to six approved real Solution Efforts and confirm their Project Leads; validate UNCLASSIFIED handling guidance; exercise database backup and restore; run Platform Integrity; and conduct brief role orientations. Setup advisories are expected during initialization and are distinct from blocking Platform Integrity failures.
+
 - Install dependencies and validate Prisma schema/migrations.
 - Choose and test the production database; do not treat SQLite as production-ready.
 - Configure environment variables without committing `.env` files or credentials.

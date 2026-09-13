@@ -101,7 +101,7 @@ export function assertProjectEdit(
   requirePermission(user, 'project:edit');
   if (!canEditProject(user!, project))
     throw new Error(
-      'You may edit only assigned, created, or administered-Unit Projects.',
+      'You do not have permission to edit this Project. Contact the Project Lead or your Unit Administrator if responsibility needs to change.',
     );
   return user!;
 }

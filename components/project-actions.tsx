@@ -8,6 +8,7 @@ type Action = 'update' | 'edit' | 'team' | 'relationships' | 'phase' | 'phase_ed
 export function ProjectActions({ project, data, canManageTeam }: { project: PortalProject; data: PortalData; canManageTeam: boolean }) {
   const [action, setAction] = useState<Action>(null);
   const [error, setError] = useState('');
+  const [closeoutStatus, setCloseoutStatus] = useState('Completed');
   const [problemSearch, setProblemSearch] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
   const initialLeadUnitId = data.units.find((unit) => unit.id === project.unitId)?.dbId ?? 0;
@@ -33,6 +34,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
   const submit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!action) return;
+    setError('');
     const form = new FormData(e.currentTarget);
     let values: Record<string, unknown> = Object.fromEntries(form);
     if (action === 'relationships') {
@@ -74,6 +76,14 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
       setError(result.error || 'Unable to save.');
       return;
     }
+    const labels: Record<Exclude<Action, null>, string> = {
+      update: 'Project Update saved.', edit: 'Project details saved.',
+      team: 'Project team saved.', relationships: 'Project relationships saved.',
+      phase: 'Project Phase added.', phase_edit: 'Project Phase saved.',
+      lesson: 'Lesson saved.', help: 'Help Request created.',
+      repository: 'Artifact reference saved.', closeout: 'Project closeout saved.',
+    };
+    window.sessionStorage.setItem('forge-success', labels[action]);
     window.location.reload();
   };
   return (
@@ -505,8 +515,8 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
           {action === 'closeout' && (
             <>
               <div className="wide-field closeout-review"><strong>Closeout preserves institutional knowledge—it does not close any related Problem.</strong><p>{project.id} · {project.name}<br />Problems: {project.problems.map((problem) => problem.id).join(', ')} · Lead Unit: {project.unit}<br />Maturity: {project.maturity} · Completion: {project.progress}% · Lessons: {project.lessons.length}</p>{!project.latestResult && <p>Review note: no final/latest result is recorded.</p>}{!project.lessons.length && <p>Review note: no Lessons are recorded.</p>}{project.phases.some((phase) => phase.status !== 'Complete') && <p>Review note: unfinished Phases will remain unchanged.</p>}{project.openHelpRequestCount > 0 && <p>Review note: {project.openHelpRequestCount} open Help Request{project.openHelpRequestCount === 1 ? '' : 's'} will remain open.</p>}</div>
-              <label>Final status<select name="status" required defaultValue="Completed"><option>Completed</option><option>Cancelled</option><option>Superseded</option></select></label>
-              <label>Outcome / disposition<select name="outcomeDisposition" required><option value="SUCCESSFUL">Successful</option><option value="PARTIALLY_SUCCESSFUL">Partially Successful</option><option value="UNSUCCESSFUL">Unsuccessful</option><option value="INCONCLUSIVE">Inconclusive</option><option value="SUPERSEDED">Superseded</option><option value="CANCELLED">Cancelled</option></select></label>
+              <label>Final Project Status<select name="status" required value={closeoutStatus} onChange={(event) => setCloseoutStatus(event.target.value)}><option>Completed</option><option>Cancelled</option><option>Superseded</option></select></label>
+              <label>Outcome / disposition<select name="outcomeDisposition" required defaultValue={closeoutStatus === 'Cancelled' ? 'CANCELLED' : closeoutStatus === 'Superseded' ? 'SUPERSEDED' : 'SUCCESSFUL'} key={closeoutStatus}>{closeoutStatus === 'Completed' && <><option value="SUCCESSFUL">Successful</option><option value="PARTIALLY_SUCCESSFUL">Partially Successful</option><option value="UNSUCCESSFUL">Unsuccessful</option><option value="INCONCLUSIVE">Inconclusive</option></>}{closeoutStatus === 'Cancelled' && <><option value="CANCELLED">Cancelled</option><option value="INCONCLUSIVE">Inconclusive</option></>}{closeoutStatus === 'Superseded' && <><option value="SUPERSEDED">Superseded</option><option value="PARTIALLY_SUCCESSFUL">Partially Successful</option></>}</select></label>
               <label className="wide-field">Final result<textarea name="finalResult" required defaultValue={project.latestResult} /></label>
               <label>What worked<textarea name="whatWorked" /></label><label>What did not work<textarea name="whatDidNotWork" /></label>
               <label className="wide-field">Recommended next action<textarea name="recommendedNextAction" defaultValue={project.nextStep} /></label>

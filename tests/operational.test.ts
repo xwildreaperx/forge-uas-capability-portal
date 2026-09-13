@@ -1195,6 +1195,22 @@ test('clean operational initialization, discovery, and authorization remain vali
       finalResult: `Temporary ${disposition} closeout.`,
       successorProjectId: status === 'Superseded' ? project.id : undefined,
     });
+  await assert.rejects(
+    closeOutProject(projectUser, secondProject.id, {
+      status: 'Cancelled',
+      outcomeDisposition: 'SUCCESSFUL',
+      finalResult: 'This contradictory closeout must be rejected.',
+    }),
+    /Cancelled Projects cannot be closed with a successful outcome/,
+  );
+  await assert.rejects(
+    closeOutProject(projectUser, secondProject.id, {
+      status: 'Completed',
+      outcomeDisposition: 'CANCELLED',
+      finalResult: 'This contradictory closeout must be rejected.',
+    }),
+    /Completed Projects cannot be closed with a cancelled outcome/,
+  );
   const superseded = await db.project.findUniqueOrThrow({
     where: { id: secondProject.id },
   });

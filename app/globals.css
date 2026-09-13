@@ -811,9 +811,8 @@ main {
   .nav-item {
     justify-content: center;
   }
-  .nav-item span {
-    display: none;
-  }
+  .nav-item { flex-direction: column; gap: 3px; font-size: .68rem; text-align: center; }
+  .nav-item span { display: block; }
   main {
     grid-column: auto;
   }
@@ -843,6 +842,12 @@ main {
     display: none;
   }
 }
+.optional-details { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+.optional-details > summary { cursor: pointer; font-weight: 750; color: var(--green); }
+.optional-details > summary small { color: var(--muted); font-weight: 500; }
+.optional-details[open] { display: grid; gap: 12px; }
+.search-empty { padding: 12px; color: var(--muted); max-width: 34rem; }
+.standalone-message { max-width: 680px; margin: 12vh auto; padding: 32px; }
 .project-title {
   display: flex;
   justify-content: space-between;
