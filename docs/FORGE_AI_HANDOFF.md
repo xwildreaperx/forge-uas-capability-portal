@@ -4,6 +4,8 @@ Document purpose: transfer sufficient product, architecture, governance, and dev
 
 Part 4 makes Help Requests first-class relational Project history. A receiving AI must treat `OPEN` and `IN_PROGRESS` as current assistance needs; `RESOLVED` and `CANCELLED` are historical context, not current blockers. Comparison is keyed to the selected Problem. Related Work is keyed to the current Project and remains deterministic and explainable. Artifact URLs never imply authorization: Documentation Availability, access instructions, and originator contact control the action.
 
+Unit Administration Part 1 adds responsibility-aware personnel continuity. The Administration workspace derives gaps from active relational assignments, including inactive or missing Project Leads, no active Project maintainer, inactive Help contacts, pending profiles/submissions, and active Units without an active Unit Administrator. These signals are operational prompts rather than performance assessments or new lifecycle states. User disablement retains attribution; primary Unit transfer retains Project memberships and history; administrator scope remains explicit; and every administrative change records actor and affected-user provenance. Help Requests can follow the current Project Lead or retain an explicit alternate contact.
+
 Routine maintenance still centers on one Project Update, with deliberate secondary actions only for saving a Lesson, requesting Help, or closeout. Authentication, notifications, internal messaging, production file storage, hosting, semantic similarity, and external AI transmission remain outside this local prototype pass.
 
 Repository: `xwildreaperx/forge-uas-capability-portal`  
@@ -288,7 +290,7 @@ Internal database IDs are integers. Stable human-facing IDs are separate strings
 
 `TrackingCounter` allocates the next value inside a Prisma transaction using upsert and increment, and `formatTrackingId` pads to six digits. SQLite serializes the current local workflow. A concurrent PostgreSQL deployment should use row locking or a database sequence while preserving public-ID semantics.
 
-Three migrations exist: the initial relational schema, Solution Pathways/detail tables, and AI handoff/governance fields plus repository metadata.
+The migration history now also includes multi-user authorization, Project operations, collaboration, and Unit-administration continuity fields. Apply migrations in repository order; do not collapse or rewrite applied history.
 
 ## 19. Current Routes
 

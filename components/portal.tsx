@@ -381,7 +381,13 @@ function View({
         onProject={(id) => open('projects', id)}
       />
     );
-  if (active === 'Compare') return <CompareView problemId={selectedId} onProject={(id) => open('projects', id)} />;
+  if (active === 'Compare')
+    return (
+      <CompareView
+        problemId={selectedId}
+        onProject={(id) => open('projects', id)}
+      />
+    );
   if (active === 'Project')
     return (
       <ProjectView
@@ -407,17 +413,37 @@ function View({
   if (active === 'Problems')
     return <ProblemsView onProblem={(id) => open('problems', id)} />;
   if (active === 'Explore')
-    return <ExploreView projectId={selectedId} onProject={(id) => open('projects', id)} />;
+    return (
+      <ExploreView
+        projectId={selectedId}
+        onProject={(id) => open('projects', id)}
+      />
+    );
   if (active === 'Activity') return <ActivityView />;
   if (active === 'Administration') return <AdministrationView />;
   return <Dashboard />;
 }
 
 function Dashboard() {
-  const { problems, projects, units, activities, helpRequests, session } = useData();
-  const mine = projects.filter((project) => project.team.some((member) => member.userId === session.currentUser?.id));
-  const relevantProblemIds = new Set(mine.flatMap((project) => project.problems.map((problem) => problem.id)));
-  const relevantLessons = projects.flatMap((project) => project.lessons.map((lesson) => ({ ...lesson, project }))).filter((lesson) => lesson.project.problems.some((problem) => relevantProblemIds.has(problem.id))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+  const { problems, projects, units, activities, helpRequests, session } =
+    useData();
+  const mine = projects.filter((project) =>
+    project.team.some((member) => member.userId === session.currentUser?.id),
+  );
+  const relevantProblemIds = new Set(
+    mine.flatMap((project) => project.problems.map((problem) => problem.id)),
+  );
+  const relevantLessons = projects
+    .flatMap((project) =>
+      project.lessons.map((lesson) => ({ ...lesson, project })),
+    )
+    .filter((lesson) =>
+      lesson.project.problems.some((problem) =>
+        relevantProblemIds.has(problem.id),
+      ),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 4);
   return (
     <>
       <div className="page-head">
@@ -469,8 +495,15 @@ function Dashboard() {
         <div className="notice">
           <Wrench size={18} />
           <div>
-            <strong>{problems.length} initial capability Problems are ready for collaboration.</strong>
-            <p>Participating Units can now associate existing work and create Solution Efforts. Detailed Problem statements and prioritization remain pending stakeholder refinement.</p>
+            <strong>
+              {problems.length} initial capability Problems are ready for
+              collaboration.
+            </strong>
+            <p>
+              Participating Units can now associate existing work and create
+              Solution Efforts. Detailed Problem statements and prioritization
+              remain pending stakeholder refinement.
+            </p>
           </div>
         </div>
       )}
@@ -489,8 +522,39 @@ function Dashboard() {
       </section>
       <div className="dashboard-grid">
         <section className="panel span-2">
-          <PanelHead title="My Projects" note="Solution Efforts where you are Project Lead or Contributor" />
-          <div className="project-cards">{mine.length ? mine.map((project) => <div className="project-card" key={project.id}><span className="maturity">{project.team.find((member) => member.userId === session.currentUser?.id)?.role === 'PROJECT_LEAD' ? 'Project Lead' : 'Contributor'}</span><strong>{project.name}</strong><p>{project.id} · {project.status} · {project.maturity}</p>{project.openHelpRequestCount > 0 && <small>{project.openHelpRequestCount} open support request{project.openHelpRequestCount === 1 ? '' : 's'}</small>}</div>) : <p className="body-copy">No Projects are assigned to your current account.</p>}</div>
+          <PanelHead
+            title="My Projects"
+            note="Solution Efforts where you are Project Lead or Contributor"
+          />
+          <div className="project-cards">
+            {mine.length ? (
+              mine.map((project) => (
+                <div className="project-card" key={project.id}>
+                  <span className="maturity">
+                    {project.team.find(
+                      (member) => member.userId === session.currentUser?.id,
+                    )?.role === 'PROJECT_LEAD'
+                      ? 'Project Lead'
+                      : 'Contributor'}
+                  </span>
+                  <strong>{project.name}</strong>
+                  <p>
+                    {project.id} · {project.status} · {project.maturity}
+                  </p>
+                  {project.openHelpRequestCount > 0 && (
+                    <small>
+                      {project.openHelpRequestCount} open support request
+                      {project.openHelpRequestCount === 1 ? '' : 's'}
+                    </small>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="body-copy">
+                No Projects are assigned to your current account.
+              </p>
+            )}
+          </div>
         </section>
         <section className="panel span-2">
           <PanelHead
@@ -505,7 +569,13 @@ function Dashboard() {
                 priority={p.priority.toUpperCase().slice(0, 4)}
                 title={`${p.id} · ${p.title}`}
                 meta={`${p.projectIds.length} projects · ${p.unitCount} units · ${p.category}`}
-                updated={activities.length ? (i ? 'Recently updated' : 'Latest update') : 'Awaiting stakeholder refinement'}
+                updated={
+                  activities.length
+                    ? i
+                      ? 'Recently updated'
+                      : 'Latest update'
+                    : 'Awaiting stakeholder refinement'
+                }
               />
             ))}
           </div>
@@ -529,8 +599,26 @@ function Dashboard() {
           ))}
         </section>
         <section className="panel">
-          <PanelHead title="Lessons relevant to my Problems" note="Recent findings; no consensus is inferred" />
-          {relevantLessons.length ? relevantLessons.map((lesson) => <div className="lesson" key={`${lesson.project.id}-${lesson.id}`}><BookOpen /><div><span className="lesson-type">{lesson.lessonTypeLabel}</span><strong>{lesson.title}</strong><small>{lesson.project.id} · {lesson.project.name}</small></div></div>) : <p className="body-copy">No relevant Lessons are recorded yet.</p>}
+          <PanelHead
+            title="Lessons relevant to my Problems"
+            note="Recent findings; no consensus is inferred"
+          />
+          {relevantLessons.length ? (
+            relevantLessons.map((lesson) => (
+              <div className="lesson" key={`${lesson.project.id}-${lesson.id}`}>
+                <BookOpen />
+                <div>
+                  <span className="lesson-type">{lesson.lessonTypeLabel}</span>
+                  <strong>{lesson.title}</strong>
+                  <small>
+                    {lesson.project.id} · {lesson.project.name}
+                  </small>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="body-copy">No relevant Lessons are recorded yet.</p>
+          )}
         </section>
         <section className="panel span-2">
           <PanelHead
@@ -540,25 +628,29 @@ function Dashboard() {
           />
           <div className="project-cards">
             {[...projects]
-              .sort((a, b) => b.lastMeaningfulActivityAt.localeCompare(a.lastMeaningfulActivityAt))
+              .sort((a, b) =>
+                b.lastMeaningfulActivityAt.localeCompare(
+                  a.lastMeaningfulActivityAt,
+                ),
+              )
               .slice(0, 3)
               .map((p) => (
-              <div className="project-card" key={p.id}>
-                <div>
-                  <span className={`dot ${p.tone}`} />
-                  <small>{p.status}</small>
+                <div className="project-card" key={p.id}>
+                  <div>
+                    <span className={`dot ${p.tone}`} />
+                    <small>{p.status}</small>
+                  </div>
+                  <strong>{p.name}</strong>
+                  <p>
+                    {p.id} · {p.unit}
+                  </p>
+                  <Progress value={p.progress} />
+                  <footer>
+                    <span>{p.maturity}</span>
+                    <b>{p.progress}%</b>
+                  </footer>
                 </div>
-                <strong>{p.name}</strong>
-                <p>
-                  {p.id} · {p.unit}
-                </p>
-                <Progress value={p.progress} />
-                <footer>
-                  <span>{p.maturity}</span>
-                  <b>{p.progress}%</b>
-                </footer>
-              </div>
-            ))}
+              ))}
           </div>
         </section>
         <section className="panel">
@@ -569,11 +661,21 @@ function Dashboard() {
               <span>Updates</span>
             </div>
             <div>
-              <strong>{activities.filter((item) => item.eventType === 'LESSON_ADDED').length}</strong>
+              <strong>
+                {
+                  activities.filter((item) => item.eventType === 'LESSON_ADDED')
+                    .length
+                }
+              </strong>
               <span>Lessons</span>
             </div>
             <div>
-              <strong>{activities.filter((item) => item.eventType === 'TEST_RESULT').length}</strong>
+              <strong>
+                {
+                  activities.filter((item) => item.eventType === 'TEST_RESULT')
+                    .length
+                }
+              </strong>
               <span>Tests</span>
             </div>
           </div>
@@ -719,21 +821,47 @@ function ProblemView({
     );
   const all = data.projects.filter((x) => problem.projectIds.includes(x.id));
   const terminalStatuses = new Set(['Completed', 'Cancelled', 'Superseded']);
-  const activeEfforts = all.filter((project) => !terminalStatuses.has(project.status));
-  const historicalEfforts = all.filter((project) => terminalStatuses.has(project.status));
-  const lessonsAcrossEfforts = all.flatMap((project) => project.lessons.map((lesson) => ({ ...lesson, project })));
-  const effortCards = (projects: typeof all) => projects.length ? <div className="approach-grid">
-    {projects.map((p) => (
-      <article key={p.id}>
-        <div><span className={`dot ${p.tone}`} /><small>{p.status}</small><span className="maturity">{p.solutionTypeLabel}</span></div>
-        <h3>{p.name}</h3><p>{p.id} · {p.unit}</p>
-        {p.outcomeLabel && <p className="outcome-chip">Outcome: {p.outcomeLabel}</p>}
-        {p.finalResult && <p>{p.finalResult}</p>}
-        <Progress value={p.progress} /><footer><small>Completion</small><strong>{p.progress}%</strong></footer>
-        <button onClick={() => onProject(p.id)}>Open effort <ArrowRight size={15} /></button>
-      </article>
-    ))}
-  </div> : <p className="body-copy">No efforts in this lifecycle group.</p>;
+  const activeEfforts = all.filter(
+    (project) => !terminalStatuses.has(project.status),
+  );
+  const historicalEfforts = all.filter((project) =>
+    terminalStatuses.has(project.status),
+  );
+  const lessonsAcrossEfforts = all.flatMap((project) =>
+    project.lessons.map((lesson) => ({ ...lesson, project })),
+  );
+  const effortCards = (projects: typeof all) =>
+    projects.length ? (
+      <div className="approach-grid">
+        {projects.map((p) => (
+          <article key={p.id}>
+            <div>
+              <span className={`dot ${p.tone}`} />
+              <small>{p.status}</small>
+              <span className="maturity">{p.solutionTypeLabel}</span>
+            </div>
+            <h3>{p.name}</h3>
+            <p>
+              {p.id} · {p.unit}
+            </p>
+            {p.outcomeLabel && (
+              <p className="outcome-chip">Outcome: {p.outcomeLabel}</p>
+            )}
+            {p.finalResult && <p>{p.finalResult}</p>}
+            <Progress value={p.progress} />
+            <footer>
+              <small>Completion</small>
+              <strong>{p.progress}%</strong>
+            </footer>
+            <button onClick={() => onProject(p.id)}>
+              Open effort <ArrowRight size={15} />
+            </button>
+          </article>
+        ))}
+      </div>
+    ) : (
+      <p className="body-copy">No efforts in this lifecycle group.</p>
+    );
   return (
     <>
       <div className="crumb">
@@ -741,7 +869,9 @@ function ProblemView({
       </div>
       <div className="problem-hero">
         <div>
-          <span className={`priority ${problem.priority === 'High' ? 'high' : 'med'}`}>
+          <span
+            className={`priority ${problem.priority === 'High' ? 'high' : 'med'}`}
+          >
             {problem.priority.toUpperCase()}
           </span>
           <h1>{problem.title}</h1>
@@ -760,26 +890,86 @@ function ProblemView({
       <div className="notice">
         <BookOpen size={18} />
         <div>
-          <strong>Detailed Problem Statement: Pending Stakeholder Refinement</strong>
+          <strong>
+            Detailed Problem Statement: Pending Stakeholder Refinement
+          </strong>
           <p>{problem.problemStatement}</p>
         </div>
       </div>
-      <h2 className="section-title">Active Solution Efforts <span>{activeEfforts.length}</span></h2>
-      {all.length ? effortCards(activeEfforts) : <div className="empty-state"><Wrench /><h2>No Solution Efforts have been linked to this Problem yet.</h2><p>Participating Units can associate existing work or create an authorized Solution Effort from the Projects area.</p></div>}
-      {historicalEfforts.length > 0 && <><h2 className="section-title">Historical / Closed Solution Efforts <span>{historicalEfforts.length}</span></h2>{effortCards(historicalEfforts)}</>}
+      <h2 className="section-title">
+        Active Solution Efforts <span>{activeEfforts.length}</span>
+      </h2>
+      {all.length ? (
+        effortCards(activeEfforts)
+      ) : (
+        <div className="empty-state">
+          <Wrench />
+          <h2>No Solution Efforts have been linked to this Problem yet.</h2>
+          <p>
+            Participating Units can associate existing work or create an
+            authorized Solution Effort from the Projects area.
+          </p>
+        </div>
+      )}
+      {historicalEfforts.length > 0 && (
+        <>
+          <h2 className="section-title">
+            Historical / Closed Solution Efforts{' '}
+            <span>{historicalEfforts.length}</span>
+          </h2>
+          {effortCards(historicalEfforts)}
+        </>
+      )}
       <section className="panel problem-lessons">
-        <PanelHead title="Lessons Across Solution Efforts" note="Persisted findings are referenced from their originating Projects; no consensus is inferred." />
-        {lessonsAcrossEfforts.length ? lessonsAcrossEfforts.map((lesson) => <button key={`${lesson.project.id}-${lesson.id}`} className="cross-project-lesson" onClick={() => onProject(lesson.project.id)}><span className="lesson-type">{lesson.lessonTypeLabel}</span><strong>{lesson.title}</strong><p>{lesson.finding}</p><small>{lesson.project.id} · {lesson.project.name} · {lesson.project.unit}{lesson.phaseName ? ` · ${lesson.phaseName}` : ''}{lesson.project.outcomeLabel ? ` · ${lesson.project.outcomeLabel}` : ''}</small></button>) : <p className="body-copy">No Lessons have been recorded across linked Solution Efforts.</p>}
+        <PanelHead
+          title="Lessons Across Solution Efforts"
+          note="Persisted findings are referenced from their originating Projects; no consensus is inferred."
+        />
+        {lessonsAcrossEfforts.length ? (
+          lessonsAcrossEfforts.map((lesson) => (
+            <button
+              key={`${lesson.project.id}-${lesson.id}`}
+              className="cross-project-lesson"
+              onClick={() => onProject(lesson.project.id)}
+            >
+              <span className="lesson-type">{lesson.lessonTypeLabel}</span>
+              <strong>{lesson.title}</strong>
+              <p>{lesson.finding}</p>
+              <small>
+                {lesson.project.id} · {lesson.project.name} ·{' '}
+                {lesson.project.unit}
+                {lesson.phaseName ? ` · ${lesson.phaseName}` : ''}
+                {lesson.project.outcomeLabel
+                  ? ` · ${lesson.project.outcomeLabel}`
+                  : ''}
+              </small>
+            </button>
+          ))
+        ) : (
+          <p className="body-copy">
+            No Lessons have been recorded across linked Solution Efforts.
+          </p>
+        )}
       </section>
     </>
   );
 }
 
-function CompareView({ problemId, onProject }: { problemId?: string; onProject: (id: string) => void }) {
+function CompareView({
+  problemId,
+  onProject,
+}: {
+  problemId?: string;
+  onProject: (id: string) => void;
+}) {
   const data = useData();
   const problem = data.problems.find((x) => x.id === problemId);
-  const allProjects = data.projects.filter((x) => problem?.projectIds.includes(x.id));
-  const [selected, setSelected] = useState(allProjects.map((project) => project.id));
+  const allProjects = data.projects.filter((x) =>
+    problem?.projectIds.includes(x.id),
+  );
+  const [selected, setSelected] = useState(
+    allProjects.map((project) => project.id),
+  );
   if (!problem)
     return (
       <div className="empty-state">
@@ -791,7 +981,9 @@ function CompareView({ problemId, onProject }: { problemId?: string; onProject: 
         </p>
       </div>
     );
-  const projects = allProjects.filter((project) => selected.includes(project.id));
+  const projects = allProjects.filter((project) =>
+    selected.includes(project.id),
+  );
   return (
     <>
       <div className="crumb">
@@ -809,7 +1001,25 @@ function CompareView({ problemId, onProject }: { problemId?: string; onProject: 
         </div>
       </div>
       <div className="comparison">
-        <div className="comparison-picker"><strong>Efforts to compare</strong>{allProjects.map((project) => <label key={project.id}><input type="checkbox" checked={selected.includes(project.id)} onChange={() => setSelected((current) => current.includes(project.id) ? current.filter((id) => id !== project.id) : [...current, project.id])} /> {project.id} · {project.name}</label>)}</div>
+        <div className="comparison-picker">
+          <strong>Efforts to compare</strong>
+          {allProjects.map((project) => (
+            <label key={project.id}>
+              <input
+                type="checkbox"
+                checked={selected.includes(project.id)}
+                onChange={() =>
+                  setSelected((current) =>
+                    current.includes(project.id)
+                      ? current.filter((id) => id !== project.id)
+                      : [...current, project.id],
+                  )
+                }
+              />{' '}
+              {project.id} · {project.name}
+            </label>
+          ))}
+        </div>
         <table>
           <thead>
             <tr>
@@ -875,8 +1085,30 @@ function CompareView({ problemId, onProject }: { problemId?: string; onProject: 
                 </td>
               ))}
             </tr>
-            <tr><th>Status / outcome</th>{projects.map((p) => <td key={p.id}><b>{p.status}</b>{p.outcomeLabel ? ` · ${p.outcomeLabel}` : ''}</td>)}</tr>
-            <tr><th>Project Lead / contact</th>{projects.map((p) => { const lead = p.team.find((member) => member.role === 'PROJECT_LEAD'); return <td key={p.id}>{lead ? `${lead.displayName} · ${lead.identifier}` : 'Not assigned'}</td>; })}</tr>
+            <tr>
+              <th>Status / outcome</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  <b>{p.status}</b>
+                  {p.outcomeLabel ? ` · ${p.outcomeLabel}` : ''}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Project Lead / contact</th>
+              {projects.map((p) => {
+                const lead = p.team.find(
+                  (member) => member.role === 'PROJECT_LEAD',
+                );
+                return (
+                  <td key={p.id}>
+                    {lead
+                      ? `${lead.displayName} · ${lead.identifier}`
+                      : 'Not assigned'}
+                  </td>
+                );
+              })}
+            </tr>
             <tr>
               <th>Completion</th>
               {projects.map((p) => (
@@ -913,14 +1145,64 @@ function CompareView({ problemId, onProject }: { problemId?: string; onProject: 
             <tr>
               <th>Last meaningful activity</th>
               {projects.map((p) => (
-                <td key={p.id}>{new Date(p.lastMeaningfulActivityAt).toLocaleDateString()}</td>
+                <td key={p.id}>
+                  {new Date(p.lastMeaningfulActivityAt).toLocaleDateString()}
+                </td>
               ))}
             </tr>
-            <tr><th>Current / final Phase</th>{projects.map((p) => <td key={p.id}>{p.phases.find((phase) => phase.status !== 'Complete')?.name ?? p.phases.at(-1)?.name ?? 'Not phased'}</td>)}</tr>
-            <tr><th>Documentation</th>{projects.map((p) => <td key={p.id}>{p.documentationLabel}</td>)}</tr>
-            <tr><th>Important Lessons</th>{projects.map((p) => <td key={p.id}>{p.lessons.slice(0, 2).map((lesson) => `${lesson.lessonTypeLabel}: ${lesson.title}`).join('; ') || '—'}</td>)}</tr>
-            <tr><th>Open Help Requests</th>{projects.map((p) => <td key={p.id}>{p.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status)).map((request) => `${request.categoryLabel}: ${request.title}`).join('; ') || 'None'}</td>)}</tr>
-            <tr><th>Open effort</th>{projects.map((p) => <td key={p.id}><button onClick={() => onProject(p.id)}>Open {p.id}</button></td>)}</tr>
+            <tr>
+              <th>Current / final Phase</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  {p.phases.find((phase) => phase.status !== 'Complete')
+                    ?.name ??
+                    p.phases.at(-1)?.name ??
+                    'Not phased'}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Documentation</th>
+              {projects.map((p) => (
+                <td key={p.id}>{p.documentationLabel}</td>
+              ))}
+            </tr>
+            <tr>
+              <th>Important Lessons</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  {p.lessons
+                    .slice(0, 2)
+                    .map(
+                      (lesson) => `${lesson.lessonTypeLabel}: ${lesson.title}`,
+                    )
+                    .join('; ') || '—'}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Open Help Requests</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  {p.helpRequests
+                    .filter((request) =>
+                      ['OPEN', 'IN_PROGRESS'].includes(request.status),
+                    )
+                    .map(
+                      (request) => `${request.categoryLabel}: ${request.title}`,
+                    )
+                    .join('; ') || 'None'}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th>Open effort</th>
+              {projects.map((p) => (
+                <td key={p.id}>
+                  <button onClick={() => onProject(p.id)}>Open {p.id}</button>
+                </td>
+              ))}
+            </tr>
           </tbody>
         </table>
       </div>
@@ -976,10 +1258,15 @@ function ProjectView({
         current.administeredUnitIds.includes(lead.dbId))),
   );
   const canManageTeam = Boolean(
-    current && current.status === 'ACTIVE' &&
+    current &&
+    current.status === 'ACTIVE' &&
     (current.role === 'SYSTEM_ADMIN' ||
-      project.team.some((member) => member.userId === current.id && member.role === 'PROJECT_LEAD') ||
-      (current.role === 'UNIT_ADMIN' && current.administeredUnitIds.includes(lead.dbId))),
+      project.team.some(
+        (member) =>
+          member.userId === current.id && member.role === 'PROJECT_LEAD',
+      ) ||
+      (current.role === 'UNIT_ADMIN' &&
+        current.administeredUnitIds.includes(lead.dbId))),
   );
   return (
     <>
@@ -1016,7 +1303,13 @@ function ProjectView({
           </button>
         </div>
       </div>
-      {canEdit && <ProjectActions project={project} data={data} canManageTeam={canManageTeam} />}
+      {canEdit && (
+        <ProjectActions
+          project={project}
+          data={data}
+          canManageTeam={canManageTeam}
+        />
+      )}
       {experience === 'executive' ? (
         <ExecutiveSplash
           project={project}
@@ -1047,7 +1340,9 @@ function ExecutiveSplash({
   const currentPhase =
     project.phases.find((p) => p.status !== 'Complete') ??
     project.phases.at(-1);
-  const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
+  const projectLead = project.team.find(
+    (member) => member.role === 'PROJECT_LEAD',
+  );
   const copyOriginator = () =>
     navigator.clipboard.writeText(
       [project.originatorContact, project.accessInstructions]
@@ -1055,8 +1350,11 @@ function ExecutiveSplash({
         .join('\n'),
     );
   const copyProjectLead = () =>
-    projectLead && navigator.clipboard.writeText(
-      [projectLead.displayName, projectLead.identifier, projectLead.primaryUnit].filter(Boolean).join('\n'),
+    projectLead &&
+    navigator.clipboard.writeText(
+      [projectLead.displayName, projectLead.identifier, projectLead.primaryUnit]
+        .filter(Boolean)
+        .join('\n'),
     );
   return (
     <div className="executive-splash">
@@ -1083,7 +1381,9 @@ function ExecutiveSplash({
           </span>
           <span>
             <small>Last meaningful activity</small>
-            <strong>{new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}</strong>
+            <strong>
+              {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}
+            </strong>
           </span>
         </div>
       </section>
@@ -1103,7 +1403,8 @@ function ExecutiveSplash({
         <section className="exec-card">
           <p className="eyebrow">WHAT WE HAVE DEMONSTRATED</p>
           <h3>
-            {project.finalResult || project.latestResult ||
+            {project.finalResult ||
+              project.latestResult ||
               project.outcome ||
               'Evidence collection is still underway.'}
           </h3>
@@ -1112,9 +1413,33 @@ function ExecutiveSplash({
               <li key={l.id}>{l.finding}</li>
             ))}
           </ul>
-          {['Field Tested', 'Validated'].includes(project.maturity) && <p>{project.updates.some((update) => update.maturityAfter === project.maturity && update.maturityEvidenceEvent) ? `${project.maturity} — supporting evidence recorded.` : `${project.maturity} — supporting evidence not yet linked.`}</p>}
+          {['Field Tested', 'Validated'].includes(project.maturity) && (
+            <p>
+              {project.updates.some(
+                (update) =>
+                  update.maturityAfter === project.maturity &&
+                  update.maturityEvidenceEvent,
+              )
+                ? `${project.maturity} — supporting evidence recorded.`
+                : `${project.maturity} — supporting evidence not yet linked.`}
+            </p>
+          )}
         </section>
-        {project.outcomeLabel && <section className="exec-card outcome-card"><p className="eyebrow">FINAL DISPOSITION</p><h3>{project.status} · {project.outcomeLabel}</h3><p>{project.finalResult || project.outcome}</p>{project.successorProjectId && <p>Successor: {project.successorProjectId} · {project.successorProjectName}</p>}</section>}
+        {project.outcomeLabel && (
+          <section className="exec-card outcome-card">
+            <p className="eyebrow">FINAL DISPOSITION</p>
+            <h3>
+              {project.status} · {project.outcomeLabel}
+            </h3>
+            <p>{project.finalResult || project.outcome}</p>
+            {project.successorProjectId && (
+              <p>
+                Successor: {project.successorProjectId} ·{' '}
+                {project.successorProjectName}
+              </p>
+            )}
+          </section>
+        )}
         <section className="exec-card risk-card">
           <p className="eyebrow">KEY RISK / LIMITATION</p>
           <h3>{project.keyRisk || 'No material risk has been recorded.'}</h3>
@@ -1129,7 +1454,18 @@ function ExecutiveSplash({
         <section className="exec-card action-card">
           <p className="eyebrow">LEADERSHIP ACTION</p>
           <h3>{project.leadershipAction}</h3>
-          {project.helpRequests.find((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status)) && <p><strong>Open support request:</strong> {project.helpRequests.find((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status))?.categoryLabel}</p>}
+          {project.helpRequests.find((request) =>
+            ['OPEN', 'IN_PROGRESS'].includes(request.status),
+          ) && (
+            <p>
+              <strong>Open support request:</strong>{' '}
+              {
+                project.helpRequests.find((request) =>
+                  ['OPEN', 'IN_PROGRESS'].includes(request.status),
+                )?.categoryLabel
+              }
+            </p>
+          )}
         </section>
         <section className="exec-card ownership-card">
           <p className="eyebrow">OWNERSHIP & KNOWLEDGE</p>
@@ -1142,10 +1478,20 @@ function ExecutiveSplash({
             <ChevronRight />
           </button>
           <div className="documentation-line">
-            <strong>Project Lead: {projectLead?.displayName ?? 'Not assigned'}</strong>
-            <small>{projectLead ? `${projectLead.title || projectLead.primaryUnit} · ${projectLead.identifier}${projectLead.status !== 'ACTIVE' ? ' · Inactive account' : ''}` : 'An authorized administrator should assign current responsibility.'}</small>
+            <strong>
+              Project Lead: {projectLead?.displayName ?? 'Not assigned'}
+            </strong>
+            <small>
+              {projectLead
+                ? `${projectLead.title || projectLead.primaryUnit} · ${projectLead.identifier}${projectLead.status !== 'ACTIVE' ? ' · Inactive account' : ''}`
+                : 'An authorized administrator should assign current responsibility.'}
+            </small>
           </div>
-          {projectLead && <button className="secondary" onClick={copyProjectLead}>Copy Project Lead contact</button>}
+          {projectLead && (
+            <button className="secondary" onClick={copyProjectLead}>
+              Copy Project Lead contact
+            </button>
+          )}
           <div className="documentation-line">
             <strong>{project.documentationLabel}</strong>
             {project.accessInstructions && (
@@ -1167,8 +1513,12 @@ function ExecutiveSplash({
 }
 
 function TechnicalView({ project }: { project: PortalProject }) {
-  const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
-  const contributors = project.team.filter((member) => member.role === 'CONTRIBUTOR');
+  const projectLead = project.team.find(
+    (member) => member.role === 'PROJECT_LEAD',
+  );
+  const contributors = project.team.filter(
+    (member) => member.role === 'CONTRIBUTOR',
+  );
   return (
     <div className="detail-grid">
       <div className="security-callout span-2">
@@ -1181,25 +1531,116 @@ function TechnicalView({ project }: { project: PortalProject }) {
       </div>
       <SolutionDetail project={project} />
       <section className="panel span-2 knowledge-summary">
-        <PanelHead title="Project knowledge state" note="Status, maturity, completion, Phase, and outcome answer different questions." />
-        <div className="fact-grid"><span><small>Status · current lifecycle</small><strong>{project.status}</strong></span><span><small>Maturity · demonstrated development</small><strong>{project.maturity}</strong></span><span><small>Completion · planned work</small><strong>{project.progress}%</strong></span><span><small>Outcome · final disposition</small><strong>{project.outcomeLabel || 'Not set'}</strong></span></div>
-        {project.finalResult && <p><b>Final result:</b> {project.finalResult}</p>}
-        {project.whatWorked && <p><b>What worked:</b> {project.whatWorked}</p>}
-        {project.whatDidNotWork && <p><b>What did not work:</b> {project.whatDidNotWork}</p>}
-        {project.recommendedNextAction && <p><b>Recommended next action:</b> {project.recommendedNextAction}</p>}
-        {project.successorProjectId && <p><b>Successor:</b> {project.successorProjectId} · {project.successorProjectName}</p>}
+        <PanelHead
+          title="Project knowledge state"
+          note="Status, maturity, completion, Phase, and outcome answer different questions."
+        />
+        <div className="fact-grid">
+          <span>
+            <small>Status · current lifecycle</small>
+            <strong>{project.status}</strong>
+          </span>
+          <span>
+            <small>Maturity · demonstrated development</small>
+            <strong>{project.maturity}</strong>
+          </span>
+          <span>
+            <small>Completion · planned work</small>
+            <strong>{project.progress}%</strong>
+          </span>
+          <span>
+            <small>Outcome · final disposition</small>
+            <strong>{project.outcomeLabel || 'Not set'}</strong>
+          </span>
+        </div>
+        {project.finalResult && (
+          <p>
+            <b>Final result:</b> {project.finalResult}
+          </p>
+        )}
+        {project.whatWorked && (
+          <p>
+            <b>What worked:</b> {project.whatWorked}
+          </p>
+        )}
+        {project.whatDidNotWork && (
+          <p>
+            <b>What did not work:</b> {project.whatDidNotWork}
+          </p>
+        )}
+        {project.recommendedNextAction && (
+          <p>
+            <b>Recommended next action:</b> {project.recommendedNextAction}
+          </p>
+        )}
+        {project.successorProjectId && (
+          <p>
+            <b>Successor:</b> {project.successorProjectId} ·{' '}
+            {project.successorProjectName}
+          </p>
+        )}
       </section>
       <section className="panel span-2 project-team-panel">
-        <PanelHead title="Project team and relationships" note="Current responsibility and authorized maintainers" />
+        <PanelHead
+          title="Project team and relationships"
+          note="Current responsibility and authorized maintainers"
+        />
         <div className="team-responsibility-grid">
-          <div><small>Lead Unit</small><strong>{project.unit}</strong></div>
-          <div><small>Project Lead</small><strong>{projectLead?.displayName ?? 'Not assigned'}</strong><span>{projectLead?.identifier || ''}{projectLead?.status !== 'ACTIVE' ? ' · Inactive account' : ''}</span></div>
-          <div><small>Created by</small><strong>{project.createdByName}</strong></div>
+          <div>
+            <small>Lead Unit</small>
+            <strong>{project.unit}</strong>
+          </div>
+          <div>
+            <small>Project Lead</small>
+            <strong>{projectLead?.displayName ?? 'Not assigned'}</strong>
+            <span>
+              {projectLead?.identifier || ''}
+              {projectLead?.status !== 'ACTIVE' ? ' · Inactive account' : ''}
+            </span>
+          </div>
+          <div>
+            <small>Created by</small>
+            <strong>{project.createdByName}</strong>
+          </div>
         </div>
         <div className="team-columns">
-          <div><h3>Project Contributors</h3>{contributors.length ? contributors.map((member) => <p key={member.userId}><strong>{member.displayName}</strong><span>{member.primaryUnit}{member.status !== 'ACTIVE' ? ' · Inactive account' : ''}</span></p>) : <p>No additional Contributors assigned.</p>}</div>
-          <div><h3>Participating Units</h3>{project.units.map((unit) => <p key={unit.id}><strong>{unit.name}</strong><span>{unit.role}</span></p>)}</div>
-          <div><h3>Problems addressed</h3>{project.problems.map((problem) => <p key={problem.id}><strong>{problem.id}</strong><span>{problem.title}{problem.isPrimary ? ' · Primary' : ''}</span></p>)}</div>
+          <div>
+            <h3>Project Contributors</h3>
+            {contributors.length ? (
+              contributors.map((member) => (
+                <p key={member.userId}>
+                  <strong>{member.displayName}</strong>
+                  <span>
+                    {member.primaryUnit}
+                    {member.status !== 'ACTIVE' ? ' · Inactive account' : ''}
+                  </span>
+                </p>
+              ))
+            ) : (
+              <p>No additional Contributors assigned.</p>
+            )}
+          </div>
+          <div>
+            <h3>Participating Units</h3>
+            {project.units.map((unit) => (
+              <p key={unit.id}>
+                <strong>{unit.name}</strong>
+                <span>{unit.role}</span>
+              </p>
+            ))}
+          </div>
+          <div>
+            <h3>Problems addressed</h3>
+            {project.problems.map((problem) => (
+              <p key={problem.id}>
+                <strong>{problem.id}</strong>
+                <span>
+                  {problem.title}
+                  {problem.isPrimary ? ' · Primary' : ''}
+                </span>
+              </p>
+            ))}
+          </div>
         </div>
       </section>
       <section className="panel span-2">
@@ -1213,24 +1654,55 @@ function TechnicalView({ project }: { project: PortalProject }) {
               <article key={update.id}>
                 <header>
                   <strong>{update.summary}</strong>
-                  <small>{new Date(update.occurredAt).toLocaleDateString()} · {update.authorName}{update.phaseName ? ` · ${update.phaseName}` : ''}</small>
+                  <small>
+                    {new Date(update.occurredAt).toLocaleDateString()} ·{' '}
+                    {update.authorName}
+                    {update.phaseName ? ` · ${update.phaseName}` : ''}
+                  </small>
                 </header>
-                <p><b>Result / finding:</b> {update.result}</p>
-                <p><b>Next step:</b> {update.nextStep}</p>
-                {update.blockerRisk && <p className="update-risk"><b>Blocker / risk:</b> {update.blockerRisk}</p>}
-                {(update.statusAfter || update.maturityAfter || update.completionAfter !== null) && (
+                <p>
+                  <b>Result / finding:</b> {update.result}
+                </p>
+                <p>
+                  <b>Next step:</b> {update.nextStep}
+                </p>
+                {update.blockerRisk && (
+                  <p className="update-risk">
+                    <b>Blocker / risk:</b> {update.blockerRisk}
+                  </p>
+                )}
+                {(update.statusAfter ||
+                  update.maturityAfter ||
+                  update.completionAfter !== null) && (
                   <footer>
-                    {update.statusAfter && <span>Status: {update.statusAfter}</span>}
-                    {update.maturityAfter && <span>Maturity: {update.maturityAfter}</span>}
-                    {update.completionAfter !== null && <span>Completion: {update.completionAfter}%</span>}
+                    {update.statusAfter && (
+                      <span>Status: {update.statusAfter}</span>
+                    )}
+                    {update.maturityAfter && (
+                      <span>Maturity: {update.maturityAfter}</span>
+                    )}
+                    {update.completionAfter !== null && (
+                      <span>Completion: {update.completionAfter}%</span>
+                    )}
                   </footer>
                 )}
-                {update.maturityEvidenceEvent && <aside className="evidence-note"><b>Evidence supporting {update.maturityAfter}:</b> {update.maturityEvidenceEvent} · {new Date(update.maturityEvidenceDate).toLocaleDateString()}{update.maturityEvidenceReference ? ` · ${update.maturityEvidenceReference}` : ''}</aside>}
+                {update.maturityEvidenceEvent && (
+                  <aside className="evidence-note">
+                    <b>Evidence supporting {update.maturityAfter}:</b>{' '}
+                    {update.maturityEvidenceEvent} ·{' '}
+                    {new Date(update.maturityEvidenceDate).toLocaleDateString()}
+                    {update.maturityEvidenceReference
+                      ? ` · ${update.maturityEvidenceReference}`
+                      : ''}
+                  </aside>
+                )}
               </article>
             ))}
           </div>
         ) : (
-          <p className="body-copy">No Project Updates have been recorded yet.</p>
+          <p className="body-copy">
+            No Project Updates have been recorded yet.
+          </p>
         )}
       </section>
       <section className="panel span-2">
@@ -1264,7 +1736,13 @@ function TechnicalView({ project }: { project: PortalProject }) {
               icon={<GitBranch />}
               title={r.name}
               meta={`${r.artifactType} · ${r.documentationLabel} · ${r.description}`}
-              href={['AVAILABLE_IN_FORGE', 'EXTERNAL_REFERENCE'].includes(r.documentationAvailability) ? r.url : undefined}
+              href={
+                ['AVAILABLE_IN_FORGE', 'EXTERNAL_REFERENCE'].includes(
+                  r.documentationAvailability,
+                )
+                  ? r.url
+                  : undefined
+              }
               access={r.phaseName ? `Phase: ${r.phaseName}` : undefined}
             />
           ))
@@ -1279,11 +1757,18 @@ function TechnicalView({ project }: { project: PortalProject }) {
             <div className="lesson" key={l.id}>
               <BookOpen />
               <div>
-                <span className="lesson-type">{l.lessonTypeLabel}</span><strong>{l.title}</strong>
+                <span className="lesson-type">{l.lessonTypeLabel}</span>
+                <strong>{l.title}</strong>
                 <p>
                   {l.finding} {l.recommendation}
                 </p>
-                <small>{new Date(l.date).toLocaleDateString()} · {l.authorName}{l.phaseName ? ` · ${l.phaseName}` : ''}{l.sourceUpdateId ? ` · From Update #${l.sourceUpdateId}` : ''}</small>
+                <small>
+                  {new Date(l.date).toLocaleDateString()} · {l.authorName}
+                  {l.phaseName ? ` · ${l.phaseName}` : ''}
+                  {l.sourceUpdateId
+                    ? ` · From Update #${l.sourceUpdateId}`
+                    : ''}
+                </small>
               </div>
             </div>
           ))
@@ -1427,24 +1912,113 @@ function Artifact({
         <small>{meta}</small>
         {access && <small>{access}</small>}
       </div>
-      {href ? <a href={href} target="_blank" rel="noreferrer" aria-label={`Open ${title}`}><ExternalLink /></a> : <small>Contact originator for access</small>}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${title}`}
+        >
+          <ExternalLink />
+        </a>
+      ) : (
+        <small>Contact originator for access</small>
+      )}
     </div>
   );
 }
 
 function HelpRequests({ project }: { project: PortalProject }) {
   const [busy, setBusy] = useState<number | null>(null);
-  const active = project.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status));
-  const closed = project.helpRequests.filter((request) => ['RESOLVED', 'CANCELLED'].includes(request.status));
+  const active = project.helpRequests.filter((request) =>
+    ['OPEN', 'IN_PROGRESS'].includes(request.status),
+  );
+  const closed = project.helpRequests.filter((request) =>
+    ['RESOLVED', 'CANCELLED'].includes(request.status),
+  );
   const transition = async (id: number, status: string) => {
-    const resolutionSummary = ['RESOLVED', 'CANCELLED'].includes(status) ? window.prompt('Short resolution summary') : '';
-    if (['RESOLVED', 'CANCELLED'].includes(status) && !resolutionSummary) return;
+    const resolutionSummary = ['RESOLVED', 'CANCELLED'].includes(status)
+      ? window.prompt('Short resolution summary')
+      : '';
+    if (['RESOLVED', 'CANCELLED'].includes(status) && !resolutionSummary)
+      return;
     setBusy(id);
-    const response = await fetch(`/api/projects/${project.id}/help-requests/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, resolutionSummary }) });
-    if (response.ok) window.location.reload(); else setBusy(null);
+    const response = await fetch(
+      `/api/projects/${project.id}/help-requests/${id}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status, resolutionSummary }),
+      },
+    );
+    if (response.ok) window.location.reload();
+    else setBusy(null);
   };
-  const card = (request: PortalProject['helpRequests'][number]) => <article className="help-request-card" key={request.id}><header><span className="lesson-type">{request.categoryLabel}</span><strong>{request.title}</strong><small>{request.status.replaceAll('_', ' ')} · {new Date(request.createdAt).toLocaleDateString()} · {request.createdByName}</small></header><p>{request.description}</p><p><b>Contact:</b> {request.contact || 'Project Lead'}</p>{request.resolutionSummary && <p><b>Resolution:</b> {request.resolutionSummary}</p>}{['OPEN', 'IN_PROGRESS'].includes(request.status) && <footer>{request.status === 'OPEN' && <button disabled={busy === request.id} onClick={() => transition(request.id, 'IN_PROGRESS')}>Mark in progress</button>}<button disabled={busy === request.id} onClick={() => transition(request.id, 'RESOLVED')}>Resolve</button><button disabled={busy === request.id} onClick={() => transition(request.id, 'CANCELLED')}>Cancel</button></footer>}</article>;
-  return <section className="panel span-2"><PanelHead title="Help Requests" note="Discoverable assistance needs and preserved resolution history" />{active.length ? active.map(card) : <p className="body-copy">No active Help Requests.</p>}{closed.length > 0 && <details><summary>Resolved / cancelled history ({closed.length})</summary>{closed.map(card)}</details>}</section>;
+  const card = (request: PortalProject['helpRequests'][number]) => (
+    <article className="help-request-card" key={request.id}>
+      <header>
+        <span className="lesson-type">{request.categoryLabel}</span>
+        <strong>{request.title}</strong>
+        <small>
+          {request.status.replaceAll('_', ' ')} ·{' '}
+          {new Date(request.createdAt).toLocaleDateString()} ·{' '}
+          {request.createdByName}
+        </small>
+      </header>
+      <p>{request.description}</p>
+      <p>
+        <b>Contact:</b> {request.contact || 'Project Lead'}
+      </p>
+      {request.resolutionSummary && (
+        <p>
+          <b>Resolution:</b> {request.resolutionSummary}
+        </p>
+      )}
+      {['OPEN', 'IN_PROGRESS'].includes(request.status) && (
+        <footer>
+          {request.status === 'OPEN' && (
+            <button
+              disabled={busy === request.id}
+              onClick={() => transition(request.id, 'IN_PROGRESS')}
+            >
+              Mark in progress
+            </button>
+          )}
+          <button
+            disabled={busy === request.id}
+            onClick={() => transition(request.id, 'RESOLVED')}
+          >
+            Resolve
+          </button>
+          <button
+            disabled={busy === request.id}
+            onClick={() => transition(request.id, 'CANCELLED')}
+          >
+            Cancel
+          </button>
+        </footer>
+      )}
+    </article>
+  );
+  return (
+    <section className="panel span-2">
+      <PanelHead
+        title="Help Requests"
+        note="Discoverable assistance needs and preserved resolution history"
+      />
+      {active.length ? (
+        active.map(card)
+      ) : (
+        <p className="body-copy">No active Help Requests.</p>
+      )}
+      {closed.length > 0 && (
+        <details>
+          <summary>Resolved / cancelled history ({closed.length})</summary>
+          {closed.map(card)}
+        </details>
+      )}
+    </section>
+  );
 }
 
 function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
@@ -1486,16 +2060,29 @@ function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
             note={`${portfolio.length} connected solution efforts`}
           />
           <div className="project-cards">
-            {portfolio.length ? portfolio.map((p) => (
-              <div className="project-card" key={p.id}>
-                <span className="maturity">{p.solutionTypeLabel}</span>
-                <strong>{p.name}</strong>
+            {portfolio.length ? (
+              portfolio.map((p) => (
+                <div className="project-card" key={p.id}>
+                  <span className="maturity">{p.solutionTypeLabel}</span>
+                  <strong>{p.name}</strong>
+                  <p>
+                    {p.id} · {p.progress}% complete
+                  </p>
+                  <Progress value={p.progress} />
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">
+                <Wrench />
+                <h3>
+                  No Solution Efforts have been associated with this Unit yet.
+                </h3>
                 <p>
-                  {p.id} · {p.progress}% complete
+                  Authorized Unit members can add existing or new work as
+                  participation begins.
                 </p>
-                <Progress value={p.progress} />
               </div>
-            )) : <div className="empty-state"><Wrench /><h3>No Solution Efforts have been associated with this Unit yet.</h3><p>Authorized Unit members can add existing or new work as participation begins.</p></div>}
+            )}
           </div>
         </section>
         <section className="panel">
@@ -1676,8 +2263,16 @@ function ProjectsView({
       ) : (
         <div className="empty-state">
           <Wrench />
-          <h2>{projects.length ? 'No solution efforts match these filters.' : 'No Solution Efforts have been created yet.'}</h2>
-          <p>{projects.length ? 'Clear one or more filters to broaden the result set.' : 'Participating Units can create and associate their actual work with the initial capability Problems.'}</p>
+          <h2>
+            {projects.length
+              ? 'No solution efforts match these filters.'
+              : 'No Solution Efforts have been created yet.'}
+          </h2>
+          <p>
+            {projects.length
+              ? 'Clear one or more filters to broaden the result set.'
+              : 'Participating Units can create and associate their actual work with the initial capability Problems.'}
+          </p>
         </div>
       )}
     </>
@@ -1714,7 +2309,15 @@ function ProblemsView({ onProblem }: { onProblem: (id: string) => void }) {
   );
 }
 function AdministrationView() {
-  const { directoryUsers, submissions, session, units, problems } = useData();
+  const {
+    directoryUsers,
+    submissions,
+    session,
+    units,
+    problems,
+    needsAttention,
+    projectDirectoryUsers,
+  } = useData();
   const current = session.currentUser;
   const scopedUnits =
     current?.role === 'SYSTEM_ADMIN'
@@ -1763,15 +2366,77 @@ function AdministrationView() {
       </div>
       <div className="detail-grid two">
         <section className="panel">
+          <h2>Needs attention</h2>
+          <p>
+            Factual continuity signals derived from current assignments. These
+            are not performance ratings.
+          </p>
+          {needsAttention.length ? (
+            <div className="stack-list">
+              {needsAttention.map((signal) => (
+                <div key={signal.key}>
+                  <strong>{signal.kind.replaceAll('_', ' ')}</strong>
+                  <p>{signal.message}</p>
+                  {signal.projectId && (
+                    <a href={`/projects/${signal.projectId}`}>Open Project</a>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <Check />
+              <h3>No continuity gaps detected in your scope.</h3>
+            </div>
+          )}
+        </section>
+        <section className="panel">
           <h2>User directory</h2>
           {directoryUsers.length ? (
             <div className="stack-list">
               {directoryUsers.map((item) => (
-                <div key={item.id}>
-                  <strong>{item.displayName}</strong>
-                  <small>
-                    {item.trackingId} · {item.status} · {item.primaryUnit}
-                  </small>
+                <details key={item.id}>
+                  <summary>
+                    <strong>{item.displayName}</strong>
+                    <small>
+                      {item.trackingId} · {item.identifier} · {item.status} ·{' '}
+                      {item.primaryUnit}
+                    </small>
+                  </summary>
+                  <p>
+                    {item.memberships
+                      .map(
+                        (membership) =>
+                          `${membership.unitName}${membership.isPrimary ? ' (primary)' : ''}${membership.isAdmin ? ' · Unit Admin' : ''}`,
+                      )
+                      .join(' · ')}
+                  </p>
+                  <p>
+                    <strong>Open responsibilities:</strong>{' '}
+                    {item.projectsLed.length} Project
+                    {item.projectsLed.length === 1 ? '' : 's'} led ·{' '}
+                    {item.projectsContributed.length} contributed ·{' '}
+                    {item.openHelpRequests.length} Help contact
+                    {item.openHelpRequests.length === 1 ? '' : 's'}
+                  </p>
+                  {item.warnings.map((warning) => (
+                    <p className="form-warning" key={warning}>
+                      {warning}
+                    </p>
+                  ))}
+                  {[...item.projectsLed, ...item.projectsContributed].map(
+                    (project) => (
+                      <p key={`${item.id}-${project.id}`}>
+                        <a href={`/projects/${project.id}`}>
+                          {project.id} — {project.name}
+                        </a>{' '}
+                        · {project.status} · {project.maturity} · Activity{' '}
+                        {new Date(
+                          project.lastMeaningfulActivityAt,
+                        ).toLocaleDateString()}
+                      </p>
+                    ),
+                  )}
                   <label>
                     Role{' '}
                     <select
@@ -1801,18 +2466,82 @@ function AdministrationView() {
                   <button
                     className="secondary"
                     disabled={item.id === current?.id}
-                    onClick={() =>
+                    onClick={() => {
+                      if (
+                        item.status === 'ACTIVE' &&
+                        item.warnings.length &&
+                        !window.confirm(
+                          `Disable ${item.displayName}?\n\n${item.warnings.join('\n')}\n\nExisting history will be retained, but these responsibilities will need reassignment.`,
+                        )
+                      )
+                        return;
                       void patch(`/api/admin/users/${item.id}`, {
                         status:
                           item.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE',
-                      })
-                    }
+                      });
+                    }}
                   >
                     {item.status === 'ACTIVE'
                       ? 'Disable account'
                       : 'Activate account'}
                   </button>
-                </div>
+                  <form
+                    className="quick-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void patch(
+                        `/api/admin/users/${item.id}/memberships`,
+                        Object.fromEntries(new FormData(event.currentTarget)),
+                      );
+                    }}
+                  >
+                    <select name="operation">
+                      <option value="ADD">Add Unit membership</option>
+                      <option value="SET_PRIMARY">Set primary Unit</option>
+                      <option value="REMOVE">Remove Unit membership</option>
+                    </select>
+                    <select name="unitId">
+                      {scopedUnits.map((unit) => (
+                        <option key={unit.id} value={unit.dbId}>
+                          {unit.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button className="secondary" type="submit">
+                      Update membership
+                    </button>
+                  </form>
+                  {current?.role === 'SYSTEM_ADMIN' && (
+                    <form
+                      className="quick-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const body = Object.fromEntries(
+                          new FormData(event.currentTarget),
+                        );
+                        void patch(`/api/admin/users/${item.id}/admin-scopes`, {
+                          ...body,
+                          assigned: body.assigned === 'true',
+                        });
+                      }}
+                    >
+                      <select name="assigned">
+                        <option value="true">Assign Unit Admin scope</option>
+                        <option value="false">Remove Unit Admin scope</option>
+                      </select>
+                      <select name="unitId">
+                        {units.map((unit) => (
+                          <option key={unit.id} value={unit.dbId}>
+                            {unit.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="secondary" type="submit">
+                        Update admin scope
+                      </button>
+                    </form>
+                  )}
+                </details>
               ))}
             </div>
           ) : (
@@ -1833,19 +2562,29 @@ function AdministrationView() {
                   </strong>
                   <small>
                     {item.status.replaceAll('_', ' ')} · {item.submitter} ·{' '}
-                    {item.unit} · Submitted {new Date(item.createdAt).toLocaleDateString()}
+                    {item.unit} · Submitted{' '}
+                    {new Date(item.createdAt).toLocaleDateString()}
                   </small>
                   <p>{item.description}</p>
                   {item.relatedProblemId && (
-                    <p className="form-success">Contributor identified {item.relatedProblemId} as covering this issue.</p>
+                    <p className="form-success">
+                      Contributor identified {item.relatedProblemId} as covering
+                      this issue.
+                    </p>
                   )}
                   {item.matches.length > 0 && (
                     <div className="review-matches">
                       <strong>Canonical Problems to review</strong>
                       {item.matches.map((match) => (
                         <div key={match.id}>
-                          <span className="maturity">{match.classification === 'POSSIBLE_DUPLICATE' ? 'Possible Duplicate' : 'Related Problem'}</span>
-                          <b>{match.id} — {match.title}</b>
+                          <span className="maturity">
+                            {match.classification === 'POSSIBLE_DUPLICATE'
+                              ? 'Possible Duplicate'
+                              : 'Related Problem'}
+                          </span>
+                          <b>
+                            {match.id} — {match.title}
+                          </b>
                           <small>{match.reasons.join(' · ')}</small>
                         </div>
                       ))}
@@ -1872,7 +2611,9 @@ function AdministrationView() {
                     <select
                       name="relatedProblemId"
                       defaultValue={
-                        problems.find((problem) => problem.id === item.relatedProblemId)?.dbId ?? ''
+                        problems.find(
+                          (problem) => problem.id === item.relatedProblemId,
+                        )?.dbId ?? ''
                       }
                     >
                       <option value="">No canonical Problem link</option>
@@ -1912,16 +2653,71 @@ function AdministrationView() {
                   {unit.id} · {unit.isActive ? 'ACTIVE' : 'INACTIVE'} · POC:{' '}
                   {unit.forgePointOfContact || 'Not assigned'}
                 </small>
-                <button
-                  className="secondary"
-                  onClick={() =>
-                    void patch(`/api/admin/units/${unit.dbId}`, {
-                      isActive: !unit.isActive,
-                    })
-                  }
+                {current?.role === 'SYSTEM_ADMIN' && (
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      void patch(`/api/admin/units/${unit.dbId}`, {
+                        isActive: !unit.isActive,
+                      })
+                    }
+                  >
+                    {unit.isActive ? 'Mark inactive' : 'Mark active'}
+                  </button>
+                )}
+                <form
+                  className="quick-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void patch(
+                      `/api/admin/units/${unit.dbId}`,
+                      Object.fromEntries(new FormData(event.currentTarget)),
+                    );
+                  }}
                 >
-                  {unit.isActive ? 'Mark inactive' : 'Mark active'}
-                </button>
+                  <input
+                    name="forgePointOfContact"
+                    defaultValue={unit.forgePointOfContact}
+                    placeholder="FORGE point of contact"
+                  />
+                  <button className="secondary" type="submit">
+                    Save POC
+                  </button>
+                </form>
+                {current?.role === 'SYSTEM_ADMIN' &&
+                  needsAttention.some(
+                    (signal) =>
+                      signal.kind === 'NO_ACTIVE_UNIT_ADMIN' &&
+                      signal.unitId === unit.dbId,
+                  ) && (
+                    <form
+                      className="quick-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const userId = new FormData(event.currentTarget).get(
+                          'userId',
+                        );
+                        if (typeof userId !== 'string') return;
+                        void patch(`/api/admin/users/${userId}/admin-scopes`, {
+                          unitId: unit.dbId,
+                          assigned: true,
+                        });
+                      }}
+                    >
+                      <select name="userId">
+                        {projectDirectoryUsers
+                          .filter((person) => person.status === 'ACTIVE')
+                          .map((person) => (
+                            <option key={person.id} value={person.id}>
+                              {person.displayName}
+                            </option>
+                          ))}
+                      </select>
+                      <button className="secondary" type="submit">
+                        Assign recovery administrator
+                      </button>
+                    </form>
+                  )}
               </div>
             ))}
           </div>
@@ -2145,7 +2941,13 @@ function GraphView({ onProblem }: { onProblem: () => void }) {
     </>
   );
 }
-function ExploreView({ projectId, onProject }: { projectId?: string; onProject: (id: string) => void }) {
+function ExploreView({
+  projectId,
+  onProject,
+}: {
+  projectId?: string;
+  onProject: (id: string) => void;
+}) {
   const { projects } = useData();
   const focus = projects.find((project) => project.id === projectId);
   if (!focus)
@@ -2170,9 +2972,15 @@ function ExploreView({ projectId, onProject }: { projectId?: string; onProject: 
     .map((p) => ({
       project: p,
       reasons: [
-        p.problems.some((x) => focus.problems.some((y) => y.id === x.id)) ? `Shares ${p.problems.filter((x) => focus.problems.some((y) => y.id === x.id)).length} Problem(s)` : '',
-        p.tags.some((x) => focus.tags.includes(x)) ? 'Shares capability tags' : '',
-        p.units.some((x) => focus.units.some((y) => y.id === x.id)) ? 'Same participating Unit' : '',
+        p.problems.some((x) => focus.problems.some((y) => y.id === x.id))
+          ? `Shares ${p.problems.filter((x) => focus.problems.some((y) => y.id === x.id)).length} Problem(s)`
+          : '',
+        p.tags.some((x) => focus.tags.includes(x))
+          ? 'Shares capability tags'
+          : '',
+        p.units.some((x) => focus.units.some((y) => y.id === x.id))
+          ? 'Same participating Unit'
+          : '',
         p.solutionType === focus.solutionType ? 'Same Solution Type' : '',
       ].filter(Boolean),
       score:
@@ -2280,15 +3088,13 @@ function CreateModal({
     const controller = new AbortController();
     const timer = setTimeout(
       () =>
-        fetch(`/api/problems?q=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`, {
-          signal: controller.signal,
-        })
-          .then(
-            (r) =>
-              r.json() as Promise<
-                ProblemMatchResult[]
-              >,
-          )
+        fetch(
+          `/api/problems?q=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`,
+          {
+            signal: controller.signal,
+          },
+        )
+          .then((r) => r.json() as Promise<ProblemMatchResult[]>)
           .then(setMatches)
           .catch(() => setMatches([]))
           .finally(() => setLoadingMatches(false)),
@@ -2334,10 +3140,17 @@ function CreateModal({
         </button>
         <p className="eyebrow">GOVERNED SUBMISSION</p>
         <h2>Submit potential capability Problem</h2>
-        <p>Surface a possible enduring gap for authorized review before it enters the canonical portfolio.</p>
+        <p>
+          Surface a possible enduring gap for authorized review before it enters
+          the canonical portfolio.
+        </p>
         <div className="question-callout">
           <strong>Check existing Problems first</strong>
-          <p>FORGE works best when similar capability gaps are connected to a common Problem. Describe the issue below and review potentially related Problems before submitting a new one.</p>
+          <p>
+            FORGE works best when similar capability gaps are connected to a
+            common Problem. Describe the issue below and review potentially
+            related Problems before submitting a new one.
+          </p>
         </div>
         <div className="security-callout">
           <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
@@ -2369,43 +3182,111 @@ function CreateModal({
           <div className="possible">
             <strong>Existing Problems to review</strong>
             {matches.map((match) => (
-              <article className={`match-card ${match.classification === 'POSSIBLE_DUPLICATE' ? 'duplicate' : ''}`} key={match.id}>
-                <span className="maturity">{match.classification === 'POSSIBLE_DUPLICATE' ? 'Possible Duplicate' : 'Related Problem'}</span>
-                <h3>{match.id} — {match.title}</h3>
+              <article
+                className={`match-card ${match.classification === 'POSSIBLE_DUPLICATE' ? 'duplicate' : ''}`}
+                key={match.id}
+              >
+                <span className="maturity">
+                  {match.classification === 'POSSIBLE_DUPLICATE'
+                    ? 'Possible Duplicate'
+                    : 'Related Problem'}
+                </span>
+                <h3>
+                  {match.id} — {match.title}
+                </h3>
                 <p>{match.description}</p>
-                <small>{match.status ?? 'Open'} · {match.category}</small>
+                <small>
+                  {match.status ?? 'Open'} · {match.category}
+                </small>
                 <strong>Why this appeared</strong>
-                <ul>{match.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                <ul>
+                  {match.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
                 <div className="match-actions">
-                  <a className="secondary" href={`/problems/${match.id}`} target="_blank" rel="noreferrer">View Problem <ExternalLink size={14} /></a>
-                  <button type="button" className="secondary" onClick={() => {
-                    setCoveredProblemId(match.dbId);
-                    setDuplicateReviewed(true);
-                    setError('');
-                  }}>This Existing Problem Covers My Issue</button>
+                  <a
+                    className="secondary"
+                    href={`/problems/${match.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View Problem <ExternalLink size={14} />
+                  </a>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setCoveredProblemId(match.dbId);
+                      setDuplicateReviewed(true);
+                      setError('');
+                    }}
+                  >
+                    This Existing Problem Covers My Issue
+                  </button>
                 </div>
               </article>
             ))}
-            {matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') && !duplicateReviewed && (
-              <button type="button" className="secondary" onClick={() => {
-                setDuplicateReviewed(true);
-                setCoveredProblemId(undefined);
-                setError('');
-              }}>My Problem Is Different — Continue Submission</button>
-            )}
+            {matches.some(
+              (match) => match.classification === 'POSSIBLE_DUPLICATE',
+            ) &&
+              !duplicateReviewed && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setDuplicateReviewed(true);
+                    setCoveredProblemId(undefined);
+                    setError('');
+                  }}
+                >
+                  My Problem Is Different — Continue Submission
+                </button>
+              )}
           </div>
         )}
-        {!loadingMatches && `${title} ${description}`.trim().length >= 3 && matches.length === 0 && (
-          <div className="notice"><Search size={18} /><div><strong>No strong matches found</strong><p>FORGE did not identify a strong existing match. This does not guarantee that related work does not exist. You may continue your submission.</p></div></div>
+        {!loadingMatches &&
+          `${title} ${description}`.trim().length >= 3 &&
+          matches.length === 0 && (
+            <div className="notice">
+              <Search size={18} />
+              <div>
+                <strong>No strong matches found</strong>
+                <p>
+                  FORGE did not identify a strong existing match. This does not
+                  guarantee that related work does not exist. You may continue
+                  your submission.
+                </p>
+              </div>
+            </div>
+          )}
+        {coveredProblemId && (
+          <p className="form-success">
+            This observation will be linked to the selected canonical Problem
+            for reviewer awareness; no new canonical Problem will be created.
+          </p>
         )}
-        {coveredProblemId && <p className="form-success">This observation will be linked to the selected canonical Problem for reviewer awareness; no new canonical Problem will be created.</p>}
         {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="create" disabled={saving || loadingMatches || (matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') && !duplicateReviewed)}>
-            {saving ? 'Submitting…' : coveredProblemId ? 'Record connection for review' : 'Submit for review'}
+          <button
+            className="create"
+            disabled={
+              saving ||
+              loadingMatches ||
+              (matches.some(
+                (match) => match.classification === 'POSSIBLE_DUPLICATE',
+              ) &&
+                !duplicateReviewed)
+            }
+          >
+            {saving
+              ? 'Submitting…'
+              : coveredProblemId
+                ? 'Record connection for review'
+                : 'Submit for review'}
           </button>
         </div>
       </form>

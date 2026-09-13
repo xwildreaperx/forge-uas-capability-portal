@@ -4,6 +4,8 @@ FORGE is a local relational prototype for discovering fictional UAS capability P
 
 Project Operations Part 4 adds collaboration-oriented Help Requests with controlled categories, preserved resolution history, contact context, Activity/freshness, dashboard discovery, Executive support signals, and distinct AI Handoff semantics. Comparison is selected-Problem-specific, Related Work is current-Project-specific and explainable, direct artifact actions respect Documentation Availability, and **My Projects** provides a personal work surface without replacing the global portfolio.
 
+Unit Administration Part 1 adds responsibility-aware personnel profiles, controlled primary/additional Unit membership, derived continuity warnings, System Administrator recovery for Units without an active administrator, and administrative Activity provenance. Account disablement preserves attribution and is allowed after a clear impact warning; it never silently rewrites Project ownership. Help Requests that follow the Project Lead move with a valid lead reassignment, while explicitly named alternate contacts remain unchanged.
+
 ## Product philosophy
 
 Problems are enduring capability gaps. Projects are broad Solution Efforts: organic development, vendor evaluation, tactics/techniques, training, integration/configuration, process/policy, or hybrid work. Multiple efforts can address the same Problem, one effort can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.
@@ -105,7 +107,7 @@ pnpm test
 pnpm build
 ```
 
-Tests cover both many-to-many relationships, Lead Unit and Project Lead invariants, scoped team management, contributor edit access, phase progression, Update-driven Phase and maturity evidence, typed Lesson provenance, lifecycle status/outcome separation, closeout, failed-work preservation, tracking formats, persisted Problem/Project creation, editable multi-Problem and multi-Unit links, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
+Tests cover both many-to-many relationships, Lead Unit and Project Lead invariants, scoped team management, contributor edit access, Unit membership transfer, administrator-scope recovery, role/status validation, administrative provenance, Help contact continuity, phase progression, Update-driven Phase and maturity evidence, typed Lesson provenance, lifecycle status/outcome separation, closeout, failed-work preservation, tracking formats, persisted Problem/Project creation, editable multi-Problem and multi-Unit links, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
 
 ## Seed and persistence
 

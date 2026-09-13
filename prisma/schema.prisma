@@ -146,10 +146,12 @@ model User {
   projectsClosed      Project[]            @relation("ProjectCloser")
   helpRequestsCreated HelpRequest[]         @relation("HelpRequestCreator")
   helpRequestsResolved HelpRequest[]        @relation("HelpRequestResolver")
+  helpRequestsContact HelpRequest[]         @relation("HelpRequestContact")
   createdProjects     Project[]           @relation("ProjectCreator")
   submissions         ProblemSubmission[] @relation("ProblemSubmitter")
   reviewedSubmissions ProblemSubmission[] @relation("SubmissionReviewer")
-  activities          ActivityEvent[]
+  activities          ActivityEvent[]       @relation("ActivityActor")
+  activitySubjects    ActivityEvent[]       @relation("ActivitySubject")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   lastActivityAt      DateTime?
@@ -538,7 +540,9 @@ model ActivityEvent {
   unitId      Int?
   unit        Unit?    @relation(fields: [unitId], references: [id])
   userId      Int?
-  user        User?    @relation(fields: [userId], references: [id])
+  user        User?    @relation("ActivityActor", fields: [userId], references: [id])
+  subjectUserId Int?
+  subjectUser User?    @relation("ActivitySubject", fields: [subjectUserId], references: [id])
   projectUpdateId Int? @unique
   projectUpdate   ProjectUpdate? @relation(fields: [projectUpdateId], references: [id], onDelete: SetNull)
 }
@@ -551,6 +555,9 @@ model HelpRequest {
   category          HelpRequestCategory @default(OTHER)
   description       String
   contact            String?
+  contactUserId      Int?
+  contactUser        User?               @relation("HelpRequestContact", fields: [contactUserId], references: [id])
+  followsProjectLead Boolean             @default(true)
   status            HelpRequestStatus   @default(OPEN)
   createdAt          DateTime            @default(now())
   createdByUserId    Int

@@ -73,9 +73,15 @@ export async function getPortalData(
             phase: { select: { phaseName: true } },
           },
         },
-        lessons: { orderBy: { date: 'desc' }, include: { phase: true, createdBy: true } },
+        lessons: {
+          orderBy: { date: 'desc' },
+          include: { phase: true, createdBy: true },
+        },
         repositories: { include: { phase: true } },
-        helpRequests: { orderBy: { createdAt: 'desc' }, include: { createdBy: true, resolvedBy: true } },
+        helpRequests: {
+          orderBy: { createdAt: 'desc' },
+          include: { createdBy: true, resolvedBy: true, contactUser: true },
+        },
         vendorDetail: true,
         tacticDetail: true,
         trainingDetail: true,
@@ -103,8 +109,16 @@ export async function getPortalData(
       where: { status: { in: ['OPEN', 'IN_PROGRESS'] } },
       orderBy: { createdAt: 'desc' },
       include: {
+        contactUser: true,
         project: {
-          select: { trackingId: true, name: true, leadUnit: { select: { name: true } }, problemLinks: { select: { problem: { select: { trackingId: true } } } } },
+          select: {
+            trackingId: true,
+            name: true,
+            leadUnit: { select: { name: true } },
+            problemLinks: {
+              select: { problem: { select: { trackingId: true } } },
+            },
+          },
         },
       },
     }),
@@ -127,7 +141,10 @@ export async function getPortalData(
                   },
                 },
           orderBy: { displayName: 'asc' },
-          include: { primaryUnit: true, unitMemberships: true },
+          include: {
+            primaryUnit: true,
+            unitMemberships: { include: { unit: true } },
+          },
         })
       : Promise.resolve([]),
     hasPermission(currentUser, 'submission:review')
@@ -148,9 +165,114 @@ export async function getPortalData(
       : Promise.resolve([]),
   ]);
 
+  const visibleUnitIds =
+    currentUser?.role === 'SYSTEM_ADMIN'
+      ? units.map((unit) => unit.id)
+      : (currentUser?.administeredUnitIds ?? []);
+  const activeStatuses = new Set([
+    'Planning',
+    'Active',
+    'Paused',
+    'Transitioning',
+  ]);
+  const needsAttention: PortalData['needsAttention'] = [];
+  for (const unit of units.filter(
+    (item) => visibleUnitIds.includes(item.id) && item.isActive,
+  )) {
+    const activeAdmins = directoryUsers.filter(
+      (person) =>
+        person.status === 'ACTIVE' &&
+        person.unitMemberships.some(
+          (membership) => membership.unitId === unit.id && membership.isAdmin,
+        ),
+    );
+    if (!activeAdmins.length)
+      needsAttention.push({
+        key: `unit-admin-${unit.id}`,
+        kind: 'NO_ACTIVE_UNIT_ADMIN',
+        severity: 'critical',
+        message: `${unit.name} has no active Unit Administrator.`,
+        unitId: unit.id,
+        projectId: '',
+        userId: null,
+      });
+  }
+  for (const project of projects.filter(
+    (item) =>
+      visibleUnitIds.includes(item.leadUnitId) &&
+      activeStatuses.has(item.status),
+  )) {
+    const lead = project.userMemberships.find(
+      (membership) => membership.role === 'PROJECT_LEAD',
+    );
+    const activeMaintainers = project.userMemberships.filter(
+      (membership) => membership.user.status === 'ACTIVE',
+    );
+    if (!lead || lead.user.status !== 'ACTIVE')
+      needsAttention.push({
+        key: `lead-${project.id}`,
+        kind: 'INACTIVE_PROJECT_LEAD',
+        severity: 'critical',
+        message: `${project.trackingId} — ${project.name} has ${lead ? 'an inactive' : 'no'} Project Lead.`,
+        unitId: project.leadUnitId,
+        projectId: project.trackingId,
+        userId: lead?.userId ?? null,
+      });
+    if (!activeMaintainers.length)
+      needsAttention.push({
+        key: `maintainer-${project.id}`,
+        kind: 'NO_ACTIVE_MAINTAINER',
+        severity: 'critical',
+        message: `${project.trackingId} — ${project.name} has no active maintainer.`,
+        unitId: project.leadUnitId,
+        projectId: project.trackingId,
+        userId: null,
+      });
+    for (const request of project.helpRequests.filter(
+      (item) =>
+        ['OPEN', 'IN_PROGRESS'].includes(item.status) &&
+        item.contactUser &&
+        item.contactUser.status !== 'ACTIVE',
+    ))
+      needsAttention.push({
+        key: `help-${request.id}`,
+        kind: 'INACTIVE_HELP_CONTACT',
+        severity: 'warning',
+        message: `Help Request “${request.title}” has an inactive contact.`,
+        unitId: project.leadUnitId,
+        projectId: project.trackingId,
+        userId: request.contactUserId,
+      });
+  }
+  for (const person of directoryUsers.filter(
+    (item) => item.status === 'PENDING',
+  ))
+    needsAttention.push({
+      key: `pending-user-${person.id}`,
+      kind: 'PENDING_USER',
+      severity: 'warning',
+      message: `${person.displayName} is awaiting account activation.`,
+      unitId: person.primaryUnitId,
+      projectId: '',
+      userId: person.id,
+    });
+  for (const submission of submissions.filter((item) =>
+    ['PENDING', 'UNDER_REVIEW'].includes(item.status),
+  ))
+    needsAttention.push({
+      key: `submission-${submission.id}`,
+      kind: 'PENDING_SUBMISSION',
+      severity: 'warning',
+      message: `${submission.trackingId} — ${submission.title} needs review.`,
+      unitId: submission.unitId,
+      projectId: '',
+      userId: submission.submitterId,
+    });
+
   return {
     datasetMode:
-      projects.length > 0 || units.some((unit) => unit.name.startsWith('Fictional Unit'))
+      projects.length > 0 ||
+      units.some((unit) => unit.name.startsWith('Fictional Unit'))
         ? 'demo'
         : 'operational',
     problems: problems.map((p) => ({
@@ -186,7 +308,12 @@ export async function getPortalData(
       ).toISOString(),
       outcome: p.outcome ?? '',
       outcomeDisposition: p.outcomeDisposition ?? '',
-      outcomeLabel: p.outcomeDisposition ? p.outcomeDisposition.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : '',
+      outcomeLabel: p.outcomeDisposition
+        ? p.outcomeDisposition
+            .replaceAll('_', ' ')
+            .toLowerCase()
+            .replace(/\b\w/g, (letter) => letter.toUpperCase())
+        : '',
       finalResult: p.finalResult ?? '',
       whatWorked: p.whatWorked ?? '',
       whatDidNotWork: p.whatDidNotWork ?? '',
@@ -195,13 +322,25 @@ export async function getPortalData(
       closedByName: p.closedBy?.displayName ?? '',
       successorProjectId: p.successorProject?.trackingId ?? '',
       successorProjectName: p.successorProject?.name ?? '',
-      openHelpRequestCount: p.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status)).length,
+      openHelpRequestCount: p.helpRequests.filter((request) =>
+        ['OPEN', 'IN_PROGRESS'].includes(request.status),
+      ).length,
       helpRequests: p.helpRequests.map((request) => ({
-        id: request.id, title: request.title, category: request.category,
-        categoryLabel: request.category.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()).replace('Testing Support Location', 'Testing Support / Location'),
-        description: request.description, contact: request.contact ?? '', status: request.status,
-        createdAt: request.createdAt.toISOString(), createdByName: request.createdBy.displayName,
-        resolutionSummary: request.resolutionSummary ?? '', resolvedAt: request.resolvedAt?.toISOString() ?? '',
+        id: request.id,
+        title: request.title,
+        category: request.category,
+        categoryLabel: request.category
+          .replaceAll('_', ' ')
+          .toLowerCase()
+          .replace(/\b\w/g, (letter) => letter.toUpperCase())
+          .replace('Testing Support Location', 'Testing Support / Location'),
+        description: request.description,
+        contact: request.contact ?? '',
+        status: request.status,
+        createdAt: request.createdAt.toISOString(),
+        createdByName: request.createdBy.displayName,
+        resolutionSummary: request.resolutionSummary ?? '',
+        resolvedAt: request.resolvedAt?.toISOString() ?? '',
         resolvedByName: request.resolvedBy?.displayName ?? '',
       })),
       documentationAvailability: p.documentationAvailability,
@@ -302,7 +441,10 @@ export async function getPortalData(
         finding: x.finding,
         recommendation: x.recommendation,
         lessonType: x.lessonType,
-        lessonTypeLabel: x.lessonType.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        lessonTypeLabel: x.lessonType
+          .replaceAll('_', ' ')
+          .toLowerCase()
+          .replace(/\b\w/g, (letter) => letter.toUpperCase()),
         date: x.date.toISOString(),
         phaseName: x.phase?.phaseName ?? '',
         authorName: x.createdBy?.displayName ?? 'Unknown recorder',
@@ -403,7 +545,11 @@ export async function getPortalData(
       createdAt: h.createdAt.toISOString(),
       projectId: h.project.trackingId,
       category: h.category,
-      categoryLabel: h.category.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()).replace('Testing Support Location', 'Testing Support / Location'),
+      categoryLabel: h.category
+        .replaceAll('_', ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase())
+        .replace('Testing Support Location', 'Testing Support / Location'),
       status: h.status,
       contact: h.contact ?? '',
       problemIds: h.project.problemLinks.map((link) => link.problem.trackingId),
@@ -423,6 +569,7 @@ export async function getPortalData(
       devSwitcherEnabled: isDevUserSwitcherEnabled(),
       availableUsers,
     },
+    needsAttention,
     directoryUsers: directoryUsers.map((user) => ({
       id: user.id,
       trackingId: user.trackingId,
@@ -435,6 +582,92 @@ export async function getPortalData(
       administeredUnitIds: user.unitMemberships
         .filter((item) => item.isAdmin)
         .map((item) => item.unitId),
+      memberships: user.unitMemberships.map((item) => ({
+        unitId: item.unitId,
+        unitTrackingId: item.unit.trackingId,
+        unitName: item.unit.name,
+        isPrimary: item.isPrimary,
+        isAdmin: item.isAdmin,
+      })),
+      projectsLed: projects
+        .filter((project) =>
+          project.userMemberships.some(
+            (membership) =>
+              membership.userId === user.id &&
+              membership.role === 'PROJECT_LEAD',
+          ),
+        )
+        .map((project) => ({
+          id: project.trackingId,
+          name: project.name,
+          status: project.status,
+          maturity: project.maturity,
+          lastMeaningfulActivityAt: (
+            project.lastMeaningfulActivityAt ?? project.createdAt
+          ).toISOString(),
+        })),
+      projectsContributed: projects
+        .filter((project) =>
+          project.userMemberships.some(
+            (membership) =>
+              membership.userId === user.id &&
+              membership.role === 'CONTRIBUTOR',
+          ),
+        )
+        .map((project) => ({
+          id: project.trackingId,
+          name: project.name,
+          status: project.status,
+          maturity: project.maturity,
+          lastMeaningfulActivityAt: (
+            project.lastMeaningfulActivityAt ?? project.createdAt
+          ).toISOString(),
+        })),
+      openHelpRequests: projects.flatMap((project) =>
+        project.helpRequests
+          .filter(
+            (request) =>
+              ['OPEN', 'IN_PROGRESS'].includes(request.status) &&
+              request.contactUserId === user.id,
+          )
+          .map((request) => ({
+            id: request.id,
+            title: request.title,
+            projectId: project.trackingId,
+            followsProjectLead: request.followsProjectLead,
+          })),
+      ),
+      warnings: [
+        ...projects
+          .filter(
+            (project) =>
+              activeStatuses.has(project.status) &&
+              project.userMemberships.some(
+                (membership) =>
+                  membership.userId === user.id &&
+                  membership.role === 'PROJECT_LEAD',
+              ),
+          )
+          .map((project) => `Leads active work: ${project.trackingId}`),
+        ...user.unitMemberships
+          .filter(
+            (membership) =>
+              membership.isAdmin &&
+              directoryUsers.filter(
+                (person) =>
+                  person.status === 'ACTIVE' &&
+                  person.unitMemberships.some(
+                    (candidate) =>
+                      candidate.unitId === membership.unitId &&
+                      candidate.isAdmin,
+                  ),
+              ).length === 1,
+          )
+          .map(
+            (membership) =>
+              `Last active Unit Administrator for ${membership.unit.name}`,
+          ),
+      ],
     })),
     projectDirectoryUsers: projectDirectoryUsers.map((user) => ({
       id: user.id,
@@ -459,7 +692,11 @@ export async function getPortalData(
       createdAt: item.createdAt.toISOString(),
       relatedProblemId: item.relatedProblem?.trackingId ?? '',
       matches: findRelatedProblems(
-        { title: item.title, description: item.description, category: item.category },
+        {
+          title: item.title,
+          description: item.description,
+          category: item.category,
+        },
         problems.map((problem) => ({
           dbId: problem.id,
           id: problem.trackingId,

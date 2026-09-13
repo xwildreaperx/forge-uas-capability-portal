@@ -24,9 +24,17 @@ export type PortalProject = {
   successorProjectName: string;
   openHelpRequestCount: number;
   helpRequests: {
-    id: number; title: string; category: string; categoryLabel: string;
-    description: string; contact: string; status: string; createdAt: string;
-    createdByName: string; resolutionSummary: string; resolvedAt: string;
+    id: number;
+    title: string;
+    category: string;
+    categoryLabel: string;
+    description: string;
+    contact: string;
+    status: string;
+    createdAt: string;
+    createdByName: string;
+    resolutionSummary: string;
+    resolvedAt: string;
     resolvedByName: string;
   }[];
   documentationAvailability: string;
@@ -256,6 +264,43 @@ export type PortalData = {
     primaryUnit: string;
     unitIds: number[];
     administeredUnitIds: number[];
+    memberships: {
+      unitId: number;
+      unitTrackingId: string;
+      unitName: string;
+      isPrimary: boolean;
+      isAdmin: boolean;
+    }[];
+    projectsLed: {
+      id: string;
+      name: string;
+      status: string;
+      maturity: string;
+      lastMeaningfulActivityAt: string;
+    }[];
+    projectsContributed: {
+      id: string;
+      name: string;
+      status: string;
+      maturity: string;
+      lastMeaningfulActivityAt: string;
+    }[];
+    openHelpRequests: {
+      id: number;
+      title: string;
+      projectId: string;
+      followsProjectLead: boolean;
+    }[];
+    warnings: string[];
+  }[];
+  needsAttention: {
+    key: string;
+    kind: string;
+    severity: 'warning' | 'critical';
+    message: string;
+    unitId: number | null;
+    projectId: string;
+    userId: number | null;
   }[];
   projectDirectoryUsers: {
     id: number;
