@@ -2,6 +2,8 @@
 
 FORGE is a local relational prototype for discovering fictional UAS capability Problems, the Solution Efforts attempting to solve them, the Units doing the work, and the evidence and Lessons those efforts produce.
 
+Project Operations Part 4 adds collaboration-oriented Help Requests with controlled categories, preserved resolution history, contact context, Activity/freshness, dashboard discovery, Executive support signals, and distinct AI Handoff semantics. Comparison is selected-Problem-specific, Related Work is current-Project-specific and explainable, direct artifact actions respect Documentation Availability, and **My Projects** provides a personal work surface without replacing the global portfolio.
+
 ## Product philosophy
 
 Problems are enduring capability gaps. Projects are broad Solution Efforts: organic development, vendor evaluation, tactics/techniques, training, integration/configuration, process/policy, or hybrid work. Multiple efforts can address the same Problem, one effort can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.

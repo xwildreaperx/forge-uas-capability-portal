@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { db } from '../lib/db.ts';
-import { addLesson, addProjectPhase, addProjectUpdate, closeOutProject, createProject, manageProjectTeam, ProblemMatchReviewRequired, submitProblem, updateProject, updateProjectPhase, updateProjectRelationships } from '../lib/data/mutations.ts';
+import { addLesson, addProjectPhase, addProjectUpdate, closeOutProject, createHelpRequest, createProject, manageProjectTeam, ProblemMatchReviewRequired, submitProblem, updateHelpRequest, updateProject, updateProjectPhase, updateProjectRelationships } from '../lib/data/mutations.ts';
 import { getPortalData } from '../lib/data/portal.ts';
 import { canAccessUnit, canEditProject, hasPermission, type CurrentUserContext } from '../lib/auth/permissions.ts';
 import { findProjectsForProblems, findRelatedProblems, isPotentiallySimilarProject } from '../lib/domain/matching.ts';
@@ -142,6 +142,21 @@ test('clean operational initialization, discovery, and authorization remain vali
   assert.equal(projectedUpdate.updates[0]?.authorName, projectUser.displayName);
   assert.match(projectHandoffMarkdown(projectedUpdate), /Field test completed/);
   assert.match(projectHandoffMarkdown(projectedUpdate), /One integration issue remains/);
+
+  const help = await createHelpRequest(projectUser, project.id, { title: 'Temporary test support', category: 'TESTING_SUPPORT_LOCATION', description: 'A partner location is needed.', contact: 'temporary-project-user' });
+  assert.equal(help.status, 'OPEN');
+  assert.ok((await db.project.findUniqueOrThrow({ where: { id: project.id } })).lastMeaningfulActivityAt);
+  await assert.rejects(createHelpRequest(contributor, project.id, { title: 'Unauthorized', description: 'No.' }), /permission|assigned, created, or administered-Unit Projects/);
+  await updateHelpRequest(projectUser, project.id, help.id, { status: 'IN_PROGRESS' });
+  await updateHelpRequest(projectUser, project.id, help.id, { status: 'RESOLVED', resolutionSummary: 'A test partner was identified.' });
+  const resolvedHelp = await db.helpRequest.findUniqueOrThrow({ where: { id: help.id } });
+  assert.equal(resolvedHelp.status, 'RESOLVED');
+  assert.equal(resolvedHelp.resolutionSummary, 'A test partner was identified.');
+  assert.ok(resolvedHelp.resolvedAt);
+  const helpProjection = (await getPortalData(projectUser)).projects.find((item) => item.id === project.trackingId)!;
+  assert.match(projectHandoffMarkdown(helpProjection), /Resolved Help Request history/);
+  assert.match(projectHandoffMarkdown(helpProjection), /A test partner was identified/);
+  assert.ok((await db.activityEvent.findMany({ where: { projectId: project.id } })).some((event) => event.eventType === 'HELP_REQUEST_RESOLVED'));
 
   const secondUnit = await db.unit.findUniqueOrThrow({ where: { trackingId: 'UNIT-000002' } });
   const unitAdmin = { ...projectUser, role: 'UNIT_ADMIN' as const, administeredUnitIds: [firstUnit.id] };

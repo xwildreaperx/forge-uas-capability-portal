@@ -74,8 +74,8 @@ export async function getPortalData(
           },
         },
         lessons: { orderBy: { date: 'desc' }, include: { phase: true, createdBy: true } },
-        repositories: true,
-        helpRequests: { where: { status: 'Open' }, select: { id: true } },
+        repositories: { include: { phase: true } },
+        helpRequests: { orderBy: { createdAt: 'desc' }, include: { createdBy: true, resolvedBy: true } },
         vendorDetail: true,
         tacticDetail: true,
         trainingDetail: true,
@@ -100,11 +100,11 @@ export async function getPortalData(
     }),
     db.activityEvent.findMany({ orderBy: { timestamp: 'desc' }, take: 44 }),
     db.helpRequest.findMany({
-      where: { status: 'Open' },
+      where: { status: { in: ['OPEN', 'IN_PROGRESS'] } },
       orderBy: { createdAt: 'desc' },
       include: {
         project: {
-          select: { name: true, leadUnit: { select: { name: true } } },
+          select: { trackingId: true, name: true, leadUnit: { select: { name: true } }, problemLinks: { select: { problem: { select: { trackingId: true } } } } },
         },
       },
     }),
@@ -195,7 +195,15 @@ export async function getPortalData(
       closedByName: p.closedBy?.displayName ?? '',
       successorProjectId: p.successorProject?.trackingId ?? '',
       successorProjectName: p.successorProject?.name ?? '',
-      openHelpRequestCount: p.helpRequests.length,
+      openHelpRequestCount: p.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status)).length,
+      helpRequests: p.helpRequests.map((request) => ({
+        id: request.id, title: request.title, category: request.category,
+        categoryLabel: request.category.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()).replace('Testing Support Location', 'Testing Support / Location'),
+        description: request.description, contact: request.contact ?? '', status: request.status,
+        createdAt: request.createdAt.toISOString(), createdByName: request.createdBy.displayName,
+        resolutionSummary: request.resolutionSummary ?? '', resolvedAt: request.resolvedAt?.toISOString() ?? '',
+        resolvedByName: request.resolvedBy?.displayName ?? '',
+      })),
       documentationAvailability: p.documentationAvailability,
       documentationLabel:
         DOCUMENTATION_LABELS[p.documentationAvailability as DocumentationValue],
@@ -312,6 +320,7 @@ export async function getPortalData(
             x.documentationAvailability as DocumentationValue
           ],
         includeInAiHandoff: x.includeInAiHandoff,
+        phaseName: x.phase?.phaseName ?? '',
       })),
       vendor: p.vendorDetail
         ? {
@@ -392,6 +401,12 @@ export async function getPortalData(
       projectName: h.project.name,
       unitName: h.project.leadUnit.name,
       createdAt: h.createdAt.toISOString(),
+      projectId: h.project.trackingId,
+      category: h.category,
+      categoryLabel: h.category.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()).replace('Testing Support Location', 'Testing Support / Location'),
+      status: h.status,
+      contact: h.contact ?? '',
+      problemIds: h.project.problemLinks.map((link) => link.problem.trackingId),
     })),
     session: {
       currentUser: currentUser

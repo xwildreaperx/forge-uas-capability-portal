@@ -23,6 +23,12 @@ export type PortalProject = {
   successorProjectId: string;
   successorProjectName: string;
   openHelpRequestCount: number;
+  helpRequests: {
+    id: number; title: string; category: string; categoryLabel: string;
+    description: string; contact: string; status: string; createdAt: string;
+    createdByName: string; resolutionSummary: string; resolvedAt: string;
+    resolvedByName: string;
+  }[];
   documentationAvailability: string;
   documentationLabel: string;
   executiveSummaryPlainLanguage: string;
@@ -120,6 +126,7 @@ export type PortalProject = {
     documentationAvailability: string;
     documentationLabel: string;
     includeInAiHandoff: boolean;
+    phaseName: string;
   }[];
   vendor: null | {
     vendorName: string;
@@ -214,6 +221,12 @@ export type PortalData = {
     projectName: string;
     unitName: string;
     createdAt: string;
+    projectId: string;
+    category: string;
+    categoryLabel: string;
+    status: string;
+    contact: string;
+    problemIds: string[];
   }[];
   session: {
     currentUser: null | {

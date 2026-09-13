@@ -600,6 +600,8 @@ async function main() {
           title: 'Integration support requested',
           description:
             'Seeking a fictional partner for the next evaluation event.',
+          category: 'INTEGRATION',
+          createdByUserId: users[1].id,
         },
       });
   }

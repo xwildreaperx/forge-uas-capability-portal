@@ -49,14 +49,18 @@ export function projectHandoffMarkdown(
         )
         .join('\n')
     : 'No lessons are recorded.';
-  const artifacts =
+  let artifacts =
     project.repositories
       .filter((r) => r.includeInAiHandoff)
       .map(
         (r) =>
-          `- ${r.name} (${r.artifactType}; ${r.documentationLabel}): ${r.description} ${r.url}`,
+          `- ${r.name} (${r.artifactType}; ${r.documentationLabel}${r.phaseName ? `; Phase: ${r.phaseName}` : ''}): ${r.description} ${referenceOnly(r.documentationAvailability) ? 'Direct access intentionally withheld; contact the originator.' : r.url}`,
       )
       .join('\n') || 'No artifacts are included in this handoff.';
+  const activeHelp = project.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status));
+  const resolvedHelp = project.helpRequests.filter((request) => ['RESOLVED', 'CANCELLED'].includes(request.status));
+  const helpRequests = `### Assistance needed now\n${activeHelp.length ? activeHelp.map((request) => `- **${request.title}** (${request.categoryLabel}; ${request.status.replaceAll('_', ' ')}): ${request.description} Contact: ${value(request.contact)}`).join('\n') : 'No active Help Requests.'}\n\n### Resolved Help Request history\n${resolvedHelp.length ? resolvedHelp.map((request) => `- ${request.title} — ${request.status.replaceAll('_', ' ')}${request.resolutionSummary ? `: ${request.resolutionSummary}` : ''}`).join('\n') : 'No resolved Help Requests.'}`;
+  artifacts = `## Help Requests\n${helpRequests}\n\n## Artifact References\n${artifacts}`;
   const pathway = project.vendor
     ? `Vendor evaluation: ${project.vendor.vendorName} ${project.vendor.productName}. Evaluation: ${value(project.vendor.evaluationStatus)}. Result: ${value(project.vendor.evaluationResult)}.`
     : project.tactic

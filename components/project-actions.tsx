@@ -4,7 +4,7 @@ import type { PortalData, PortalProject } from '@/lib/data/types';
 import { DOCUMENTATION_OPTIONS } from '@/lib/domain/documentation';
 import { findProjectsForProblems } from '@/lib/domain/matching';
 
-type Action = 'update' | 'edit' | 'team' | 'relationships' | 'phase' | 'phase_edit' | 'lesson' | 'repository' | 'closeout' | null;
+type Action = 'update' | 'edit' | 'team' | 'relationships' | 'phase' | 'phase_edit' | 'lesson' | 'help' | 'repository' | 'closeout' | null;
 export function ProjectActions({ project, data, canManageTeam }: { project: PortalProject; data: PortalData; canManageTeam: boolean }) {
   const [action, setAction] = useState<Action>(null);
   const [error, setError] = useState('');
@@ -49,6 +49,8 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
         ? ''
         : action === 'update'
           ? '/updates'
+        : action === 'help'
+          ? '/help-requests'
         : action === 'closeout'
           ? '/closeout'
         : action === 'team'
@@ -77,7 +79,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
   return (
     <div className="project-actions">
       <div>
-          {(['update', 'edit', ...(canManageTeam ? ['team' as const] : []), 'relationships', 'phase', ...(project.phases.length ? ['phase_edit' as const] : []), 'lesson', 'repository', 'closeout'] as const).map((value) => (
+          {(['update', 'help', 'edit', ...(canManageTeam ? ['team' as const] : []), 'relationships', 'phase', ...(project.phases.length ? ['phase_edit' as const] : []), 'lesson', 'repository', 'closeout'] as const).map((value) => (
           <button
             className={value === 'update' ? 'create' : 'secondary'}
             key={value}
@@ -85,6 +87,8 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
           >
             {value === 'update'
               ? 'Add Project Update'
+              : value === 'help'
+                ? 'Request Help'
               : value === 'team'
                 ? 'Manage Team'
                 : value === 'relationships'
@@ -489,6 +493,15 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
               </label>
             </>
           )}
+          {action === 'help' && (
+            <>
+              <div className="wide-field update-form-intro"><strong>Ask the FORGE network for assistance.</strong><span>The Project and current Project Lead are already known. Record only what another Unit needs to decide whether it can help.</span></div>
+              <label className="wide-field">What help is needed?<input name="title" required /></label>
+              <label>Category<select name="category" defaultValue="TECHNICAL_EXPERTISE"><option value="TECHNICAL_EXPERTISE">Technical Expertise</option><option value="HARDWARE">Hardware</option><option value="SOFTWARE_SUPPORT">Software Support</option><option value="TESTING_SUPPORT_LOCATION">Testing Support / Location</option><option value="FUNDING_RESOURCING">Funding / Resourcing</option><option value="OPERATOR_FEEDBACK">Operator Feedback</option><option value="DATA">Data</option><option value="MANUFACTURING">Manufacturing</option><option value="INTEGRATION">Integration</option><option value="DOCUMENTATION">Documentation</option><option value="OTHER">Other</option></select></label>
+              <label>Contact / Project Lead<input name="contact" defaultValue={project.team.find((member) => member.role === 'PROJECT_LEAD')?.identifier || project.originatorContact} /></label>
+              <label className="wide-field">Description<textarea name="description" required placeholder="What assistance is needed, and what would a useful response look like?" /></label>
+            </>
+          )}
           {action === 'closeout' && (
             <>
               <div className="wide-field closeout-review"><strong>Closeout preserves institutional knowledge—it does not close any related Problem.</strong><p>{project.id} · {project.name}<br />Problems: {project.problems.map((problem) => problem.id).join(', ')} · Lead Unit: {project.unit}<br />Maturity: {project.maturity} · Completion: {project.progress}% · Lessons: {project.lessons.length}</p>{!project.latestResult && <p>Review note: no final/latest result is recorded.</p>}{!project.lessons.length && <p>Review note: no Lessons are recorded.</p>}{project.phases.some((phase) => phase.status !== 'Complete') && <p>Review note: unfinished Phases will remain unchanged.</p>}{project.openHelpRequestCount > 0 && <p>Review note: {project.openHelpRequestCount} open Help Request{project.openHelpRequestCount === 1 ? '' : 's'} will remain open.</p>}</div>
@@ -539,6 +552,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                   ))}
                 </select>
               </label>
+              <label>Associated Phase <small>Optional</small><select name="phaseId" defaultValue=""><option value="">No Phase selected</option>{project.phases.map((phase) => <option value={phase.id} key={phase.id}>{phase.name}</option>)}</select></label>
               <input type="hidden" name="includeInAiHandoff" value="false" />
               <label className="checkline">
                 <input

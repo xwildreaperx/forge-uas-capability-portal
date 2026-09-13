@@ -3,6 +3,12 @@
 Version: 1.0  
 Environment: Unclassified local prototype
 
+## Collaboration and pilot workflow
+
+Project maintainers use **Request Help** to publish an approved capability-level assistance need. Select a practical category, enter a short description, and reuse the Project Lead or another existing contact. Move the request to In Progress when assistance begins, then resolve or cancel it with a short summary. Closed requests remain institutional history. FORGE does not provide internal messaging; collaborators use the displayed contact through approved channels.
+
+Open a canonical Problem to compare all or selected linked Solution Efforts, including historical and unsuccessful work. Open **Related Work** from a Project for explainable shared-Problem, tag, Unit, or Solution-Type connections. Artifact links open only when Documentation Availability permits direct access; otherwise contact the originator. **My Projects**, assistance discovery, activity, and relevant Lessons make the dashboard useful to Project teams while preserving the portfolio view.
+
 > You are being given the FORGE Platform Handoff. Read this document before analyzing or advising a user about FORGE. Use it to understand the platform’s purpose, information model, terminology, workflows, information-governance model, and design philosophy. Projects are not always technical-development efforts. Do not reconstruct missing technical information: some records intentionally contain metadata only and direct the user to an authorized owner.
 
 ## Purpose

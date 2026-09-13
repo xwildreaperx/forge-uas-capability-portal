@@ -67,9 +67,9 @@ export function CreateProjectModal({
           const body = {
             name: form.get('name'),
             solutionType: type,
-            executiveSummary: form.get('executiveSummary'),
+            executiveSummary: form.get('executiveSummary') || form.get('detailedDescription'),
             detailedDescription: form.get('detailedDescription'),
-            solutionApproach: form.get('solutionApproach'),
+            solutionApproach: form.get('solutionApproach') || form.get('detailedDescription'),
             status: form.get('status'),
             maturity: form.get('maturity'),
             completion: form.get('completion'),
@@ -177,16 +177,16 @@ export function CreateProjectModal({
           </select>
         </label>
         <label>
-          Executive summary
-          <textarea name="executiveSummary" required />
+          Executive summary <small>Optional — enrich later</small>
+          <textarea name="executiveSummary" />
         </label>
         <label>
-          Detailed description
+          Short description
           <textarea name="detailedDescription" required value={description} onChange={(event) => setDescription(event.target.value)} />
         </label>
         <label>
-          Solution approach
-          <textarea name="solutionApproach" required />
+          Solution approach <small>Optional — enrich later</small>
+          <textarea name="solutionApproach" />
         </label>
         <fieldset>
           <legend>Executive communication</legend>

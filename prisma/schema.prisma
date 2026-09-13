@@ -61,6 +61,27 @@ enum LessonType {
   UNRESOLVED_QUESTION
 }
 
+enum HelpRequestCategory {
+  TECHNICAL_EXPERTISE
+  HARDWARE
+  SOFTWARE_SUPPORT
+  TESTING_SUPPORT_LOCATION
+  FUNDING_RESOURCING
+  OPERATOR_FEEDBACK
+  DATA
+  MANUFACTURING
+  INTEGRATION
+  DOCUMENTATION
+  OTHER
+}
+
+enum HelpRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
 enum ProblemSubmissionStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -123,6 +144,8 @@ model User {
   projectUpdates      ProjectUpdate[]
   lessonsRecorded     LessonLearned[]      @relation("LessonAuthor")
   projectsClosed      Project[]            @relation("ProjectCloser")
+  helpRequestsCreated HelpRequest[]         @relation("HelpRequestCreator")
+  helpRequestsResolved HelpRequest[]        @relation("HelpRequestResolver")
   createdProjects     Project[]           @relation("ProjectCreator")
   submissions         ProblemSubmission[] @relation("ProblemSubmitter")
   reviewedSubmissions ProblemSubmission[] @relation("SubmissionReviewer")
@@ -436,6 +459,7 @@ model ProjectPhase {
   sortOrder        Int
   lessons          LessonLearned[]
   updates          ProjectUpdate[]
+  repositories     RepositoryLink[]
   createdByUserId  Int?
 }
 
@@ -497,6 +521,8 @@ model RepositoryLink {
   documentationAvailability DocumentationAvailability @default(EXTERNAL_REFERENCE)
   includeInAiHandoff        Boolean                   @default(true)
   createdByUserId           Int?
+  phaseId                   Int?
+  phase                     ProjectPhase?             @relation(fields: [phaseId], references: [id])
 }
 
 model ActivityEvent {
@@ -518,11 +544,22 @@ model ActivityEvent {
 }
 
 model HelpRequest {
-  id          Int      @id @default(autoincrement())
-  projectId   Int
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String
-  description String
-  status      String   @default("Open")
-  createdAt   DateTime @default(now())
+  id                Int                 @id @default(autoincrement())
+  projectId         Int
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title             String
+  category          HelpRequestCategory @default(OTHER)
+  description       String
+  contact            String?
+  status            HelpRequestStatus   @default(OPEN)
+  createdAt          DateTime            @default(now())
+  createdByUserId    Int
+  createdBy          User                @relation("HelpRequestCreator", fields: [createdByUserId], references: [id])
+  resolutionSummary String?
+  resolvedAt        DateTime?
+  resolvedByUserId  Int?
+  resolvedBy        User?               @relation("HelpRequestResolver", fields: [resolvedByUserId], references: [id])
+
+  @@index([status, category])
+  @@index([projectId, createdAt])
 }

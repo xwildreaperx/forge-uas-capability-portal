@@ -43,6 +43,8 @@ const PROJECT_MATURITIES = ['Concept', 'Prototype', 'Field Tested', 'Validated']
 const PROJECT_OUTCOMES = ['SUCCESSFUL', 'PARTIALLY_SUCCESSFUL', 'UNSUCCESSFUL', 'INCONCLUSIVE', 'SUPERSEDED', 'CANCELLED'] as const;
 const PHASE_STATUSES = ['Planned', 'In Progress', 'Complete'] as const;
 const LESSON_TYPES = ['CONFIRMED_FINDING', 'WORKING_HYPOTHESIS', 'FAILED_APPROACH', 'RECOMMENDATION', 'UNRESOLVED_QUESTION'] as const;
+const HELP_CATEGORIES = ['TECHNICAL_EXPERTISE', 'HARDWARE', 'SOFTWARE_SUPPORT', 'TESTING_SUPPORT_LOCATION', 'FUNDING_RESOURCING', 'OPERATOR_FEEDBACK', 'DATA', 'MANUFACTURING', 'INTEGRATION', 'DOCUMENTATION', 'OTHER'] as const;
+const HELP_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CANCELLED'] as const;
 const controlled = <T extends readonly string[]>(value: unknown, values: T, label: string): T[number] => {
   if (typeof value !== 'string' || !values.includes(value as T[number])) throw new Error(`${label} is invalid.`);
   return value as T[number];
@@ -826,7 +828,7 @@ export async function addLesson(
 }
 
 export async function closeOutProject(user: CurrentUserContext | null, projectId: number, input: Record<string, unknown>) {
-  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { problemLinks: { include: { problem: true } }, phases: true, lessons: true, helpRequests: { where: { status: 'Open' } }, userMemberships: { include: { user: true } }, leadUnit: true } });
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { problemLinks: { include: { problem: true } }, phases: true, lessons: true, helpRequests: { where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }, userMemberships: { include: { user: true } }, leadUnit: true } });
   const actor = assertProjectEdit(user, project);
   const status = controlled(input.status, ['Completed', 'Cancelled', 'Superseded'] as const, 'Final status');
   const outcomeDisposition = controlled(input.outcomeDisposition, PROJECT_OUTCOMES, 'Outcome');
@@ -860,6 +862,9 @@ export async function addRepository(
     select: { id: true, leadUnitId: true, createdByUserId: true },
   });
   const actor = assertProjectEdit(user, project);
+  const phaseId = input.phaseId ? Number(input.phaseId) : null;
+  if (phaseId && !(await db.projectPhase.findFirst({ where: { id: phaseId, projectId } })))
+    throw new Error('Associated Phase must belong to this Project.');
   const occurredAt = new Date();
   return db.$transaction(async (tx) => {
     const repository = await tx.repositoryLink.create({ data: {
@@ -877,6 +882,7 @@ export async function addRepository(
           ? false
           : true,
       createdByUserId: actor.id,
+      phaseId,
     } });
     await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
     await tx.activityEvent.create({ data: {
@@ -885,6 +891,55 @@ export async function addRepository(
       projectId, unitId: project.leadUnitId, userId: actor.id,
     } });
     return repository;
+  });
+}
+
+export async function createHelpRequest(
+  user: CurrentUserContext | null,
+  projectId: number,
+  input: Record<string, unknown>,
+) {
+  const project = await projectForOperations(projectId);
+  const actor = assertProjectEdit(user, project);
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const request = await tx.helpRequest.create({ data: {
+      projectId,
+      title: requiredString(input.title, 'What help is needed'),
+      category: controlled(input.category || 'OTHER', HELP_CATEGORIES, 'Help Request category'),
+      description: requiredString(input.description, 'Description'),
+      contact: optional(input.contact) ?? project.userMemberships.find((member) => member.role === 'PROJECT_LEAD')?.user.identifier ?? project.leadUnit.forgePointOfContact,
+      status: 'OPEN', createdByUserId: actor.id,
+    } });
+    await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+    await tx.activityEvent.create({ data: { timestamp: occurredAt, eventType: 'HELP_REQUEST_OPENED', description: `Help Request opened: ${request.title} (${request.category.replaceAll('_', ' ').toLowerCase()}).`, actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id } });
+    return request;
+  });
+}
+
+export async function updateHelpRequest(
+  user: CurrentUserContext | null,
+  projectId: number,
+  helpRequestId: number,
+  input: Record<string, unknown>,
+) {
+  const project = await projectForOperations(projectId);
+  const actor = assertProjectEdit(user, project);
+  const request = await db.helpRequest.findFirstOrThrow({ where: { id: helpRequestId, projectId } });
+  const status = controlled(input.status, HELP_STATUSES, 'Help Request status');
+  if (request.status === 'RESOLVED' || request.status === 'CANCELLED') throw new Error('Closed Help Requests remain history and cannot be reopened.');
+  if (status === request.status) throw new Error('Choose a new Help Request status.');
+  const resolutionSummary = ['RESOLVED', 'CANCELLED'].includes(status) ? requiredString(input.resolutionSummary, 'Resolution summary') : null;
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const updated = await tx.helpRequest.update({ where: { id: helpRequestId }, data: {
+      status, resolutionSummary,
+      resolvedAt: ['RESOLVED', 'CANCELLED'].includes(status) ? occurredAt : null,
+      resolvedByUserId: ['RESOLVED', 'CANCELLED'].includes(status) ? actor.id : null,
+    } });
+    await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+    await tx.activityEvent.create({ data: { timestamp: occurredAt, eventType: `HELP_REQUEST_${status}`, description: `Help Request ${status.replaceAll('_', ' ').toLowerCase()}: ${request.title}.${resolutionSummary ? ` ${resolutionSummary}` : ''}`, actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id } });
+    return updated;
   });
 }
 

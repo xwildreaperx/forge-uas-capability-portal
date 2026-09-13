@@ -2,6 +2,10 @@
 
 Document purpose: transfer sufficient product, architecture, governance, and development context to a capable AI system or coding agent that has no access to prior conversations.
 
+Part 4 makes Help Requests first-class relational Project history. A receiving AI must treat `OPEN` and `IN_PROGRESS` as current assistance needs; `RESOLVED` and `CANCELLED` are historical context, not current blockers. Comparison is keyed to the selected Problem. Related Work is keyed to the current Project and remains deterministic and explainable. Artifact URLs never imply authorization: Documentation Availability, access instructions, and originator contact control the action.
+
+Routine maintenance still centers on one Project Update, with deliberate secondary actions only for saving a Lesson, requesting Help, or closeout. Authentication, notifications, internal messaging, production file storage, hosting, semantic similarity, and external AI transmission remain outside this local prototype pass.
+
 Repository: `xwildreaperx/forge-uas-capability-portal`  
 Branch inspected: `master`  
 Part 3 starting checkpoint: `376e4b915453a980cc63801bfa8804e257b579e1`

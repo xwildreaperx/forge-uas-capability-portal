@@ -1009,6 +1009,23 @@ main {
   padding: 10px 0;
   border-bottom: 1px solid #edf0ee;
 }
+
+.comparison-picker { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; padding: 1rem; border-bottom: 1px solid var(--border); }
+.comparison-picker strong { flex-basis: 100%; }
+.comparison-picker label { display: flex; gap: .45rem; align-items: center; font-size: .875rem; }
+.help-request-card { border: 1px solid var(--border); border-radius: .65rem; padding: 1rem; margin-top: .75rem; }
+.help-request-card header { display: grid; gap: .3rem; }
+.help-request-card footer { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.help-request-card footer button { border: 1px solid var(--border); border-radius: .45rem; padding: .45rem .7rem; }
+.artifact a { color: inherit; padding: .4rem; }
+
+@media (max-width: 760px) {
+  .comparison { overflow-x: auto; }
+  .comparison table { min-width: 720px; }
+  .quick-form { grid-template-columns: 1fr; }
+  .quick-form .wide-field { grid-column: auto; }
+  .project-actions > div { overflow-x: auto; flex-wrap: nowrap; }
+}
 .artifact > span {
   display: grid;
   place-items: center;

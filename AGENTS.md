@@ -39,3 +39,6 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - Prefer one Project Update for routine progress, Phase progression, Project state, and maturity evidence. Avoid asking users to enter the same result into disconnected forms or generating redundant Activity.
 - Field Tested and Validated maturity changes must retain supporting event, date, author, result, and optional Phase/reference provenance through their Project Update.
 - Lesson Type changes interpretation, especially in AI Handoff. Preserve Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, and Unresolved Question distinctions and their known provenance.
+- Help Requests are collaboration signals, not tickets or internal messages. Preserve category, contact, creator, lifecycle, resolution history, Activity, and Last Meaningful Activity; distinguish active assistance from resolved history in AI Handoff.
+- Comparison must use the selected canonical Problem, and Related Work the currently viewed Project. Keep both deterministic, explainable, and inclusive of historical efforts.
+- Open artifact links only when Documentation Availability explicitly permits direct access. For metadata-only, originator-held, and controlled records, preserve contact/access guidance.

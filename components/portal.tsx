@@ -381,7 +381,7 @@ function View({
         onProject={(id) => open('projects', id)}
       />
     );
-  if (active === 'Compare') return <CompareView />;
+  if (active === 'Compare') return <CompareView problemId={selectedId} onProject={(id) => open('projects', id)} />;
   if (active === 'Project')
     return (
       <ProjectView
@@ -407,14 +407,17 @@ function View({
   if (active === 'Problems')
     return <ProblemsView onProblem={(id) => open('problems', id)} />;
   if (active === 'Explore')
-    return <ExploreView onProject={() => setActive('Project')} />;
+    return <ExploreView projectId={selectedId} onProject={(id) => open('projects', id)} />;
   if (active === 'Activity') return <ActivityView />;
   if (active === 'Administration') return <AdministrationView />;
   return <Dashboard />;
 }
 
 function Dashboard() {
-  const { problems, projects, units, activities, helpRequests } = useData();
+  const { problems, projects, units, activities, helpRequests, session } = useData();
+  const mine = projects.filter((project) => project.team.some((member) => member.userId === session.currentUser?.id));
+  const relevantProblemIds = new Set(mine.flatMap((project) => project.problems.map((problem) => problem.id)));
+  const relevantLessons = projects.flatMap((project) => project.lessons.map((lesson) => ({ ...lesson, project }))).filter((lesson) => lesson.project.problems.some((problem) => relevantProblemIds.has(problem.id))).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
   return (
     <>
       <div className="page-head">
@@ -486,6 +489,10 @@ function Dashboard() {
       </section>
       <div className="dashboard-grid">
         <section className="panel span-2">
+          <PanelHead title="My Projects" note="Solution Efforts where you are Project Lead or Contributor" />
+          <div className="project-cards">{mine.length ? mine.map((project) => <div className="project-card" key={project.id}><span className="maturity">{project.team.find((member) => member.userId === session.currentUser?.id)?.role === 'PROJECT_LEAD' ? 'Project Lead' : 'Contributor'}</span><strong>{project.name}</strong><p>{project.id} · {project.status} · {project.maturity}</p>{project.openHelpRequestCount > 0 && <small>{project.openHelpRequestCount} open support request{project.openHelpRequestCount === 1 ? '' : 's'}</small>}</div>) : <p className="body-copy">No Projects are assigned to your current account.</p>}</div>
+        </section>
+        <section className="panel span-2">
           <PanelHead
             title="Current capability activity"
             note="Most active problem spaces across the network"
@@ -520,6 +527,10 @@ function Dashboard() {
               meta={`${h.unitName} · open`}
             />
           ))}
+        </section>
+        <section className="panel">
+          <PanelHead title="Lessons relevant to my Problems" note="Recent findings; no consensus is inferred" />
+          {relevantLessons.length ? relevantLessons.map((lesson) => <div className="lesson" key={`${lesson.project.id}-${lesson.id}`}><BookOpen /><div><span className="lesson-type">{lesson.lessonTypeLabel}</span><strong>{lesson.title}</strong><small>{lesson.project.id} · {lesson.project.name}</small></div></div>) : <p className="body-copy">No relevant Lessons are recorded yet.</p>}
         </section>
         <section className="panel span-2">
           <PanelHead
@@ -764,9 +775,11 @@ function ProblemView({
   );
 }
 
-function CompareView() {
+function CompareView({ problemId, onProject }: { problemId?: string; onProject: (id: string) => void }) {
   const data = useData();
-  const problem = data.problems.find((x) => x.id === 'PRB-000001');
+  const problem = data.problems.find((x) => x.id === problemId);
+  const allProjects = data.projects.filter((x) => problem?.projectIds.includes(x.id));
+  const [selected, setSelected] = useState(allProjects.map((project) => project.id));
   if (!problem)
     return (
       <div className="empty-state">
@@ -778,9 +791,7 @@ function CompareView() {
         </p>
       </div>
     );
-  const projects = data.projects.filter((x) =>
-    problem.projectIds.includes(x.id),
-  );
+  const projects = allProjects.filter((project) => selected.includes(project.id));
   return (
     <>
       <div className="crumb">
@@ -798,6 +809,7 @@ function CompareView() {
         </div>
       </div>
       <div className="comparison">
+        <div className="comparison-picker"><strong>Efforts to compare</strong>{allProjects.map((project) => <label key={project.id}><input type="checkbox" checked={selected.includes(project.id)} onChange={() => setSelected((current) => current.includes(project.id) ? current.filter((id) => id !== project.id) : [...current, project.id])} /> {project.id} · {project.name}</label>)}</div>
         <table>
           <thead>
             <tr>
@@ -864,6 +876,7 @@ function CompareView() {
               ))}
             </tr>
             <tr><th>Status / outcome</th>{projects.map((p) => <td key={p.id}><b>{p.status}</b>{p.outcomeLabel ? ` · ${p.outcomeLabel}` : ''}</td>)}</tr>
+            <tr><th>Project Lead / contact</th>{projects.map((p) => { const lead = p.team.find((member) => member.role === 'PROJECT_LEAD'); return <td key={p.id}>{lead ? `${lead.displayName} · ${lead.identifier}` : 'Not assigned'}</td>; })}</tr>
             <tr>
               <th>Completion</th>
               {projects.map((p) => (
@@ -903,6 +916,11 @@ function CompareView() {
                 <td key={p.id}>{new Date(p.lastMeaningfulActivityAt).toLocaleDateString()}</td>
               ))}
             </tr>
+            <tr><th>Current / final Phase</th>{projects.map((p) => <td key={p.id}>{p.phases.find((phase) => phase.status !== 'Complete')?.name ?? p.phases.at(-1)?.name ?? 'Not phased'}</td>)}</tr>
+            <tr><th>Documentation</th>{projects.map((p) => <td key={p.id}>{p.documentationLabel}</td>)}</tr>
+            <tr><th>Important Lessons</th>{projects.map((p) => <td key={p.id}>{p.lessons.slice(0, 2).map((lesson) => `${lesson.lessonTypeLabel}: ${lesson.title}`).join('; ') || '—'}</td>)}</tr>
+            <tr><th>Open Help Requests</th>{projects.map((p) => <td key={p.id}>{p.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status)).map((request) => `${request.categoryLabel}: ${request.title}`).join('; ') || 'None'}</td>)}</tr>
+            <tr><th>Open effort</th>{projects.map((p) => <td key={p.id}><button onClick={() => onProject(p.id)}>Open {p.id}</button></td>)}</tr>
           </tbody>
         </table>
       </div>
@@ -1111,6 +1129,7 @@ function ExecutiveSplash({
         <section className="exec-card action-card">
           <p className="eyebrow">LEADERSHIP ACTION</p>
           <h3>{project.leadershipAction}</h3>
+          {project.helpRequests.find((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status)) && <p><strong>Open support request:</strong> {project.helpRequests.find((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status))?.categoryLabel}</p>}
         </section>
         <section className="exec-card ownership-card">
           <p className="eyebrow">OWNERSHIP & KNOWLEDGE</p>
@@ -1230,6 +1249,7 @@ function TechnicalView({ project }: { project: PortalProject }) {
           ))}
         </div>
       </section>
+      <HelpRequests project={project} />
       <section className="panel">
         <h2>Technical artifacts</h2>
         <p className="upload-warning">
@@ -1244,6 +1264,8 @@ function TechnicalView({ project }: { project: PortalProject }) {
               icon={<GitBranch />}
               title={r.name}
               meta={`${r.artifactType} · ${r.documentationLabel} · ${r.description}`}
+              href={['AVAILABLE_IN_FORGE', 'EXTERNAL_REFERENCE'].includes(r.documentationAvailability) ? r.url : undefined}
+              access={r.phaseName ? `Phase: ${r.phaseName}` : undefined}
             />
           ))
         ) : (
@@ -1388,10 +1410,14 @@ function Artifact({
   icon,
   title,
   meta,
+  href,
+  access,
 }: {
   icon: React.ReactNode;
   title: string;
   meta: string;
+  href?: string;
+  access?: string;
 }) {
   return (
     <div className="artifact">
@@ -1399,10 +1425,26 @@ function Artifact({
       <div>
         <strong>{title}</strong>
         <small>{meta}</small>
+        {access && <small>{access}</small>}
       </div>
-      <ExternalLink />
+      {href ? <a href={href} target="_blank" rel="noreferrer" aria-label={`Open ${title}`}><ExternalLink /></a> : <small>Contact originator for access</small>}
     </div>
   );
+}
+
+function HelpRequests({ project }: { project: PortalProject }) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const active = project.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status));
+  const closed = project.helpRequests.filter((request) => ['RESOLVED', 'CANCELLED'].includes(request.status));
+  const transition = async (id: number, status: string) => {
+    const resolutionSummary = ['RESOLVED', 'CANCELLED'].includes(status) ? window.prompt('Short resolution summary') : '';
+    if (['RESOLVED', 'CANCELLED'].includes(status) && !resolutionSummary) return;
+    setBusy(id);
+    const response = await fetch(`/api/projects/${project.id}/help-requests/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, resolutionSummary }) });
+    if (response.ok) window.location.reload(); else setBusy(null);
+  };
+  const card = (request: PortalProject['helpRequests'][number]) => <article className="help-request-card" key={request.id}><header><span className="lesson-type">{request.categoryLabel}</span><strong>{request.title}</strong><small>{request.status.replaceAll('_', ' ')} · {new Date(request.createdAt).toLocaleDateString()} · {request.createdByName}</small></header><p>{request.description}</p><p><b>Contact:</b> {request.contact || 'Project Lead'}</p>{request.resolutionSummary && <p><b>Resolution:</b> {request.resolutionSummary}</p>}{['OPEN', 'IN_PROGRESS'].includes(request.status) && <footer>{request.status === 'OPEN' && <button disabled={busy === request.id} onClick={() => transition(request.id, 'IN_PROGRESS')}>Mark in progress</button>}<button disabled={busy === request.id} onClick={() => transition(request.id, 'RESOLVED')}>Resolve</button><button disabled={busy === request.id} onClick={() => transition(request.id, 'CANCELLED')}>Cancel</button></footer>}</article>;
+  return <section className="panel span-2"><PanelHead title="Help Requests" note="Discoverable assistance needs and preserved resolution history" />{active.length ? active.map(card) : <p className="body-copy">No active Help Requests.</p>}{closed.length > 0 && <details><summary>Resolved / cancelled history ({closed.length})</summary>{closed.map(card)}</details>}</section>;
 }
 
 function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
@@ -2103,9 +2145,9 @@ function GraphView({ onProblem }: { onProblem: () => void }) {
     </>
   );
 }
-function ExploreView({ onProject }: { onProject: () => void }) {
+function ExploreView({ projectId, onProject }: { projectId?: string; onProject: (id: string) => void }) {
   const { projects } = useData();
-  const focus = projects[0];
+  const focus = projects.find((project) => project.id === projectId);
   if (!focus)
     return (
       <>
@@ -2124,15 +2166,22 @@ function ExploreView({ onProject }: { onProject: () => void }) {
       </>
     );
   const related = projects
-    .slice(1)
+    .filter((project) => project.id !== focus.id)
     .map((p) => ({
       project: p,
+      reasons: [
+        p.problems.some((x) => focus.problems.some((y) => y.id === x.id)) ? `Shares ${p.problems.filter((x) => focus.problems.some((y) => y.id === x.id)).length} Problem(s)` : '',
+        p.tags.some((x) => focus.tags.includes(x)) ? 'Shares capability tags' : '',
+        p.units.some((x) => focus.units.some((y) => y.id === x.id)) ? 'Same participating Unit' : '',
+        p.solutionType === focus.solutionType ? 'Same Solution Type' : '',
+      ].filter(Boolean),
       score:
         (p.problems.some((x) => focus.problems.some((y) => y.id === x.id))
           ? 50
           : 0) +
         (p.tags.some((x) => focus.tags.includes(x)) ? 25 : 0) +
-        (p.units.some((x) => focus.units.some((y) => y.id === x.id)) ? 15 : 0),
+        (p.units.some((x) => focus.units.some((y) => y.id === x.id)) ? 15 : 0) +
+        (p.solutionType === focus.solutionType ? 10 : 0),
     }))
     .filter((x) => x.score)
     .sort((a, b) => b.score - a.score);
@@ -2150,14 +2199,15 @@ function ExploreView({ onProject }: { onProject: () => void }) {
         </p>
       </div>
       <div className="approach-grid">
-        {related.map(({ project: p, score }) => (
+        {related.map(({ project: p, score, reasons }) => (
           <article key={p.id}>
             <span className="maturity">{score}% related</span>
             <h3>{p.name}</h3>
             <p>
               {p.unit} · {p.tags.join(', ')}
             </p>
-            <button onClick={onProject}>
+            <p>{reasons.join(' · ')}</p>
+            <button onClick={() => onProject(p.id)}>
               Review connection <ArrowRight />
             </button>
           </article>
