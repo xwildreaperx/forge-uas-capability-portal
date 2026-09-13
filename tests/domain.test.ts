@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import { db } from '../lib/db.ts';
-import { createProblem, createProject } from '../lib/data/mutations.ts';
+import {
+  createProblem,
+  createProject,
+  submitProblem,
+} from '../lib/data/mutations.ts';
 import { getPortalData } from '../lib/data/portal.ts';
 import { findRelatedProblems } from '../lib/domain/matching.ts';
 import { filterProjects } from '../lib/domain/search.ts';
@@ -12,9 +16,38 @@ import {
   projectHandoffMarkdown,
   projectHandoffText,
 } from '../lib/domain/handoff.ts';
+import type { CurrentUserContext } from '../lib/auth/permissions.ts';
+import {
+  canAccessUnit,
+  canEditProject,
+  hasPermission,
+  requirePermission,
+} from '../lib/auth/permissions.ts';
+import { isDevUserSwitcherEnabled } from '../lib/auth/config.ts';
 
 const createdProblemIds: number[] = [];
 const createdProjectIds: number[] = [];
+
+async function testUser(trackingId: string): Promise<CurrentUserContext> {
+  const user = await db.user.findUniqueOrThrow({
+    where: { trackingId },
+    include: { unitMemberships: true, projectMemberships: true },
+  });
+  return {
+    id: user.id,
+    trackingId: user.trackingId,
+    displayName: user.displayName,
+    identifier: user.identifier,
+    role: user.role,
+    status: user.status,
+    primaryUnitId: user.primaryUnitId,
+    unitIds: user.unitMemberships.map((x) => x.unitId),
+    administeredUnitIds: user.unitMemberships
+      .filter((x) => x.isAdmin)
+      .map((x) => x.unitId),
+    projectIds: user.projectMemberships.map((x) => x.projectId),
+  };
+}
 
 after(async () => {
   if (createdProjectIds.length)
@@ -75,7 +108,7 @@ describe('tracking IDs and creation', () => {
   });
 
   it('persists a Problem with a unique tracking ID', async () => {
-    const problem = await createProblem({
+    const problem = await createProblem(await testUser('USR-000004'), {
       title: 'Test persistent capability gap',
       description: 'Created by automated persistence verification.',
     });
@@ -94,7 +127,7 @@ describe('tracking IDs and creation', () => {
       orderBy: { id: 'asc' },
     });
     const units = await db.unit.findMany({ take: 3, orderBy: { id: 'asc' } });
-    const project = await createProject({
+    const project = await createProject(await testUser('USR-000002'), {
       name: 'Test multi-link project',
       executiveSummary: 'Persistence test.',
       detailedDescription: 'Tests explicit junction records.',
@@ -138,7 +171,7 @@ describe('tracking IDs and creation', () => {
       },
     ];
     for (const [index, specific] of cases.entries()) {
-      const project = await createProject({
+      const project = await createProject(await testUser('USR-000002'), {
         name: `Pathway persistence ${index}`,
         executiveSummary: 'Test effort.',
         detailedDescription: 'Conditional record persistence.',
@@ -223,7 +256,7 @@ describe('portable AI handoff and governed knowledge', () => {
   it('persists curated executive, AI-context, and reference-only metadata', async () => {
     const problem = await db.problem.findFirstOrThrow();
     const unit = await db.unit.findFirstOrThrow();
-    const project = await createProject({
+    const project = await createProject(await testUser('USR-000002'), {
       name: 'Reference-only handoff test',
       executiveSummary: 'Tests governed portable context.',
       detailedDescription: 'The authoritative procedure is held outside FORGE.',
@@ -280,6 +313,67 @@ describe('portable AI handoff and governed knowledge', () => {
     assert.equal(json.generated, generated.toISOString());
     assert.ok(
       ['Partial', 'Comprehensive'].includes(handoffCompleteness(projected)),
+    );
+  });
+});
+
+describe('role and scope authorization', () => {
+  it('forces the development identity switcher off in production', () => {
+    const original = process.env.NODE_ENV;
+    Object.assign(process.env, { NODE_ENV: 'production' });
+    assert.equal(isDevUserSwitcherEnabled(), false);
+    Object.assign(process.env, { NODE_ENV: original });
+  });
+  it('allows Contributors to submit but not create Projects or administer', async () => {
+    const contributor = await testUser('USR-000001');
+    assert.equal(hasPermission(contributor, 'problem:submit'), true);
+    assert.equal(hasPermission(contributor, 'project:create'), false);
+    assert.equal(hasPermission(contributor, 'user:manage'), false);
+    const submission = await submitProblem(contributor, {
+      title: 'Automated permission test submission',
+      description: 'Verifies the governed intake path.',
+    });
+    assert.match(submission.trackingId, /^SUB-\d{6}$/);
+    await db.problemSubmission.delete({ where: { id: submission.id } });
+  });
+
+  it('limits Project Users to assigned or created Projects', async () => {
+    const projectUser = await testUser('USR-000002');
+    const assigned = await db.project.findUniqueOrThrow({
+      where: { trackingId: 'PRJ-000001' },
+      select: { id: true, leadUnitId: true, createdByUserId: true },
+    });
+    const other = await db.project.findUniqueOrThrow({
+      where: { trackingId: 'PRJ-000003' },
+      select: { id: true, leadUnitId: true, createdByUserId: true },
+    });
+    assert.equal(canEditProject(projectUser, assigned), true);
+    assert.equal(canEditProject(projectUser, other), false);
+  });
+
+  it('limits Unit Administrators to explicitly administered Units', async () => {
+    const unitAdmin = await testUser('USR-000003');
+    const administered = await db.unit.findUniqueOrThrow({
+      where: { trackingId: 'UNIT-000001' },
+    });
+    const other = await db.unit.findUniqueOrThrow({
+      where: { trackingId: 'UNIT-000002' },
+    });
+    assert.equal(canAccessUnit(unitAdmin, administered.id), true);
+    assert.equal(canAccessUnit(unitAdmin, other.id), false);
+  });
+
+  it('grants System Administrators global scope and denies disabled accounts', async () => {
+    const systemAdmin = await testUser('USR-000004');
+    const lastUnit = await db.unit.findFirstOrThrow({
+      orderBy: { id: 'desc' },
+    });
+    assert.equal(canAccessUnit(systemAdmin, lastUnit.id), true);
+    const disabled = { ...systemAdmin, status: 'DISABLED' as const };
+    assert.equal(hasPermission(disabled, 'platform:admin'), false);
+    assert.throws(
+      () => requirePermission(disabled, 'portal:read'),
+      /not active/,
     );
   });
 });

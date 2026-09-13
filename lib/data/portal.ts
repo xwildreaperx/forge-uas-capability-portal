@@ -8,6 +8,9 @@ import {
   DOCUMENTATION_LABELS,
   type DocumentationValue,
 } from '../domain/documentation.ts';
+import type { CurrentUserContext } from '../auth/permissions.ts';
+import { hasPermission } from '../auth/permissions.ts';
+import { isDevUserSwitcherEnabled } from '../auth/config.ts';
 
 const tones: Record<string, string> = {
   Concept: 'amber',
@@ -16,69 +19,111 @@ const tones: Record<string, string> = {
   Validated: 'purple',
 };
 
-export async function getPortalData(): Promise<PortalData> {
-  const [problems, projects, units, activities, helpRequests] =
-    await Promise.all([
-      db.problem.findMany({
-        orderBy: { trackingId: 'asc' },
-        include: {
-          projectLinks: {
-            select: { project: { select: { trackingId: true } } },
-          },
-          unitLinks: true,
-          tags: { select: { tag: { select: { name: true } } } },
+export async function getPortalData(
+  currentUser: CurrentUserContext | null = null,
+): Promise<PortalData> {
+  const [
+    problems,
+    projects,
+    units,
+    activities,
+    helpRequests,
+    availableUsers,
+    directoryUsers,
+    submissions,
+  ] = await Promise.all([
+    db.problem.findMany({
+      orderBy: { trackingId: 'asc' },
+      include: {
+        projectLinks: {
+          select: { project: { select: { trackingId: true } } },
         },
-      }),
-      db.project.findMany({
-        orderBy: { trackingId: 'asc' },
-        include: {
-          leadUnit: { select: { trackingId: true, name: true } },
-          problemLinks: {
-            orderBy: { isPrimary: 'desc' },
-            select: {
-              isPrimary: true,
-              problem: { select: { trackingId: true, title: true } },
-            },
-          },
-          unitLinks: {
-            select: {
-              role: true,
-              unit: { select: { trackingId: true, name: true } },
-            },
-          },
-          tags: { select: { tag: { select: { name: true } } } },
-          locations: {
-            select: { location: { select: { name: true, region: true } } },
-          },
-          phases: { orderBy: { sortOrder: 'asc' } },
-          lessons: { orderBy: { date: 'desc' } },
-          repositories: true,
-          vendorDetail: true,
-          tacticDetail: true,
-          trainingDetail: true,
-        },
-      }),
-      db.unit.findMany({
-        orderBy: { trackingId: 'asc' },
-        include: {
-          location: true,
-          capabilities: { select: { tag: { select: { name: true } } } },
-          projectLinks: {
-            select: { project: { select: { trackingId: true } } },
+        unitLinks: true,
+        tags: { select: { tag: { select: { name: true } } } },
+      },
+    }),
+    db.project.findMany({
+      orderBy: { trackingId: 'asc' },
+      include: {
+        leadUnit: { select: { trackingId: true, name: true } },
+        problemLinks: {
+          orderBy: { isPrimary: 'desc' },
+          select: {
+            isPrimary: true,
+            problem: { select: { trackingId: true, title: true } },
           },
         },
-      }),
-      db.activityEvent.findMany({ orderBy: { timestamp: 'desc' }, take: 44 }),
-      db.helpRequest.findMany({
-        where: { status: 'Open' },
-        orderBy: { createdAt: 'desc' },
-        include: {
-          project: {
-            select: { name: true, leadUnit: { select: { name: true } } },
+        unitLinks: {
+          select: {
+            role: true,
+            unit: { select: { trackingId: true, name: true } },
           },
         },
-      }),
-    ]);
+        tags: { select: { tag: { select: { name: true } } } },
+        locations: {
+          select: { location: { select: { name: true, region: true } } },
+        },
+        phases: { orderBy: { sortOrder: 'asc' } },
+        lessons: { orderBy: { date: 'desc' } },
+        repositories: true,
+        vendorDetail: true,
+        tacticDetail: true,
+        trainingDetail: true,
+      },
+    }),
+    db.unit.findMany({
+      orderBy: { trackingId: 'asc' },
+      include: {
+        location: true,
+        capabilities: { select: { tag: { select: { name: true } } } },
+        projectLinks: {
+          select: { project: { select: { trackingId: true } } },
+        },
+      },
+    }),
+    db.activityEvent.findMany({ orderBy: { timestamp: 'desc' }, take: 44 }),
+    db.helpRequest.findMany({
+      where: { status: 'Open' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        project: {
+          select: { name: true, leadUnit: { select: { name: true } } },
+        },
+      },
+    }),
+    isDevUserSwitcherEnabled()
+      ? db.user.findMany({
+          orderBy: { id: 'asc' },
+          select: { id: true, displayName: true, role: true, status: true },
+        })
+      : Promise.resolve([]),
+    hasPermission(currentUser, 'user:manage')
+      ? db.user.findMany({
+          where:
+            currentUser?.role === 'SYSTEM_ADMIN'
+              ? {}
+              : {
+                  unitMemberships: {
+                    some: {
+                      unitId: { in: currentUser?.administeredUnitIds ?? [] },
+                    },
+                  },
+                },
+          orderBy: { displayName: 'asc' },
+          include: { primaryUnit: true, unitMemberships: true },
+        })
+      : Promise.resolve([]),
+    hasPermission(currentUser, 'submission:review')
+      ? db.problemSubmission.findMany({
+          where:
+            currentUser?.role === 'SYSTEM_ADMIN'
+              ? {}
+              : { unitId: { in: currentUser?.administeredUnitIds ?? [] } },
+          orderBy: { createdAt: 'desc' },
+          include: { submitter: true, unit: true, relatedProblem: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
   return {
     problems: problems.map((p) => ({
@@ -94,6 +139,7 @@ export async function getPortalData(): Promise<PortalData> {
       tags: p.tags.map((x) => x.tag.name),
     })),
     projects: projects.map((p) => ({
+      dbId: p.id,
       id: p.trackingId,
       name: p.name,
       unit: p.leadUnit.name,
@@ -240,6 +286,8 @@ export async function getPortalData(): Promise<PortalData> {
       longitude: u.location?.longitude ?? 0,
       capabilities: u.capabilities.map((x) => x.tag.name),
       projectIds: u.projectLinks.map((x) => x.project.trackingId),
+      isActive: u.isActive,
+      forgePointOfContact: u.forgePointOfContact ?? '',
     })),
     activities: activities.map((a) => ({
       id: a.id,
@@ -255,6 +303,47 @@ export async function getPortalData(): Promise<PortalData> {
       projectName: h.project.name,
       unitName: h.project.leadUnit.name,
       createdAt: h.createdAt.toISOString(),
+    })),
+    session: {
+      currentUser: currentUser
+        ? {
+            id: currentUser.id,
+            trackingId: currentUser.trackingId,
+            displayName: currentUser.displayName,
+            role: currentUser.role,
+            status: currentUser.status,
+            administeredUnitIds: currentUser.administeredUnitIds,
+            projectIds: currentUser.projectIds,
+          }
+        : null,
+      devSwitcherEnabled: isDevUserSwitcherEnabled(),
+      availableUsers,
+    },
+    directoryUsers: directoryUsers.map((user) => ({
+      id: user.id,
+      trackingId: user.trackingId,
+      displayName: user.displayName,
+      identifier: user.identifier,
+      role: user.role,
+      status: user.status,
+      primaryUnit: user.primaryUnit?.name ?? 'No primary Unit',
+      unitIds: user.unitMemberships.map((item) => item.unitId),
+      administeredUnitIds: user.unitMemberships
+        .filter((item) => item.isAdmin)
+        .map((item) => item.unitId),
+    })),
+    submissions: submissions.map((item) => ({
+      id: item.id,
+      trackingId: item.trackingId,
+      title: item.title,
+      description: item.description,
+      category: item.category,
+      status: item.status,
+      submitter: item.submitter.displayName,
+      unit: item.unit?.name ?? 'No Unit',
+      unitId: item.unitId,
+      createdAt: item.createdAt.toISOString(),
+      relatedProblemId: item.relatedProblem?.trackingId ?? '',
     })),
   };
 }

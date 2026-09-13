@@ -12,6 +12,12 @@ import {
   DOCUMENTATION_LABELS,
   type DocumentationValue,
 } from '../domain/documentation.ts';
+import type { CurrentUserContext } from '../auth/permissions.ts';
+import {
+  assertProjectEdit,
+  canAccessUnit,
+  requirePermission,
+} from '../auth/permissions.ts';
 
 const optional = (value: unknown) =>
   typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -45,7 +51,11 @@ export async function detectRelatedProblems(input: {
   );
 }
 
-export async function createProblem(input: Record<string, unknown>) {
+export async function createProblem(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
+  requirePermission(user, 'submission:review');
   const title = requiredString(input.title, 'Title');
   const description = requiredString(input.description, 'Description');
   return db.$transaction(async (tx) => {
@@ -75,9 +85,11 @@ export async function createProblem(input: Record<string, unknown>) {
 }
 
 export async function updateProblem(
+  user: CurrentUserContext | null,
   id: string,
   input: Record<string, unknown>,
 ) {
+  requirePermission(user, 'submission:review');
   return db.problem.update({
     where: { trackingId: id },
     data: {
@@ -91,7 +103,11 @@ export async function updateProblem(
   });
 }
 
-export async function createProject(input: Record<string, unknown>) {
+export async function createProject(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'project:create');
   const name = requiredString(input.name, 'Name');
   const problemIds = integerIds(input.problemIds, 'Problem IDs');
   const unitIds = integerIds(input.unitIds, 'Unit IDs');
@@ -161,6 +177,8 @@ export async function createProject(input: Record<string, unknown>) {
         completion: completionValue(input.completion ?? 0),
         startDate: new Date(),
         leadUnitId,
+        createdByUserId: actor.id,
+        userMemberships: { create: { userId: actor.id, role: 'PROJECT_LEAD' } },
         problemLinks: {
           create: problemIds.map((problemId, index) => ({
             problemId,
@@ -258,9 +276,15 @@ export async function createProject(input: Record<string, unknown>) {
 }
 
 export async function updateProject(
+  user: CurrentUserContext | null,
   id: string,
   input: Record<string, unknown>,
 ) {
+  const project = await db.project.findUniqueOrThrow({
+    where: { trackingId: id },
+    select: { id: true, leadUnitId: true, createdByUserId: true },
+  });
+  assertProjectEdit(user, project);
   return db.project.update({
     where: { trackingId: id },
     data: {
@@ -325,9 +349,15 @@ export async function resolveProjectId(trackingId: string) {
 }
 
 export async function addProjectPhase(
+  user: CurrentUserContext | null,
   projectId: number,
   input: Record<string, unknown>,
 ) {
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { id: true, leadUnitId: true, createdByUserId: true },
+  });
+  const actor = assertProjectEdit(user, project);
   return db.projectPhase.create({
     data: {
       projectId,
@@ -344,14 +374,21 @@ export async function addProjectPhase(
         'Technical summary',
       ),
       sortOrder: Number(input.sortOrder ?? 1),
+      createdByUserId: actor.id,
     },
   });
 }
 
 export async function addLesson(
+  user: CurrentUserContext | null,
   projectId: number,
   input: Record<string, unknown>,
 ) {
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { id: true, leadUnitId: true, createdByUserId: true },
+  });
+  const actor = assertProjectEdit(user, project);
   return db.$transaction(async (tx) =>
     tx.lessonLearned.create({
       data: {
@@ -361,15 +398,22 @@ export async function addLesson(
         finding: requiredString(input.finding, 'Finding'),
         recommendation: requiredString(input.recommendation, 'Recommendation'),
         date: new Date(),
+        createdByUserId: actor.id,
       },
     }),
   );
 }
 
 export async function addRepository(
+  user: CurrentUserContext | null,
   projectId: number,
   input: Record<string, unknown>,
 ) {
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { id: true, leadUnitId: true, createdByUserId: true },
+  });
+  const actor = assertProjectEdit(user, project);
   return db.repositoryLink.create({
     data: {
       projectId,
@@ -385,6 +429,172 @@ export async function addRepository(
         input.includeInAiHandoff === 'false'
           ? false
           : true,
+      createdByUserId: actor.id,
+    },
+  });
+}
+
+export async function submitProblem(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'problem:submit');
+  const title = requiredString(input.title, 'Title');
+  const description = requiredString(input.description, 'Description');
+  const requestedUnitId = Number(input.unitId || actor.primaryUnitId);
+  const unitId =
+    Number.isInteger(requestedUnitId) && actor.unitIds.includes(requestedUnitId)
+      ? requestedUnitId
+      : actor.primaryUnitId;
+  return db.$transaction(async (tx) =>
+    tx.problemSubmission.create({
+      data: {
+        trackingId: await nextTrackingId(tx, 'Submission'),
+        title,
+        description,
+        category:
+          typeof input.category === 'string' ? input.category : 'Uncategorized',
+        operationalImpact: optional(input.operationalImpact),
+        supportingContext: optional(input.supportingContext),
+        originatorContact: optional(input.originatorContact),
+        submitterId: actor.id,
+        unitId,
+      },
+    }),
+  );
+}
+
+export async function reviewProblemSubmission(
+  user: CurrentUserContext | null,
+  trackingId: string,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'submission:review');
+  const submission = await db.problemSubmission.findUniqueOrThrow({
+    where: { trackingId },
+  });
+  if (
+    actor.role !== 'SYSTEM_ADMIN' &&
+    (!submission.unitId || !canAccessUnit(actor, submission.unitId))
+  )
+    throw new Error('You may review submissions only for administered Units.');
+  const status = String(input.status);
+  if (
+    !['UNDER_REVIEW', 'ACCEPTED', 'DUPLICATE_LINKED', 'REJECTED'].includes(
+      status,
+    )
+  )
+    throw new Error('Invalid review status.');
+  const relatedProblemId = input.relatedProblemId
+    ? Number(input.relatedProblemId)
+    : null;
+  if (
+    (status === 'ACCEPTED' || status === 'DUPLICATE_LINKED') &&
+    !relatedProblemId
+  )
+    throw new Error(
+      'Accepted or duplicate submissions must link to a canonical Problem.',
+    );
+  return db.problemSubmission.update({
+    where: { trackingId },
+    data: {
+      status: status as never,
+      relatedProblemId,
+      reviewerId: actor.id,
+      reviewNote: optional(input.reviewNote),
+      reviewedAt: new Date(),
+    },
+  });
+}
+
+export async function updateUserAccount(
+  user: CurrentUserContext | null,
+  targetId: number,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'user:manage');
+  const target = await db.user.findUniqueOrThrow({
+    where: { id: targetId },
+    include: { unitMemberships: true },
+  });
+  if (
+    actor.role !== 'SYSTEM_ADMIN' &&
+    !target.unitMemberships.some((membership) =>
+      canAccessUnit(actor, membership.unitId),
+    )
+  )
+    throw new Error('You may manage users only within administered Units.');
+  const requestedRole =
+    typeof input.role === 'string' ? input.role : target.role;
+  if (
+    actor.role !== 'SYSTEM_ADMIN' &&
+    (requestedRole === 'SYSTEM_ADMIN' || requestedRole === 'UNIT_ADMIN')
+  )
+    throw new Error(
+      'Only a System Administrator may grant administrator roles.',
+    );
+  return db.user.update({
+    where: { id: targetId },
+    data: {
+      displayName: input.displayName
+        ? requiredString(input.displayName, 'Display name')
+        : undefined,
+      title: optional(input.title) ?? undefined,
+      role: requestedRole as never,
+      status:
+        typeof input.status === 'string' ? (input.status as never) : undefined,
+      lastActivityAt: new Date(),
+    },
+  });
+}
+
+export async function createUserAccount(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'user:manage');
+  const unitId = Number(input.unitId);
+  if (!Number.isInteger(unitId) || !canAccessUnit(actor, unitId))
+    throw new Error('Select a Unit within your administrative scope.');
+  const role = typeof input.role === 'string' ? input.role : 'CONTRIBUTOR';
+  if (
+    actor.role !== 'SYSTEM_ADMIN' &&
+    !['CONTRIBUTOR', 'PROJECT_USER'].includes(role)
+  )
+    throw new Error(
+      'Only a System Administrator may create administrator accounts.',
+    );
+  return db.$transaction(async (tx) =>
+    tx.user.create({
+      data: {
+        trackingId: await nextTrackingId(tx, 'User'),
+        displayName: requiredString(input.displayName, 'Display name'),
+        identifier: requiredString(input.identifier, 'Identifier'),
+        role: role as never,
+        status: 'PENDING',
+        primaryUnitId: unitId,
+        unitMemberships: {
+          create: { unitId, isPrimary: true, isAdmin: role === 'UNIT_ADMIN' },
+        },
+      },
+    }),
+  );
+}
+
+export async function updateUnitRecord(
+  user: CurrentUserContext | null,
+  unitId: number,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'unit:manage');
+  if (!canAccessUnit(actor, unitId))
+    throw new Error('You may manage only explicitly administered Units.');
+  return db.unit.update({
+    where: { id: unitId },
+    data: {
+      isActive:
+        typeof input.isActive === 'boolean' ? input.isActive : undefined,
+      forgePointOfContact: optional(input.forgePointOfContact) ?? undefined,
     },
   });
 }

@@ -1,4 +1,5 @@
 export type PortalProject = {
+  dbId: number;
   id: string;
   name: string;
   unit: string;
@@ -130,6 +131,8 @@ export type PortalUnit = {
   longitude: number;
   capabilities: string[];
   projectIds: string[];
+  isActive: boolean;
+  forgePointOfContact: string;
 };
 
 export type PortalData = {
@@ -150,5 +153,47 @@ export type PortalData = {
     projectName: string;
     unitName: string;
     createdAt: string;
+  }[];
+  session: {
+    currentUser: null | {
+      id: number;
+      trackingId: string;
+      displayName: string;
+      role: string;
+      status: string;
+      administeredUnitIds: number[];
+      projectIds: number[];
+    };
+    devSwitcherEnabled: boolean;
+    availableUsers: {
+      id: number;
+      displayName: string;
+      role: string;
+      status: string;
+    }[];
+  };
+  directoryUsers: {
+    id: number;
+    trackingId: string;
+    displayName: string;
+    identifier: string;
+    role: string;
+    status: string;
+    primaryUnit: string;
+    unitIds: number[];
+    administeredUnitIds: number[];
+  }[];
+  submissions: {
+    id: number;
+    trackingId: string;
+    title: string;
+    description: string;
+    category: string;
+    status: string;
+    submitter: string;
+    unit: string;
+    unitId: number | null;
+    createdAt: string;
+    relatedProblemId: string;
   }[];
 };

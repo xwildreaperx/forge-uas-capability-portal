@@ -117,6 +117,36 @@ button {
   margin: 8px;
   border-radius: 4px;
 }
+
+.dev-switcher {
+  margin: 10px;
+  padding: 10px;
+  border: 1px solid #c98b36;
+  border-radius: 8px;
+  background: #fff7e7;
+  color: #5b3a05;
+}
+.dev-switcher strong {
+  display: block;
+  font-size: 10px;
+  line-height: 1.25;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.dev-switcher select {
+  width: 100%;
+  font-size: 11px;
+  padding: 6px;
+  border: 1px solid #d3b16f;
+  border-radius: 5px;
+  background: white;
+  color: #242424;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
 .profile {
   display: flex;
   align-items: center;

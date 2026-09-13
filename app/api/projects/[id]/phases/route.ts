@@ -1,4 +1,5 @@
 import { addProjectPhase, resolveProjectId } from '@/lib/data/mutations';
+import { getRequestUser } from '@/lib/auth/current-user';
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -6,7 +7,11 @@ export async function POST(
   try {
     const { id } = await context.params;
     return Response.json(
-      await addProjectPhase(await resolveProjectId(id), await request.json()),
+      await addProjectPhase(
+        await getRequestUser(request),
+        await resolveProjectId(id),
+        await request.json(),
+      ),
       { status: 201 },
     );
   } catch (error) {

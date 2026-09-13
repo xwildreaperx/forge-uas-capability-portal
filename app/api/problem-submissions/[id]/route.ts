@@ -1,5 +1,5 @@
-import { updateProject } from '@/lib/data/mutations';
 import { getRequestUser } from '@/lib/auth/current-user';
+import { reviewProblemSubmission } from '@/lib/data/mutations';
 
 export async function PATCH(
   request: Request,
@@ -8,7 +8,7 @@ export async function PATCH(
   try {
     const { id } = await context.params;
     return Response.json(
-      await updateProject(
+      await reviewProblemSubmission(
         await getRequestUser(request),
         id,
         await request.json(),
@@ -18,9 +18,11 @@ export async function PATCH(
     return Response.json(
       {
         error:
-          error instanceof Error ? error.message : 'Unable to update Project.',
+          error instanceof Error
+            ? error.message
+            : 'Unable to review submission.',
       },
-      { status: 400 },
+      { status: 403 },
     );
   }
 }

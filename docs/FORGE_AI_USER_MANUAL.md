@@ -11,6 +11,16 @@ FORGE is a capability problem-solving and institutional-knowledge network. It he
 
 ## Core information model
 
+## Users, roles, and governed contribution
+
+FORGE separates identity profiles from future authentication. Accounts have Pending, Active, or Disabled status and one platform role: Contributor, Project User, Unit Administrator, or System Administrator. Unit memberships and Project assignments are explicit relational records; Unit Administrators act only within explicitly administered Units. Disabling an account removes action authority without erasing attribution.
+
+Contributors submit potential Problems into a review queue rather than directly editing canonical Problems. Reviewers may accept and link a submission, associate it with existing work as a duplicate, or reject it. Project Users can create solution efforts and edit only created/assigned work. System Administrators have global scope. UI controls reflect these rules, but server mutations are the enforcement boundary.
+
+The amber **Development Only — Not Authentication** switcher exists solely for local role acceptance. It is gated by environment and cannot operate in a production build. Do not mistake it for password, SSO, CAC, or session security.
+
+`pnpm db:seed:demo` loads fictional demonstration history and representative users for every role. `pnpm db:seed:clean` removes operational/demo records and creates only one generic bootstrap System Administrator identity. Set `FORGE_BOOTSTRAP_IDENTIFIER` for the intended deployment context, then replace or map that identity when a real authentication adapter is implemented. Neither seed contains credentials.
+
 Problems → Solution Efforts / Projects → Units → Capabilities → Phases and tests → Lessons → Outcomes.
 
 - A **Problem** is an enduring capability gap. It can outlive any individual attempt to solve it.

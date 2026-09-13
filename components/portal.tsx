@@ -22,6 +22,7 @@ import {
   Search,
   Shield,
   Users,
+  UserCog,
   Wrench,
   X,
 } from 'lucide-react';
@@ -40,7 +41,7 @@ const useData = () => {
   return value;
 };
 
-const nav = [
+const baseNav = [
   ['Dashboard', BarChart3],
   ['Explore', Search],
   ['Problems', AlertTriangle],
@@ -61,12 +62,26 @@ export function Portal({
   selectedId?: string;
 }) {
   const router = useRouter();
-  const [data, setData] = useState(initialData);
+  const data = initialData;
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(initialView);
   const [creating, setCreating] = useState<'problem' | 'project' | false>(
     false,
   );
+  const user = data.session.currentUser;
+  const canCreateProject = Boolean(
+    user &&
+    user.status === 'ACTIVE' &&
+    ['PROJECT_USER', 'UNIT_ADMIN', 'SYSTEM_ADMIN'].includes(user.role),
+  );
+  const canAdminister = Boolean(
+    user &&
+    user.status === 'ACTIVE' &&
+    ['UNIT_ADMIN', 'SYSTEM_ADMIN'].includes(user.role),
+  );
+  const nav = canAdminister
+    ? [...baseNav, ['Administration', UserCog] as const]
+    : baseNav;
   const open = (type: 'problems' | 'projects' | 'units', id: string) =>
     router.push(`/${type}/${id}`);
   const matches = useMemo(() => {
@@ -158,26 +173,9 @@ export function Portal({
     };
     if (!response.ok)
       throw new Error(item.error || 'Unable to create Problem.');
-    setData((current) => ({
-      ...current,
-      problems: [
-        {
-          dbId: 0,
-          id: item.trackingId,
-          title: item.title,
-          description: item.shortDescription,
-          category: item.category,
-          priority: item.priority,
-          status: item.status,
-          projectIds: [],
-          unitCount: 0,
-          tags: [],
-        },
-        ...current.problems,
-      ],
-    }));
     setCreating(false);
-    open('problems', item.trackingId);
+    router.refresh();
+    setActive('Problems');
   };
 
   return (
@@ -207,6 +205,31 @@ export function Portal({
             ))}
           </nav>
           <div className="sidebar-foot">
+            {data.session.devSwitcherEnabled && (
+              <div className="dev-switcher">
+                <strong>Development Only — Not Authentication</strong>
+                <select
+                  aria-label="Development user"
+                  value={user?.id ?? ''}
+                  onChange={async (event) => {
+                    await fetch('/api/dev-identity', {
+                      method: 'POST',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({
+                        userId: Number(event.target.value),
+                      }),
+                    });
+                    window.location.reload();
+                  }}
+                >
+                  {data.session.availableUsers.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.displayName} — {item.role.replaceAll('_', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="classification">FICTIONAL DATA</div>
             <button className="nav-item" onClick={() => router.push('/guide')}>
               <HelpCircle size={17} /> Help & guidance
@@ -214,8 +237,11 @@ export function Portal({
             <div className="profile">
               <span>PA</span>
               <div>
-                <strong>Portal Analyst</strong>
-                <small>Contributor</small>
+                <strong>{user?.displayName ?? 'No active identity'}</strong>
+                <small>
+                  {user?.role.replaceAll('_', ' ') ??
+                    'Authentication adapter pending'}
+                </small>
               </div>
             </div>
           </div>
@@ -262,8 +288,12 @@ export function Portal({
                 </div>
               )}
             </div>
-            <button className="create" onClick={() => setCreating('problem')}>
-              <Plus size={16} /> Create
+            <button
+              className="create"
+              onClick={() => setCreating('problem')}
+              disabled={!user || user.status !== 'ACTIVE'}
+            >
+              <Plus size={16} /> Submit Problem
             </button>
           </header>
           <div className="page">
@@ -273,6 +303,7 @@ export function Portal({
               selectedId={selectedId}
               open={open}
               onCreateProject={() => setCreating('project')}
+              canCreateProject={canCreateProject}
             />
           </div>
         </main>
@@ -301,12 +332,14 @@ function View({
   selectedId,
   open,
   onCreateProject,
+  canCreateProject,
 }: {
   active: string;
   setActive: (v: string) => void;
   selectedId?: string;
   open: (type: 'problems' | 'projects' | 'units', id: string) => void;
   onCreateProject: () => void;
+  canCreateProject: boolean;
 }) {
   if (active === 'Problem')
     return (
@@ -336,6 +369,7 @@ function View({
       <ProjectsView
         onProject={(id) => open('projects', id)}
         onCreate={onCreateProject}
+        canCreate={canCreateProject}
       />
     );
   if (active === 'Problems')
@@ -343,6 +377,7 @@ function View({
   if (active === 'Explore')
     return <ExploreView onProject={() => setActive('Project')} />;
   if (active === 'Activity') return <ActivityView />;
+  if (active === 'Administration') return <AdministrationView />;
   return <Dashboard />;
 }
 
@@ -612,7 +647,17 @@ function ProblemView({
   const data = useData();
   const problem =
     data.problems.find((x) => x.id === id) ??
-    data.problems.find((x) => x.id === 'PRB-000001')!;
+    data.problems.find((x) => x.id === 'PRB-000001');
+  if (!problem)
+    return (
+      <div className="empty-state">
+        <AlertTriangle />
+        <h1>No canonical Problems yet.</h1>
+        <p>
+          Potential Problems can be submitted for review from the portal header.
+        </p>
+      </div>
+    );
   const all = data.projects.filter((x) => problem.projectIds.includes(x.id));
   return (
     <>
@@ -670,7 +715,18 @@ function ProblemView({
 
 function CompareView() {
   const data = useData();
-  const problem = data.problems.find((x) => x.id === 'PRB-000001')!;
+  const problem = data.problems.find((x) => x.id === 'PRB-000001');
+  if (!problem)
+    return (
+      <div className="empty-state">
+        <BarChart3 />
+        <h1>Nothing to compare yet.</h1>
+        <p>
+          Comparisons become available after a Problem has linked solution
+          efforts.
+        </p>
+      </div>
+    );
   const projects = data.projects.filter((x) =>
     problem.projectIds.includes(x.id),
   );
@@ -814,11 +870,39 @@ function ProjectView({
   const [experience, setExperience] = useState<
     'executive' | 'technical' | 'ai'
   >('executive');
-  const { projects, units } = useData();
+  const { projects, units, session } = useData();
   const project =
     projects.find((x) => x.id === id) ??
-    projects.find((x) => x.id === 'PRJ-000001')!;
-  const lead = units.find((x) => x.id === project.unitId)!;
+    projects.find((x) => x.id === 'PRJ-000001');
+  if (!project)
+    return (
+      <div className="empty-state">
+        <Wrench />
+        <h1>No solution efforts yet.</h1>
+        <p>
+          Create the first effort after Units and a reviewed Problem are
+          available.
+        </p>
+      </div>
+    );
+  const lead = units.find((x) => x.id === project.unitId);
+  if (!lead)
+    return (
+      <div className="empty-state">
+        <Users />
+        <h1>Lead Unit unavailable.</h1>
+        <p>This effort needs a valid lead Unit assignment.</p>
+      </div>
+    );
+  const current = session.currentUser;
+  const canEdit = Boolean(
+    current &&
+    current.status === 'ACTIVE' &&
+    (current.role === 'SYSTEM_ADMIN' ||
+      current.projectIds.includes(project.dbId) ||
+      (current.role === 'UNIT_ADMIN' &&
+        current.administeredUnitIds.includes(lead.dbId))),
+  );
   return (
     <>
       <div className="crumb">
@@ -854,7 +938,7 @@ function ProjectView({
           </button>
         </div>
       </div>
-      <ProjectActions project={project} />
+      {canEdit && <ProjectActions project={project} />}
       {experience === 'executive' ? (
         <ExecutiveSplash
           project={project}
@@ -1196,6 +1280,14 @@ function Artifact({
 function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
   const { units, projects } = useData();
   const unit = units.find((x) => x.id === id) ?? units[0];
+  if (!unit)
+    return (
+      <div className="empty-state">
+        <Users />
+        <h1>No Units configured.</h1>
+        <p>A System Administrator can create the first approved Unit.</p>
+      </div>
+    );
   const portfolio = projects.filter((p) => unit.projectIds.includes(p.id));
   return (
     <>
@@ -1259,9 +1351,11 @@ function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
 function ProjectsView({
   onProject,
   onCreate,
+  canCreate,
 }: {
   onProject: (id: string) => void;
   onCreate: () => void;
+  canCreate: boolean;
 }) {
   const { projects } = useData();
   const [query, setQuery] = useState('');
@@ -1312,7 +1406,12 @@ function ProjectsView({
             integration, policy, and hybrid approaches
           </p>
         </div>
-        <button className="create" onClick={onCreate}>
+        <button
+          className="create"
+          onClick={onCreate}
+          disabled={!canCreate}
+          title={canCreate ? '' : 'Project User access or higher is required'}
+        >
           <Plus size={16} /> Create solution effort
         </button>
       </div>
@@ -1444,6 +1543,267 @@ function ProblemsView({ onProblem }: { onProblem: (id: string) => void }) {
     </>
   );
 }
+function AdministrationView() {
+  const { directoryUsers, submissions, session, units, problems } = useData();
+  const current = session.currentUser;
+  const scopedUnits =
+    current?.role === 'SYSTEM_ADMIN'
+      ? units
+      : units.filter((unit) =>
+          current?.administeredUnitIds.includes(unit.dbId),
+        );
+  const patch = async (url: string, body: Record<string, unknown>) => {
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) window.alert(result.error || 'Unable to save.');
+    else window.location.reload();
+  };
+  const createUser = async (event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const body = Object.fromEntries(new FormData(event.currentTarget));
+    const response = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok) window.alert(result.error || 'Unable to create user.');
+    else window.location.reload();
+  };
+  return (
+    <>
+      <ListHead
+        title="Administration"
+        note="Scoped accounts, Unit assignments, and Problem-submission review"
+      />
+      <div className="notice">
+        <Shield size={18} />
+        <div>
+          <strong>Authorization groundwork</strong>
+          <p>
+            This prototype stores identity profiles and enforces role and scope
+            on server mutations. Passwords and production authentication are
+            intentionally not implemented.
+          </p>
+        </div>
+      </div>
+      <div className="detail-grid two">
+        <section className="panel">
+          <h2>User directory</h2>
+          {directoryUsers.length ? (
+            <div className="stack-list">
+              {directoryUsers.map((item) => (
+                <div key={item.id}>
+                  <strong>{item.displayName}</strong>
+                  <small>
+                    {item.trackingId} · {item.status} · {item.primaryUnit}
+                  </small>
+                  <label>
+                    Role{' '}
+                    <select
+                      value={item.role}
+                      disabled={item.id === current?.id}
+                      onChange={(event) =>
+                        void patch(`/api/admin/users/${item.id}`, {
+                          role: event.target.value,
+                        })
+                      }
+                    >
+                      {(current?.role === 'SYSTEM_ADMIN'
+                        ? [
+                            'CONTRIBUTOR',
+                            'PROJECT_USER',
+                            'UNIT_ADMIN',
+                            'SYSTEM_ADMIN',
+                          ]
+                        : ['CONTRIBUTOR', 'PROJECT_USER']
+                      ).map((role) => (
+                        <option key={role} value={role}>
+                          {role.replaceAll('_', ' ')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    className="secondary"
+                    disabled={item.id === current?.id}
+                    onClick={() =>
+                      void patch(`/api/admin/users/${item.id}`, {
+                        status:
+                          item.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE',
+                      })
+                    }
+                  >
+                    {item.status === 'ACTIVE'
+                      ? 'Disable account'
+                      : 'Activate account'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <Users />
+              <h3>No users in your administrative scope.</h3>
+            </div>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Problem submissions</h2>
+          {submissions.length ? (
+            <div className="stack-list">
+              {submissions.map((item) => (
+                <div key={item.id}>
+                  <strong>
+                    {item.trackingId} — {item.title}
+                  </strong>
+                  <small>
+                    {item.status.replaceAll('_', ' ')} · {item.submitter} ·{' '}
+                    {item.unit}
+                  </small>
+                  <p>{item.description}</p>
+                  <form
+                    className="quick-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void patch(
+                        `/api/problem-submissions/${item.trackingId}`,
+                        Object.fromEntries(new FormData(event.currentTarget)),
+                      );
+                    }}
+                  >
+                    <select name="status" defaultValue={item.status}>
+                      <option value="UNDER_REVIEW">Under review</option>
+                      <option value="ACCEPTED">Accept and link</option>
+                      <option value="DUPLICATE_LINKED">
+                        Duplicate / link existing
+                      </option>
+                      <option value="REJECTED">Reject</option>
+                    </select>
+                    <select name="relatedProblemId" defaultValue="">
+                      <option value="">No canonical Problem link</option>
+                      {problems.map((problem) => (
+                        <option key={problem.id} value={problem.dbId}>
+                          {problem.id} — {problem.title}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      name="reviewNote"
+                      placeholder="Concise review note"
+                    />
+                    <button className="secondary" type="submit">
+                      Save review
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <Check />
+              <h3>No submissions recorded in your scope.</h3>
+            </div>
+          )}
+        </section>
+      </div>
+      <section className="panel">
+        <h2>Unit administration</h2>
+        {scopedUnits.length ? (
+          <div className="stack-list">
+            {scopedUnits.map((unit) => (
+              <div key={unit.id}>
+                <strong>{unit.name}</strong>
+                <small>
+                  {unit.id} · {unit.isActive ? 'ACTIVE' : 'INACTIVE'} · POC:{' '}
+                  {unit.forgePointOfContact || 'Not assigned'}
+                </small>
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    void patch(`/api/admin/units/${unit.dbId}`, {
+                      isActive: !unit.isActive,
+                    })
+                  }
+                >
+                  {unit.isActive ? 'Mark inactive' : 'Mark active'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <Users />
+            <h3>No Units in your administrative scope.</h3>
+          </div>
+        )}
+      </section>
+      {scopedUnits.length > 0 && (
+        <section className="panel">
+          <h2>Create account profile</h2>
+          <p>
+            Creates a Pending identity profile only. No password or
+            authentication credential is created.
+          </p>
+          <form className="quick-form" onSubmit={createUser}>
+            <label>
+              Display name
+              <input name="displayName" required />
+            </label>
+            <label>
+              Future identity mapping
+              <input
+                name="identifier"
+                required
+                placeholder="email or directory identifier"
+              />
+            </label>
+            <label>
+              Primary Unit
+              <select name="unitId">
+                {scopedUnits.map((unit) => (
+                  <option key={unit.id} value={unit.dbId}>
+                    {unit.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Role
+              <select name="role">
+                {(current?.role === 'SYSTEM_ADMIN'
+                  ? [
+                      'CONTRIBUTOR',
+                      'PROJECT_USER',
+                      'UNIT_ADMIN',
+                      'SYSTEM_ADMIN',
+                    ]
+                  : ['CONTRIBUTOR', 'PROJECT_USER']
+                ).map((role) => (
+                  <option key={role} value={role}>
+                    {role.replaceAll('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="create" type="submit">
+              Create Pending profile
+            </button>
+          </form>
+        </section>
+      )}
+      <p className="muted">
+        Current scope:{' '}
+        {session.currentUser?.role.replaceAll('_', ' ') ?? 'none'}.
+      </p>
+    </>
+  );
+}
+
 function ListHead({ title, note }: { title: string; note: string }) {
   return (
     <div className="page-head">
@@ -1458,6 +1818,23 @@ function ListHead({ title, note }: { title: string; note: string }) {
 
 function MapView({ onProject }: { onProject: () => void }) {
   const { units } = useData();
+  if (!units.length)
+    return (
+      <>
+        <ListHead
+          title="Capability map"
+          note="Explore expertise and project activity geographically"
+        />
+        <div className="empty-state">
+          <MapPin />
+          <h2>No approved Units or locations yet.</h2>
+          <p>
+            The map will populate after an administrator adds Unit and location
+            metadata.
+          </p>
+        </div>
+      </>
+    );
   return (
     <>
       <ListHead
@@ -1511,8 +1888,26 @@ function MapView({ onProject }: { onProject: () => void }) {
 function GraphView({ onProblem }: { onProblem: () => void }) {
   const { problems, projects, units } = useData();
   const problem = problems[0];
-  const project = projects.find((x) => problem.projectIds.includes(x.id))!;
-  const unit = units.find((x) => x.id === project.unitId)!;
+  const project =
+    problem && projects.find((x) => problem.projectIds.includes(x.id));
+  const unit = project && units.find((x) => x.id === project.unitId);
+  if (!problem || !project || !unit)
+    return (
+      <>
+        <ListHead
+          title="Capability Graph"
+          note="Trace relational knowledge connections"
+        />
+        <div className="empty-state">
+          <Network />
+          <h2>No connected capability graph yet.</h2>
+          <p>
+            Add a canonical Problem, linked solution effort, and participating
+            Unit to establish the first graph.
+          </p>
+        </div>
+      </>
+    );
   return (
     <>
       <ListHead
@@ -1562,6 +1957,23 @@ function GraphView({ onProblem }: { onProblem: () => void }) {
 function ExploreView({ onProject }: { onProject: () => void }) {
   const { projects } = useData();
   const focus = projects[0];
+  if (!focus)
+    return (
+      <>
+        <ListHead
+          title="Related work"
+          note="Connections calculated from persisted relationships"
+        />
+        <div className="empty-state">
+          <Search />
+          <h2>No related work yet.</h2>
+          <p>
+            Relationships appear after solution efforts are linked to Problems,
+            Units, and capabilities.
+          </p>
+        </div>
+      </>
+    );
   const related = projects
     .slice(1)
     .map((p) => ({

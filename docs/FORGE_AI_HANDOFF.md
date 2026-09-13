@@ -4,7 +4,7 @@ Document purpose: transfer sufficient product, architecture, governance, and dev
 
 Repository: `xwildreaperx/forge-uas-capability-portal`  
 Branch inspected: `master`  
-Current checkpoint at inspection: `eb89d97`  
+Baseline checkpoint for the multi-user groundwork pass: `5795166`
 Information boundary: fictional, non-sensitive prototype data; UNCLASSIFIED INFORMATION ONLY
 
 ## 1. Executive Summary
@@ -48,6 +48,10 @@ The current problem state is fragmented visibility. Project knowledge may live i
 The desired future state is a discoverable network of approved capability-level knowledge. A user should be able to find a Problem, see every linked Solution Effort, compare unlike pathways, identify participating Units, inspect results and lessons, find the authoritative source, and resume work without reconstructing history from scratch. Leaders should see what matters without having to interpret technical detail; practitioners should still have access to that detail; and an external AI should receive structured, reviewed context when a user deliberately exports it.
 
 ## 4. Core Information Model
+
+The relational architecture also includes `User`, `UnitMembership`, `ProjectMembership`, and `ProblemSubmission`. Users have one of four roles and a Pending/Active/Disabled lifecycle. Unit-administrator scope and Project assignment are explicit; activity and created records can retain user attribution. Candidate Problems enter a separately governed review queue before becoming or linking to canonical Problems.
+
+Identity resolution is isolated in `lib/auth/current-user.ts`; reusable role/scope decisions live in `lib/auth/permissions.ts`. Local role testing uses a prominently labeled development-only identity cookie. This is not authentication and is forced off for production builds. Production identity integration should replace this adapter while preserving server-side permission enforcement.
 
 The Prisma schema is relational and uses explicit records for important relationships.
 

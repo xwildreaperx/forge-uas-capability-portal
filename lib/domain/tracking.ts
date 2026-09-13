@@ -5,6 +5,8 @@ const prefixes = {
   Project: 'PRJ',
   Unit: 'UNIT',
   Lesson: 'LES',
+  User: 'USR',
+  Submission: 'SUB',
 } as const;
 
 export function formatTrackingId(entity: keyof typeof prefixes, value: number) {

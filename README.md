@@ -19,6 +19,17 @@ Persistent operations are server-side:
 - `lib/domain/` contains pure matching, search, validation, and tracking-ID logic.
 - `app/api/` exposes mutations and duplicate-work lookup. `app/page.tsx` loads the initial server projection.
 
+`lib/auth/` is the future-authentication adapter and centralized authorization boundary. The local prototype resolves a development identity only when the switcher is enabled and `NODE_ENV` is not production. This is a role-testing aid, not login or authentication.
+
+## Roles and account lifecycle
+
+- **Contributor** reads permitted knowledge and submits potential Problems for review.
+- **Project User** also creates Projects and edits Projects they created or are assigned to.
+- **Unit Administrator** also manages users, submissions, and Project work only for explicitly administered Units.
+- **System Administrator** has platform-wide administrative scope.
+
+Accounts are Pending, Active, or Disabled. Unit membership, Unit-administrator scope, and Project membership are separate relational concepts. Disabled users retain attribution but cannot exercise permissions. Server mutations enforce permissions even when a UI control is hidden. Candidate Problem submissions remain separate from canonical Problem records until review.
+
 ## Three knowledge experiences
 
 - **Executive** is a one-minute, plain-language brief with the problem, approach, demonstrated result, risk, next step, and leadership action.
@@ -55,7 +66,7 @@ pnpm install
 copy .env.example .env
 pnpm db:generate
 pnpm exec prisma migrate deploy
-pnpm db:seed
+pnpm db:seed:demo
 pnpm dev
 ```
 
@@ -68,6 +79,8 @@ pnpm db:migrate --name descriptive_change
 ```
 
 Other useful commands are `pnpm db:generate`, `pnpm db:seed`, and `pnpm db:reset`. For an existing relational prototype database, `pnpm db:upgrade-solutions` applies the idempotent pathway demonstration data without resetting local records.
+
+Use `pnpm db:seed:demo` for fictional review history. Use `pnpm db:seed:clean` only when intentionally replacing the current database with a production-shaped empty baseline: it creates one generic System Administrator bootstrap identity and no operational records, credentials, or secrets. Set `FORGE_BOOTSTRAP_IDENTIFIER` before clean seeding and map or replace that identity during future authentication integration.
 
 ## Quality checks
 
@@ -93,7 +106,7 @@ All records are fictional and non-sensitive.
 
 - Conditional create forms currently focus on the highest-value identifying and evaluation fields; the schema retains additional context fields for progressive UI expansion.
 - Map geometry and graph layout are illustrative; their records and relationships are persisted.
-- Authentication, permissions, file storage, synchronization, and external integrations are omitted.
+- Passwords, CAC/SSO/Entra/AD/LDAP/SAML/OIDC/MFA, production sessions, file storage, synchronization, and external integrations are intentionally omitted. Identity and authorization groundwork is implemented; production authentication must replace the development adapter without weakening server checks.
 - SQLite is local-only. PostgreSQL migration requires changing the datasource provider/URL, creating a new migration baseline, and strengthening counter allocation; the relational model and data services can remain.
 
 ## Recommended next pass

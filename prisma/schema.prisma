@@ -26,6 +26,32 @@ enum DocumentationAvailability {
   NOT_YET_DOCUMENTED
 }
 
+enum UserRole {
+  CONTRIBUTOR
+  PROJECT_USER
+  UNIT_ADMIN
+  SYSTEM_ADMIN
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+enum ProjectMembershipRole {
+  PROJECT_LEAD
+  CONTRIBUTOR
+}
+
+enum ProblemSubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  DUPLICATE_LINKED
+  REJECTED
+}
+
 model TrackingCounter {
   entity String @id
   value  Int    @default(0)
@@ -43,25 +69,63 @@ model Location {
 }
 
 model Unit {
-  id                 Int             @id @default(autoincrement())
-  trackingId         String          @unique
-  name               String          @unique
-  abbreviation       String
-  unitType           String
-  parentOrganization String?
-  locationId         Int?
-  location           Location?       @relation(fields: [locationId], references: [id])
-  leadProjects       Project[]       @relation("LeadUnit")
-  projectLinks       ProjectUnit[]
-  problemLinks       ProblemUnit[]
-  capabilities       UnitTag[]
-  lessons            LessonLearned[]
-  activities         ActivityEvent[]
+  id                  Int                 @id @default(autoincrement())
+  trackingId          String              @unique
+  name                String              @unique
+  abbreviation        String
+  unitType            String
+  parentOrganization  String?
+  locationId          Int?
+  location            Location?           @relation(fields: [locationId], references: [id])
+  leadProjects        Project[]           @relation("LeadUnit")
+  projectLinks        ProjectUnit[]
+  problemLinks        ProblemUnit[]
+  capabilities        UnitTag[]
+  lessons             LessonLearned[]
+  activities          ActivityEvent[]
+  primaryUsers        User[]              @relation("PrimaryUnit")
+  userMemberships     UnitMembership[]
+  submissions         ProblemSubmission[]
+  isActive            Boolean             @default(true)
+  forgePointOfContact String?
+}
+
+model User {
+  id                  Int                 @id @default(autoincrement())
+  trackingId          String              @unique
+  displayName         String
+  identifier          String              @unique
+  role                UserRole            @default(CONTRIBUTOR)
+  status              AccountStatus       @default(PENDING)
+  title               String?
+  notes               String?
+  primaryUnitId       Int?
+  primaryUnit         Unit?               @relation("PrimaryUnit", fields: [primaryUnitId], references: [id])
+  unitMemberships     UnitMembership[]
+  projectMemberships  ProjectMembership[]
+  createdProjects     Project[]           @relation("ProjectCreator")
+  submissions         ProblemSubmission[] @relation("ProblemSubmitter")
+  reviewedSubmissions ProblemSubmission[] @relation("SubmissionReviewer")
+  activities          ActivityEvent[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  lastActivityAt      DateTime?
+}
+
+model UnitMembership {
+  userId    Int
+  unitId    Int
+  isPrimary Boolean @default(false)
+  isAdmin   Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit      Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@id([userId, unitId])
 }
 
 model Problem {
-  id                  Int               @id @default(autoincrement())
-  trackingId          String            @unique
+  id                  Int                 @id @default(autoincrement())
+  trackingId          String              @unique
   title               String
   shortDescription    String
   detailedDescription String
@@ -70,15 +134,40 @@ model Problem {
   priority            String
   status              String
   owner               String?
-  visibility          String            @default("Internal")
+  visibility          String              @default("Internal")
   dateIdentified      DateTime
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   projectLinks        ProblemProject[]
   unitLinks           ProblemUnit[]
   tags                ProblemTag[]
   locations           ProblemLocation[]
   activities          ActivityEvent[]
+  acceptedSubmissions ProblemSubmission[]
+}
+
+model ProblemSubmission {
+  id                Int                     @id @default(autoincrement())
+  trackingId        String                  @unique
+  title             String
+  description       String
+  category          String                  @default("Uncategorized")
+  operationalImpact String?
+  supportingContext String?
+  originatorContact String?
+  status            ProblemSubmissionStatus @default(SUBMITTED)
+  submitterId       Int
+  submitter         User                    @relation("ProblemSubmitter", fields: [submitterId], references: [id])
+  unitId            Int?
+  unit              Unit?                   @relation(fields: [unitId], references: [id])
+  reviewerId        Int?
+  reviewer          User?                   @relation("SubmissionReviewer", fields: [reviewerId], references: [id])
+  relatedProblemId  Int?
+  relatedProblem    Problem?                @relation(fields: [relatedProblemId], references: [id])
+  reviewNote        String?
+  createdAt         DateTime                @default(now())
+  reviewedAt        DateTime?
+  updatedAt         DateTime                @updatedAt
 }
 
 model Project {
@@ -135,6 +224,19 @@ model Project {
   vendorDetail                  VendorDetail?
   tacticDetail                  TacticDetail?
   trainingDetail                TrainingDetail?
+  createdByUserId               Int?
+  createdBy                     User?                     @relation("ProjectCreator", fields: [createdByUserId], references: [id])
+  userMemberships               ProjectMembership[]
+}
+
+model ProjectMembership {
+  userId    Int
+  projectId Int
+  role      ProjectMembershipRole @default(CONTRIBUTOR)
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
 }
 
 model VendorDetail {
@@ -300,22 +402,24 @@ model ProjectPhase {
   completedAt      DateTime?
   sortOrder        Int
   lessons          LessonLearned[]
+  createdByUserId  Int?
 }
 
 model LessonLearned {
-  id             Int           @id @default(autoincrement())
-  trackingId     String        @unique
-  title          String
-  finding        String
-  recommendation String
-  date           DateTime
-  projectId      Int
-  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  phaseId        Int?
-  phase          ProjectPhase? @relation(fields: [phaseId], references: [id])
-  unitId         Int?
-  unit           Unit?         @relation(fields: [unitId], references: [id])
-  tags           LessonTag[]
+  id              Int           @id @default(autoincrement())
+  trackingId      String        @unique
+  title           String
+  finding         String
+  recommendation  String
+  date            DateTime
+  projectId       Int
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseId         Int?
+  phase           ProjectPhase? @relation(fields: [phaseId], references: [id])
+  unitId          Int?
+  unit            Unit?         @relation(fields: [unitId], references: [id])
+  tags            LessonTag[]
+  createdByUserId Int?
 }
 
 model RepositoryLink {
@@ -328,6 +432,7 @@ model RepositoryLink {
   artifactType              String?
   documentationAvailability DocumentationAvailability @default(EXTERNAL_REFERENCE)
   includeInAiHandoff        Boolean                   @default(true)
+  createdByUserId           Int?
 }
 
 model ActivityEvent {
@@ -342,6 +447,8 @@ model ActivityEvent {
   project     Project? @relation(fields: [projectId], references: [id])
   unitId      Int?
   unit        Unit?    @relation(fields: [unitId], references: [id])
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
 }
 
 model HelpRequest {

@@ -46,6 +46,9 @@ const projectNames = [
 async function main() {
   await db.$transaction([
     db.activityEvent.deleteMany(),
+    db.problemSubmission.deleteMany(),
+    db.projectMembership.deleteMany(),
+    db.unitMembership.deleteMany(),
     db.helpRequest.deleteMany(),
     db.repositoryLink.deleteMany(),
     db.vendorDetail.deleteMany(),
@@ -64,6 +67,7 @@ async function main() {
     db.problemProject.deleteMany(),
     db.project.deleteMany(),
     db.problem.deleteMany(),
+    db.user.deleteMany(),
     db.unit.deleteMany(),
     db.tag.deleteMany(),
     db.location.deleteMany(),
@@ -126,6 +130,57 @@ async function main() {
               { tagId: tags[i % tags.length].id },
               { tagId: tags[(i + 3) % tags.length].id },
             ],
+          },
+        },
+      }),
+    ),
+  );
+
+  const users = await Promise.all(
+    [
+      [
+        'USR-000001',
+        'Casey Contributor',
+        'casey.contributor@example.invalid',
+        'CONTRIBUTOR',
+        0,
+      ],
+      [
+        'USR-000002',
+        'Parker Project User',
+        'parker.project@example.invalid',
+        'PROJECT_USER',
+        0,
+      ],
+      [
+        'USR-000003',
+        'Uma Unit Administrator',
+        'uma.unitadmin@example.invalid',
+        'UNIT_ADMIN',
+        0,
+      ],
+      [
+        'USR-000004',
+        'FORGE System Administrator',
+        'forge.systemadmin@example.invalid',
+        'SYSTEM_ADMIN',
+        1,
+      ],
+    ].map(([trackingId, displayName, identifier, role, unitIndex]) =>
+      db.user.create({
+        data: {
+          trackingId: String(trackingId),
+          displayName: String(displayName),
+          identifier: String(identifier),
+          role: String(role) as never,
+          status: 'ACTIVE',
+          primaryUnitId: units[Number(unitIndex)].id,
+          unitMemberships: {
+            create: {
+              unitId: units[Number(unitIndex)].id,
+              isPrimary: true,
+              isAdmin: role === 'UNIT_ADMIN',
+            },
           },
         },
       }),
@@ -539,6 +594,25 @@ async function main() {
       });
   }
 
+  await db.projectMembership.createMany({
+    data: [
+      { userId: users[1].id, projectId: projects[0].id, role: 'PROJECT_LEAD' },
+      { userId: users[2].id, projectId: projects[1].id, role: 'PROJECT_LEAD' },
+    ],
+  });
+  await db.problemSubmission.create({
+    data: {
+      trackingId: 'SUB-000001',
+      title: 'Potential resilient control-link gap',
+      description: 'Fictional submission awaiting Unit review.',
+      category: 'RF / Communications',
+      operationalImpact: 'Operators may lose useful range in complex terrain.',
+      submitterId: users[0].id,
+      unitId: units[0].id,
+      status: 'SUBMITTED',
+    },
+  });
+
   for (let i = 0; i < 44; i++)
     await db.activityEvent.create({
       data: {
@@ -572,6 +646,8 @@ async function main() {
       ['Project', 20],
       ['Unit', 12],
       ['Lesson', 20],
+      ['User', 4],
+      ['Submission', 1],
     ].map(([entity, value]) =>
       db.trackingCounter.create({
         data: { entity: String(entity), value: Number(value) },
@@ -579,7 +655,7 @@ async function main() {
     ),
   );
   console.log(
-    `Seeded ${problems.length} problems, ${projects.length} projects, ${units.length} units, 40 phases, 20 lessons, and 44 activities.`,
+    `Seeded ${problems.length} problems, ${projects.length} projects, ${units.length} units, ${users.length} users, one pending submission, 40 phases, 20 lessons, and 44 activities.`,
   );
 }
 
