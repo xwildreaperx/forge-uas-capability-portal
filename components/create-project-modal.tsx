@@ -26,6 +26,10 @@ export function CreateProjectModal({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedProblems, setSelectedProblems] = useState<number[]>([]);
+  const [selectedUnits, setSelectedUnits] = useState<number[]>([]);
+  const [problemSearch, setProblemSearch] = useState('');
+  const [unitSearch, setUnitSearch] = useState('');
+  const [leadUnitId, setLeadUnitId] = useState(data.units[0]?.dbId ?? 0);
   const includesVendor = type === 'VENDOR_SOLUTION' || type === 'HYBRID';
   const includesTactic = type === 'TACTIC_TECHNIQUE' || type === 'HYBRID';
   const includesTraining = type === 'TRAINING' || type === 'HYBRID';
@@ -58,8 +62,7 @@ export function CreateProjectModal({
           setSaving(true);
           setError('');
           const form = new FormData(e.currentTarget);
-          const unitIds = form.getAll('unitIds').map(Number);
-          const leadUnitId = Number(form.get('leadUnitId'));
+          const unitIds = [...selectedUnits];
           if (!unitIds.includes(leadUnitId)) unitIds.push(leadUnitId);
           const body = {
             name: form.get('name'),
@@ -72,7 +75,7 @@ export function CreateProjectModal({
             completion: form.get('completion'),
             leadUnitId,
             unitIds,
-            problemIds: form.getAll('problemIds').map(Number),
+            problemIds: selectedProblems,
             tags: form.getAll('tags'),
             locations: form.getAll('locations'),
             documentationAvailability: form.get('documentationAvailability'),
@@ -279,7 +282,8 @@ export function CreateProjectModal({
         </div>
         <fieldset>
           <legend>Problems addressed</legend>
-          {data.problems.map((p) => (
+          <input aria-label="Search Problems" placeholder="Search by Problem ID, title, or category" value={problemSearch} onChange={(event) => setProblemSearch(event.target.value)} />
+          {data.problems.filter((problem) => `${problem.id} ${problem.title} ${problem.category}`.toLowerCase().includes(problemSearch.toLowerCase())).map((p) => (
             <label className="checkline" key={p.id}>
               <input
                 type="checkbox"
@@ -327,8 +331,9 @@ export function CreateProjectModal({
         )}
         <label>
           Lead unit
-          <select name="leadUnitId">
-            {data.units.map((u) => (
+          <input aria-label="Search Lead Units" placeholder="Filter by Unit ID, name, or abbreviation" value={unitSearch} onChange={(event) => setUnitSearch(event.target.value)} />
+          <select name="leadUnitId" value={leadUnitId} onChange={(event) => setLeadUnitId(Number(event.target.value))}>
+            {data.units.filter((unit) => unit.dbId === leadUnitId || `${unit.id} ${unit.name} ${unit.abbreviation}`.toLowerCase().includes(unitSearch.toLowerCase())).map((u) => (
               <option key={u.id} value={u.dbId}>
                 {u.name}
               </option>
@@ -337,9 +342,9 @@ export function CreateProjectModal({
         </label>
         <fieldset>
           <legend>Participating units</legend>
-          {data.units.map((u) => (
+          {data.units.filter((unit) => `${unit.id} ${unit.name} ${unit.abbreviation}`.toLowerCase().includes(unitSearch.toLowerCase())).map((u) => (
             <label className="checkline" key={u.id}>
-              <input type="checkbox" name="unitIds" value={u.dbId} />
+              <input type="checkbox" name="unitIds" value={u.dbId} checked={selectedUnits.includes(u.dbId)} onChange={(event) => setSelectedUnits((current) => event.target.checked ? [...current, u.dbId] : current.filter((id) => id !== u.dbId))} />
               {u.name}
             </label>
           ))}

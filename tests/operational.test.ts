@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { db } from '../lib/db.ts';
-import { addProjectPhase, addProjectUpdate, createProject, ProblemMatchReviewRequired, submitProblem } from '../lib/data/mutations.ts';
+import { addProjectPhase, addProjectUpdate, createProject, manageProjectTeam, ProblemMatchReviewRequired, submitProblem, updateProjectRelationships } from '../lib/data/mutations.ts';
 import { getPortalData } from '../lib/data/portal.ts';
-import { canAccessUnit, hasPermission, type CurrentUserContext } from '../lib/auth/permissions.ts';
+import { canAccessUnit, canEditProject, hasPermission, type CurrentUserContext } from '../lib/auth/permissions.ts';
 import { findProjectsForProblems, findRelatedProblems, isPotentiallySimilarProject } from '../lib/domain/matching.ts';
 import { projectHandoffMarkdown } from '../lib/domain/handoff.ts';
 
@@ -134,4 +134,74 @@ test('clean operational initialization, discovery, and authorization remain vali
   assert.equal(canAccessUnit(unitAdmin, firstUnit.id), true);
   assert.equal(canAccessUnit(unitAdmin, secondUnit.id), false);
   assert.equal(hasPermission({ ...systemAdmin, status: 'DISABLED' }, 'platform:admin'), false);
+
+  const teamUserRecord = await db.user.create({ data: { trackingId: 'USR-000004', displayName: 'Temporary Project Team Member', identifier: 'temporary-team-member', role: 'PROJECT_USER', status: 'ACTIVE', primaryUnitId: secondUnit.id, unitMemberships: { create: { unitId: secondUnit.id, isPrimary: true } } } });
+  const teamUser = context(teamUserRecord, [secondUnit.id]);
+  await manageProjectTeam(projectUser, project.id, { operation: 'ADD_CONTRIBUTOR', userId: teamUser.id });
+  let memberships = await db.projectMembership.findMany({ where: { projectId: project.id } });
+  assert.equal(memberships.find((item) => item.userId === projectUser.id)?.role, 'PROJECT_LEAD');
+  assert.equal(memberships.find((item) => item.userId === teamUser.id)?.role, 'CONTRIBUTOR');
+  const assignedTeamUser = { ...teamUser, projectIds: [project.id] };
+  assert.equal(canEditProject(assignedTeamUser, { id: project.id, leadUnitId: firstUnit.id, createdByUserId: projectUser.id }), true);
+  const contributorUpdate = await addProjectUpdate(assignedTeamUser, project.id, { summary: 'Contributor recorded a durable update.', result: 'Team access was verified.', nextStep: 'Continue acceptance testing.' });
+  await manageProjectTeam(projectUser, project.id, { operation: 'REMOVE_CONTRIBUTOR', userId: teamUser.id });
+  await assert.rejects(
+    addProjectUpdate(teamUser, project.id, { summary: 'Removed contributor update.', result: 'No result.', nextStep: 'None.' }),
+    /permission|assigned, created, or administered-Unit Projects/,
+  );
+  await manageProjectTeam(projectUser, project.id, { operation: 'ADD_CONTRIBUTOR', userId: teamUser.id });
+  await manageProjectTeam(projectUser, project.id, { operation: 'CHANGE_LEAD', userId: teamUser.id });
+  memberships = await db.projectMembership.findMany({ where: { projectId: project.id } });
+  assert.equal(memberships.find((item) => item.userId === projectUser.id)?.role, 'CONTRIBUTOR');
+  assert.equal(memberships.find((item) => item.userId === teamUser.id)?.role, 'PROJECT_LEAD');
+  assert.equal((await db.projectUpdate.findUniqueOrThrow({ where: { id: contributorUpdate.id } })).authorId, teamUser.id);
+  await assert.rejects(
+    manageProjectTeam(projectUser, project.id, { operation: 'REMOVE_CONTRIBUTOR', userId: teamUser.id }),
+    /Only the current Project Lead/,
+  );
+  const unrelatedUnitAdmin = { ...unitAdmin, administeredUnitIds: [secondUnit.id] };
+  await assert.rejects(
+    manageProjectTeam(unrelatedUnitAdmin, project.id, { operation: 'CHANGE_LEAD', userId: projectUser.id }),
+    /Only the current Project Lead/,
+  );
+  await db.user.update({ where: { id: teamUser.id }, data: { status: 'DISABLED' } });
+  const inactiveProjection = (await getPortalData(systemAdmin)).projects.find((item) => item.id === project.trackingId)!;
+  assert.equal(inactiveProjection.team.find((member) => member.userId === teamUser.id)?.status, 'DISABLED');
+  await manageProjectTeam(unitAdmin, project.id, { operation: 'CHANGE_LEAD', userId: projectUser.id });
+
+  const thirdUserRecord = await db.user.create({ data: { trackingId: 'USR-000005', displayName: 'Temporary System-Assigned Contributor', identifier: 'temporary-system-assigned', role: 'PROJECT_USER', status: 'ACTIVE', primaryUnitId: firstUnit.id } });
+  await manageProjectTeam(systemAdmin, project.id, { operation: 'ADD_CONTRIBUTOR', userId: thirdUserRecord.id });
+  const secondProblem = await db.problem.findUniqueOrThrow({ where: { trackingId: 'PRB-000002' } });
+  await updateProjectRelationships(projectUser, project.id, {
+    problemIds: [problem.id, secondProblem.id], primaryProblemId: secondProblem.id,
+    unitIds: [firstUnit.id, secondUnit.id], leadUnitId: secondUnit.id,
+    unitRoles: { [firstUnit.id]: 'Testing' },
+  });
+  const relationships = await db.project.findUniqueOrThrow({
+    where: { id: project.id },
+    include: { problemLinks: true, unitLinks: true, userMemberships: true },
+  });
+  assert.equal(relationships.problemLinks.length, 2);
+  assert.equal(relationships.problemLinks.find((link) => link.problemId === secondProblem.id)?.isPrimary, true);
+  assert.equal(relationships.unitLinks.find((link) => link.unitId === secondUnit.id)?.role, 'Lead');
+  assert.equal(relationships.unitLinks.find((link) => link.unitId === firstUnit.id)?.role, 'Testing');
+  assert.equal(relationships.userMemberships.find((member) => member.role === 'PROJECT_LEAD')?.userId, projectUser.id);
+  await assert.rejects(
+    updateProjectRelationships(projectUser, project.id, { problemIds: [], primaryProblemId: 0, unitIds: [secondUnit.id], leadUnitId: secondUnit.id }),
+    /at least one|Primary Problem/,
+  );
+  await updateProjectRelationships(projectUser, project.id, {
+    problemIds: [secondProblem.id], primaryProblemId: secondProblem.id,
+    unitIds: [secondUnit.id], leadUnitId: secondUnit.id,
+  });
+  assert.equal(await db.problemProject.count({ where: { projectId: project.id } }), 1);
+  const finalProjection = (await getPortalData(systemAdmin)).projects.find((item) => item.id === project.trackingId)!;
+  assert.equal(finalProjection.createdByUserId, projectUser.id);
+  assert.equal(finalProjection.team.find((member) => member.role === 'PROJECT_LEAD')?.userId, projectUser.id);
+  const handoff = projectHandoffMarkdown(finalProjection);
+  assert.match(handoff, /Current Project Team/);
+  assert.match(handoff, /Temporary Acceptance Project User/);
+  assert.match(handoff, /PRB-000002/);
+  assert.match(handoff, new RegExp(secondUnit.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.ok((await getPortalData(systemAdmin)).activities.some((event) => /Lead Unit changed|Project Lead changed/.test(event.description)));
 });

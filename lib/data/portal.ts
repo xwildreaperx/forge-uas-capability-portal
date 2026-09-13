@@ -32,6 +32,7 @@ export async function getPortalData(
     availableUsers,
     directoryUsers,
     submissions,
+    projectDirectoryUsers,
   ] = await Promise.all([
     db.problem.findMany({
       orderBy: { trackingId: 'asc' },
@@ -77,6 +78,11 @@ export async function getPortalData(
         vendorDetail: true,
         tacticDetail: true,
         trainingDetail: true,
+        createdBy: { select: { displayName: true } },
+        userMemberships: {
+          orderBy: { role: 'desc' },
+          include: { user: { include: { primaryUnit: true } } },
+        },
       },
     }),
     db.unit.findMany({
@@ -129,6 +135,12 @@ export async function getPortalData(
               : { unitId: { in: currentUser?.administeredUnitIds ?? [] } },
           orderBy: { createdAt: 'desc' },
           include: { submitter: true, unit: true, relatedProblem: true },
+        })
+      : Promise.resolve([]),
+    currentUser
+      ? db.user.findMany({
+          orderBy: { displayName: 'asc' },
+          include: { primaryUnit: true },
         })
       : Promise.resolve([]),
   ]);
@@ -203,6 +215,18 @@ export async function getPortalData(
       keyAdvantage: p.keyAdvantage ?? '',
       keyLimitation: p.keyLimitation ?? '',
       latestResult: p.latestResult ?? '',
+      createdByUserId: p.createdByUserId,
+      createdByName: p.createdBy?.displayName ?? 'Unknown creator',
+      team: p.userMemberships.map((membership) => ({
+        userId: membership.user.id,
+        trackingId: membership.user.trackingId,
+        displayName: membership.user.displayName,
+        identifier: membership.user.identifier,
+        title: membership.user.title ?? '',
+        status: membership.user.status,
+        primaryUnit: membership.user.primaryUnit?.name ?? 'No primary Unit',
+        role: membership.role,
+      })),
       problems: p.problemLinks.map((x) => ({
         id: x.problem.trackingId,
         title: x.problem.title,
@@ -365,6 +389,16 @@ export async function getPortalData(
       administeredUnitIds: user.unitMemberships
         .filter((item) => item.isAdmin)
         .map((item) => item.unitId),
+    })),
+    projectDirectoryUsers: projectDirectoryUsers.map((user) => ({
+      id: user.id,
+      trackingId: user.trackingId,
+      displayName: user.displayName,
+      identifier: user.identifier,
+      title: user.title ?? '',
+      status: user.status,
+      primaryUnit: user.primaryUnit?.name ?? 'No primary Unit',
+      primaryUnitId: user.primaryUnitId,
     })),
     submissions: submissions.map((item) => ({
       id: item.id,

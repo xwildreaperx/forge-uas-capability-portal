@@ -30,6 +30,8 @@ Persistent operations are server-side:
 
 Accounts are Pending, Active, or Disabled. Unit membership, Unit-administrator scope, and Project membership are separate relational concepts. Disabled users retain attribution but cannot exercise permissions. Server mutations enforce permissions even when a UI control is hidden. Candidate Problem submissions remain separate from canonical Problem records until review.
 
+Every Project has exactly one current Project Lead and may have multiple Contributors. Creation records the creator as the initial Lead; later Lead changes preserve the creator and all historical authorship. Current Project Leads, the Lead Unit's administrators, and System Administrators may manage the team. Assigned active contributors may maintain Project content, while removing an assignment removes that edit scope. Disabled members remain visible as inactive historical participants until an authorized maintainer reassigns or removes them.
+
 ## Three knowledge experiences
 
 - **Executive** is a one-minute, plain-language brief with the problem, approach, demonstrated result, risk, next step, and leadership action.
@@ -51,6 +53,7 @@ The database—not browser storage—is the source of truth. Client state is lim
 - `ProblemProject`: explicit many-to-many Problem ↔ Project junction with `isPrimary` metadata.
 - `ProjectUnit`: explicit many-to-many Project ↔ Unit junction with Lead, Supporting, and Testing roles.
 - `Project.leadUnitId`: distinct required Lead Unit.
+- `ProjectMembership`: explicit Project ↔ User assignment with exactly one current Project Lead maintained by application transactions.
 - `ProblemUnit`: Reporter/Affected Unit relationships.
 - Explicit tag and location junctions connect Problems, Projects, Units, and Lessons.
 - Phases, Lessons, repository links, activities, and help requests use foreign keys.
@@ -92,7 +95,7 @@ pnpm test
 pnpm build
 ```
 
-Tests cover both many-to-many relationships, the Lead Unit, tracking formats, persisted Problem/Project creation, conditional organic/vendor/TTP/training detail persistence, multi-Problem and multi-Unit links, exact ID/keyword search, solution-type/vendor filtering, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
+Tests cover both many-to-many relationships, Lead Unit and Project Lead invariants, scoped team management, contributor edit access, durable attribution, tracking formats, persisted Problem/Project creation, editable multi-Problem and multi-Unit links, conditional organic/vendor/TTP/training detail persistence, exact ID/keyword search, solution-type/vendor filtering, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
 
 ## Seed and persistence
 
@@ -118,7 +121,7 @@ Dashboard, search, comparison, Units, map markers, Related Work, Capability Grap
 
 Problem intake performs deterministic, server-backed canonicalization checks using the proposed title and description. It explains Possible Duplicate and Related Problem suggestions, preserves directional and aircraft-type distinctions, and lets Contributors either link an observation to an existing canonical Problem or deliberately continue into governed review. Solution Effort creation separately surfaces Projects already linked to selected Problems; parallel Projects remain permitted.
 
-Routine maintenance uses first-class Project Updates. One concise entry records chronological progress, author and optional Phase, refreshes Latest Result and optional Project state, drives meaningful activity/freshness, and contributes automatically to Executive facts and portable AI Handoff history.
+Routine maintenance uses first-class Project Updates. One concise entry records chronological progress, author and optional Phase, refreshes Latest Result and optional Project state, drives meaningful activity/freshness, and contributes automatically to Executive facts and portable AI Handoff history. Project pages also expose governed team and relationship management: searchable user, Problem, and Unit selection; explicit Lead/Contributor and Lead/Supporting/Testing roles; existing-work awareness; human-readable activity events; and consistent team context across Executive, Technical, and AI views.
 
 Demo-seed records are fictional and non-sensitive. Clean-seed records are controlled stakeholder-supplied capability abstractions and approved organization names.
 

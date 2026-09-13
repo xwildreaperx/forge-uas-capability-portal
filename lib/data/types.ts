@@ -39,6 +39,18 @@ export type PortalProject = {
   keyAdvantage: string;
   keyLimitation: string;
   latestResult: string;
+  createdByUserId: number | null;
+  createdByName: string;
+  team: {
+    userId: number;
+    trackingId: string;
+    displayName: string;
+    identifier: string;
+    title: string;
+    status: string;
+    primaryUnit: string;
+    role: 'PROJECT_LEAD' | 'CONTRIBUTOR';
+  }[];
   problems: { id: string; title: string; isPrimary: boolean }[];
   units: { id: string; name: string; role: string }[];
   tags: string[];
@@ -203,6 +215,16 @@ export type PortalData = {
     primaryUnit: string;
     unitIds: number[];
     administeredUnitIds: number[];
+  }[];
+  projectDirectoryUsers: {
+    id: number;
+    trackingId: string;
+    displayName: string;
+    identifier: string;
+    title: string;
+    status: string;
+    primaryUnit: string;
+    primaryUnitId: number | null;
   }[];
   submissions: {
     id: number;

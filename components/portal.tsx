@@ -924,7 +924,8 @@ function ProjectView({
   const [experience, setExperience] = useState<
     'executive' | 'technical' | 'ai'
   >('executive');
-  const { projects, units, session } = useData();
+  const data = useData();
+  const { projects, units, session } = data;
   const project =
     projects.find((x) => x.id === id) ??
     projects.find((x) => x.id === 'PRJ-000001');
@@ -953,9 +954,16 @@ function ProjectView({
     current &&
     current.status === 'ACTIVE' &&
     (current.role === 'SYSTEM_ADMIN' ||
+      project.createdByUserId === current.id ||
       current.projectIds.includes(project.dbId) ||
       (current.role === 'UNIT_ADMIN' &&
         current.administeredUnitIds.includes(lead.dbId))),
+  );
+  const canManageTeam = Boolean(
+    current && current.status === 'ACTIVE' &&
+    (current.role === 'SYSTEM_ADMIN' ||
+      project.team.some((member) => member.userId === current.id && member.role === 'PROJECT_LEAD') ||
+      (current.role === 'UNIT_ADMIN' && current.administeredUnitIds.includes(lead.dbId))),
   );
   return (
     <>
@@ -992,7 +1000,7 @@ function ProjectView({
           </button>
         </div>
       </div>
-      {canEdit && <ProjectActions project={project} />}
+      {canEdit && <ProjectActions project={project} data={data} canManageTeam={canManageTeam} />}
       {experience === 'executive' ? (
         <ExecutiveSplash
           project={project}
@@ -1023,11 +1031,16 @@ function ExecutiveSplash({
   const currentPhase =
     project.phases.find((p) => p.status !== 'Complete') ??
     project.phases.at(-1);
+  const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
   const copyOriginator = () =>
     navigator.clipboard.writeText(
       [project.originatorContact, project.accessInstructions]
         .filter(Boolean)
         .join('\n'),
+    );
+  const copyProjectLead = () =>
+    projectLead && navigator.clipboard.writeText(
+      [projectLead.displayName, projectLead.identifier, projectLead.primaryUnit].filter(Boolean).join('\n'),
     );
   return (
     <div className="executive-splash">
@@ -1110,6 +1123,11 @@ function ExecutiveSplash({
             <ChevronRight />
           </button>
           <div className="documentation-line">
+            <strong>Project Lead: {projectLead?.displayName ?? 'Not assigned'}</strong>
+            <small>{projectLead ? `${projectLead.title || projectLead.primaryUnit} · ${projectLead.identifier}${projectLead.status !== 'ACTIVE' ? ' · Inactive account' : ''}` : 'An authorized administrator should assign current responsibility.'}</small>
+          </div>
+          {projectLead && <button className="secondary" onClick={copyProjectLead}>Copy Project Lead contact</button>}
+          <div className="documentation-line">
             <strong>{project.documentationLabel}</strong>
             {project.accessInstructions && (
               <small>{project.accessInstructions}</small>
@@ -1130,6 +1148,8 @@ function ExecutiveSplash({
 }
 
 function TechnicalView({ project }: { project: PortalProject }) {
+  const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
+  const contributors = project.team.filter((member) => member.role === 'CONTRIBUTOR');
   return (
     <div className="detail-grid">
       <div className="security-callout span-2">
@@ -1141,6 +1161,19 @@ function TechnicalView({ project }: { project: PortalProject }) {
         </p>
       </div>
       <SolutionDetail project={project} />
+      <section className="panel span-2 project-team-panel">
+        <PanelHead title="Project team and relationships" note="Current responsibility and authorized maintainers" />
+        <div className="team-responsibility-grid">
+          <div><small>Lead Unit</small><strong>{project.unit}</strong></div>
+          <div><small>Project Lead</small><strong>{projectLead?.displayName ?? 'Not assigned'}</strong><span>{projectLead?.identifier || ''}{projectLead?.status !== 'ACTIVE' ? ' · Inactive account' : ''}</span></div>
+          <div><small>Created by</small><strong>{project.createdByName}</strong></div>
+        </div>
+        <div className="team-columns">
+          <div><h3>Project Contributors</h3>{contributors.length ? contributors.map((member) => <p key={member.userId}><strong>{member.displayName}</strong><span>{member.primaryUnit}{member.status !== 'ACTIVE' ? ' · Inactive account' : ''}</span></p>) : <p>No additional Contributors assigned.</p>}</div>
+          <div><h3>Participating Units</h3>{project.units.map((unit) => <p key={unit.id}><strong>{unit.name}</strong><span>{unit.role}</span></p>)}</div>
+          <div><h3>Problems addressed</h3>{project.problems.map((problem) => <p key={problem.id}><strong>{problem.id}</strong><span>{problem.title}{problem.isPrimary ? ' · Primary' : ''}</span></p>)}</div>
+        </div>
+      </section>
       <section className="panel span-2">
         <PanelHead
           title="Project updates"

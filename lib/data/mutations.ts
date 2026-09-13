@@ -456,6 +456,187 @@ export async function updateProject(
   });
 }
 
+async function projectForOperations(projectId: number) {
+  return db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    include: {
+      leadUnit: true,
+      problemLinks: { include: { problem: true } },
+      unitLinks: { include: { unit: true } },
+      userMemberships: { include: { user: true } },
+    },
+  });
+}
+
+function assertTeamManagement(
+  user: CurrentUserContext | null,
+  project: Awaited<ReturnType<typeof projectForOperations>>,
+) {
+  const actor = requirePermission(user, 'project:edit');
+  const isLead = project.userMemberships.some(
+    (membership) =>
+      membership.userId === actor.id && membership.role === 'PROJECT_LEAD',
+  );
+  const isLeadUnitAdmin =
+    actor.role === 'UNIT_ADMIN' &&
+    actor.administeredUnitIds.includes(project.leadUnitId);
+  if (actor.role !== 'SYSTEM_ADMIN' && !isLead && !isLeadUnitAdmin)
+    throw new Error(
+      'Only the current Project Lead, Lead Unit Administrator, or System Administrator may manage the Project team.',
+    );
+  return actor;
+}
+
+export async function manageProjectTeam(
+  user: CurrentUserContext | null,
+  projectId: number,
+  input: Record<string, unknown>,
+) {
+  const project = await projectForOperations(projectId);
+  const actor = assertTeamManagement(user, project);
+  const operation = String(input.operation);
+  if (!['ADD_CONTRIBUTOR', 'REMOVE_CONTRIBUTOR', 'CHANGE_LEAD'].includes(operation))
+    throw new Error('Invalid Project team operation.');
+  const userId = Number(input.userId);
+  if (!Number.isInteger(userId) || userId < 1) throw new Error('A valid user is required.');
+  const target = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const existing = project.userMemberships.find((item) => item.userId === userId);
+  const currentLead = project.userMemberships.find(
+    (item) => item.role === 'PROJECT_LEAD',
+  );
+  if (operation !== 'REMOVE_CONTRIBUTOR' && target.status !== 'ACTIVE')
+    throw new Error('Disabled users cannot be assigned as active Project maintainers.');
+  if (operation === 'REMOVE_CONTRIBUTOR' && existing?.role === 'PROJECT_LEAD')
+    throw new Error('Assign a new Project Lead before removing the current Lead.');
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    let description: string;
+    if (operation === 'ADD_CONTRIBUTOR') {
+      if (existing) throw new Error('This user is already on the Project team.');
+      await tx.projectMembership.create({
+        data: { projectId, userId, role: 'CONTRIBUTOR' },
+      });
+      description = `${target.displayName} added as a Project Contributor.`;
+    } else if (operation === 'REMOVE_CONTRIBUTOR') {
+      if (!existing) throw new Error('This user is not on the Project team.');
+      await tx.projectMembership.delete({ where: { userId_projectId: { userId, projectId } } });
+      description = `${target.displayName} removed as a Project Contributor.`;
+    } else {
+      if (currentLead?.userId === userId)
+        throw new Error('This user is already the Project Lead.');
+      await tx.projectMembership.updateMany({
+        where: { projectId, role: 'PROJECT_LEAD', userId: { not: userId } },
+        data: { role: 'CONTRIBUTOR' },
+      });
+      await tx.projectMembership.upsert({
+        where: { userId_projectId: { userId, projectId } },
+        update: { role: 'PROJECT_LEAD' },
+        create: { userId, projectId, role: 'PROJECT_LEAD' },
+      });
+      description = `Project Lead changed from ${currentLead?.user.displayName ?? 'Unassigned'} to ${target.displayName}.`;
+    }
+    await tx.project.update({
+      where: { id: projectId },
+      data: { lastMeaningfulActivityAt: occurredAt },
+    });
+    await tx.activityEvent.create({
+      data: {
+        timestamp: occurredAt,
+        eventType: operation,
+        description,
+        actor: actor.displayName,
+        projectId,
+        unitId: project.leadUnitId,
+        userId: actor.id,
+      },
+    });
+    return tx.projectMembership.findMany({ where: { projectId } });
+  });
+}
+
+export async function updateProjectRelationships(
+  user: CurrentUserContext | null,
+  projectId: number,
+  input: Record<string, unknown>,
+) {
+  const project = await projectForOperations(projectId);
+  const actor = assertProjectEdit(user, project);
+  const problemIds = integerIds(input.problemIds, 'Problem IDs');
+  const primaryProblemId = Number(input.primaryProblemId);
+  if (!problemIds.includes(primaryProblemId))
+    throw new Error('Primary Problem must remain linked to the Project.');
+  const requestedUnitIds = integerIds(input.unitIds, 'Unit IDs');
+  const leadUnitId = Number(input.leadUnitId);
+  const unitIds = [...new Set([...requestedUnitIds, leadUnitId])];
+  const [problems, units] = await Promise.all([
+    db.problem.findMany({ where: { id: { in: problemIds } } }),
+    db.unit.findMany({ where: { id: { in: unitIds } } }),
+  ]);
+  if (problems.length !== problemIds.length) throw new Error('One or more Problems are invalid.');
+  if (units.length !== unitIds.length) throw new Error('One or more Units are invalid.');
+  const roles =
+    input.unitRoles && typeof input.unitRoles === 'object'
+      ? (input.unitRoles as Record<string, unknown>)
+      : {};
+  const allowedRoles = new Set(['Supporting', 'Testing']);
+  const occurredAt = new Date();
+  const oldProblems = new Map(project.problemLinks.map((x) => [x.problemId, x]));
+  const oldUnits = new Map(project.unitLinks.map((x) => [x.unitId, x]));
+  const descriptions: string[] = [];
+  for (const problem of problems) {
+    if (!oldProblems.has(problem.id))
+      descriptions.push(`${problem.trackingId} — ${problem.title} added to the Project.`);
+    else if (problem.id === primaryProblemId && !oldProblems.get(problem.id)?.isPrimary)
+      descriptions.push(`${problem.trackingId} — ${problem.title} set as the primary Problem.`);
+  }
+  for (const link of project.problemLinks) {
+    if (!problemIds.includes(link.problemId))
+      descriptions.push(`${link.problem.trackingId} — ${link.problem.title} removed from the Project.`);
+  }
+  for (const unit of units) {
+    const role = unit.id === leadUnitId ? 'Lead' : allowedRoles.has(String(roles[unit.id])) ? String(roles[unit.id]) : 'Supporting';
+    const previous = oldUnits.get(unit.id);
+    if (!previous) descriptions.push(`${unit.name} added as a ${role} Unit.`);
+    else if (previous.role !== role) descriptions.push(`${unit.name} role changed from ${previous.role} to ${role}.`);
+  }
+  for (const link of project.unitLinks) {
+    if (!unitIds.includes(link.unitId)) descriptions.push(`${link.unit.name} removed from participating Units.`);
+  }
+  if (project.leadUnitId !== leadUnitId) {
+    const nextLead = units.find((unit) => unit.id === leadUnitId)!;
+    descriptions.push(`Lead Unit changed from ${project.leadUnit.name} to ${nextLead.name}.`);
+  }
+  if (!descriptions.length) throw new Error('No relationship changes were selected.');
+
+  return db.$transaction(async (tx) => {
+    await tx.problemProject.deleteMany({ where: { projectId, problemId: { notIn: problemIds } } });
+    for (const problemId of problemIds) {
+      await tx.problemProject.upsert({
+        where: { problemId_projectId: { problemId, projectId } },
+        update: { isPrimary: problemId === primaryProblemId },
+        create: { problemId, projectId, isPrimary: problemId === primaryProblemId },
+      });
+    }
+    await tx.projectUnit.deleteMany({ where: { projectId, unitId: { notIn: unitIds } } });
+    for (const unitId of unitIds) {
+      const role = unitId === leadUnitId ? 'Lead' : allowedRoles.has(String(roles[unitId])) ? String(roles[unitId]) : 'Supporting';
+      await tx.projectUnit.upsert({
+        where: { projectId_unitId: { projectId, unitId } },
+        update: { role },
+        create: { projectId, unitId, role },
+      });
+    }
+    await tx.project.update({ where: { id: projectId }, data: { leadUnitId, lastMeaningfulActivityAt: occurredAt } });
+    await tx.activityEvent.createMany({
+      data: descriptions.map((description) => ({
+        timestamp: occurredAt, eventType: 'PROJECT_RELATIONSHIP_CHANGED', description,
+        actor: actor.displayName, projectId, unitId: leadUnitId, userId: actor.id,
+      })),
+    });
+    return tx.project.findUniqueOrThrow({ where: { id: projectId } });
+  });
+}
+
 export async function resolveProjectId(trackingId: string) {
   const project = await db.project.findUnique({
     where: { trackingId },

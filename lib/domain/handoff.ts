@@ -37,6 +37,9 @@ export function projectHandoffMarkdown(
         )
         .join('\n')
     : 'No Project Updates are recorded.';
+  const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
+  const contributors = project.team.filter((member) => member.role === 'CONTRIBUTOR');
+  phases = `### Current Project Team\nCreated by: ${project.createdByName}\nProject Lead: ${projectLead ? `${projectLead.displayName} (${projectLead.identifier}; ${projectLead.status})` : 'Not assigned'}\nContributors: ${contributors.length ? contributors.map((member) => `${member.displayName} (${member.status})`).join(', ') : 'None assigned'}\n\n${phases}`;
   phases += `\n\n### Chronological Project Updates\nLast meaningful activity: ${project.lastMeaningfulActivityAt}\n${updateHistory}`;
   const lessons = project.lessons.length
     ? project.lessons

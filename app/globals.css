@@ -2092,6 +2092,81 @@ main {
 .update-risk {
   color: #7b3f18;
 }
+.team-roster,
+.team-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.team-roster > div,
+.team-responsibility-grid > div,
+.team-columns > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px;
+  background: #f8faf9;
+}
+.team-roster strong,
+.team-roster span,
+.team-roster b,
+.team-responsibility-grid small,
+.team-responsibility-grid strong,
+.team-responsibility-grid span,
+.team-columns p strong,
+.team-columns p span {
+  display: block;
+}
+.team-roster span,
+.team-responsibility-grid span,
+.team-columns p span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.team-roster b {
+  color: #8a451b;
+  font-size: 12px;
+}
+.team-responsibility-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.team-columns h3 {
+  margin: 0 0 8px;
+}
+.team-columns p {
+  margin: 8px 0;
+}
+.relationship-picker {
+  max-height: 280px;
+  overflow: auto;
+}
+.relationship-picker > input {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: white;
+}
+.relationship-unit {
+  display: grid;
+  grid-template-columns: 1fr 150px;
+  align-items: center;
+  gap: 10px;
+}
+.existing-work-panel > a {
+  display: block;
+  margin-top: 7px;
+  color: var(--green);
+}
+@media (max-width: 700px) {
+  .team-roster,
+  .team-responsibility-grid,
+  .team-columns,
+  .relationship-unit {
+    grid-template-columns: 1fr;
+  }
+}
 .fact-grid {
   margin-top: 15px;
 }

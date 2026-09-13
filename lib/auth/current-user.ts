@@ -48,11 +48,16 @@ export async function getCurrentUser(): Promise<CurrentUserContext | null> {
 export async function getRequestUser(request: Request) {
   if (!isDevUserSwitcherEnabled()) return null;
   const explicit = Number(request.headers.get('x-forge-dev-user'));
-  if (Number.isInteger(explicit) && explicit > 0)
-    return userContextById(explicit);
+  if (Number.isInteger(explicit) && explicit > 0) {
+    const explicitUser = await userContextById(explicit);
+    if (explicitUser) return explicitUser;
+  }
   const match = request.headers
     .get('cookie')
     ?.match(/(?:^|;\s*)forge_dev_user=(\d+)/);
-  if (match) return userContextById(Number(match[1]));
+  if (match) {
+    const selectedUser = await userContextById(Number(match[1]));
+    if (selectedUser) return selectedUser;
+  }
   return getCurrentUser();
 }
