@@ -112,6 +112,9 @@ export type PortalProblem = {
   id: string;
   title: string;
   description: string;
+  detailedDescription: string;
+  problemStatement: string;
+  owner: string;
   category: string;
   priority: string;
   status: string;
@@ -133,9 +136,12 @@ export type PortalUnit = {
   projectIds: string[];
   isActive: boolean;
   forgePointOfContact: string;
+  parentOrganization: string;
+  hasLocation: boolean;
 };
 
 export type PortalData = {
+  datasetMode: 'demo' | 'operational';
   problems: PortalProblem[];
   projects: PortalProject[];
   units: PortalUnit[];

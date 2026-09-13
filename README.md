@@ -80,7 +80,7 @@ pnpm db:migrate --name descriptive_change
 
 Other useful commands are `pnpm db:generate`, `pnpm db:seed`, and `pnpm db:reset`. For an existing relational prototype database, `pnpm db:upgrade-solutions` applies the idempotent pathway demonstration data without resetting local records.
 
-Use `pnpm db:seed:demo` for fictional review history. Use `pnpm db:seed:clean` only when intentionally replacing the current database with a production-shaped empty baseline: it creates one generic System Administrator bootstrap identity and no operational records, credentials, or secrets. Set `FORGE_BOOTSTRAP_IDENTIFIER` before clean seeding and map or replace that identity during future authentication integration.
+Use `pnpm db:seed:demo` for fictional review history. Use `pnpm db:seed:clean` only when intentionally resetting the current database to the approved sparse operational baseline described below. It creates no credentials or secrets. Set `FORGE_BOOTSTRAP_IDENTIFIER` before clean seeding and map or replace that identity during future authentication integration.
 
 ## Quality checks
 
@@ -96,11 +96,27 @@ Tests cover both many-to-many relationships, the Lead Unit, tracking formats, pe
 
 ## Seed and persistence
 
+### Initial operational dataset
+
+`pnpm db:seed:clean` is a destructive, deterministic reset to the controlled initial operational portfolio. It removes prior records, then creates exactly nine approved organizations, twelve stakeholder-supplied canonical capability Problems, zero Projects, six high-level category tags, and one generic bootstrap System Administrator profile. It creates no locations, Unit–Problem assignments, owners, inferred priorities, Project artifacts, or operational activity.
+
+Detailed Problem statements intentionally remain **Pending Stakeholder Refinement**. These summaries are discovery aids, not final requirements. Participating Units are expected to associate existing work and create their own Solution Efforts after stakeholder refinement.
+
+```bash
+# Demo — fictional development/test data; never use for operational initialization
+pnpm db:seed:demo
+
+# Clean Operational — resets to 9 Units, 12 Problems, and 0 Projects
+pnpm db:seed:clean
+```
+
+The clean operational initializer contains no fictional operational records. The demo initializer remains development-only. Both environments remain **UNCLASSIFIED INFORMATION ONLY**.
+
 The fictional seed contains 12 Problems, 20 Solution Efforts, 12 Units across 8 locations, 40 phases, 20 Lessons Learned, and 44 activities. `PRB-000001 — Short RF Range` has five deliberately different pathways: organic relay development, a commercial radio evaluation, a directional-antenna technique, an RF-planning training package, and an existing-radio configuration improvement.
 
 Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical/AI Handoff views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems and conditional Solution Efforts persist through server routes and survive refresh/restart. Detail pages are addressable at `/problems/[id]`, `/projects/[id]`, and `/units/[id]`; project pages expose edit, phase, Lesson, and repository forms. `/guide` explains the operating model and provides the portable platform manual.
 
-All records are fictional and non-sensitive.
+Demo-seed records are fictional and non-sensitive. Clean-seed records are controlled stakeholder-supplied capability abstractions and approved organization names.
 
 ## Remaining limitations
 

@@ -19,7 +19,9 @@ Contributors submit potential Problems into a review queue rather than directly 
 
 The amber **Development Only — Not Authentication** switcher exists solely for local role acceptance. It is gated by environment and cannot operate in a production build. Do not mistake it for password, SSO, CAC, or session security.
 
-`pnpm db:seed:demo` loads fictional demonstration history and representative users for every role. `pnpm db:seed:clean` removes operational/demo records and creates only one generic bootstrap System Administrator identity. Set `FORGE_BOOTSTRAP_IDENTIFIER` for the intended deployment context, then replace or map that identity when a real authentication adapter is implemented. Neither seed contains credentials.
+`pnpm db:seed:demo` loads fictional demonstration history and representative users for every role. `pnpm db:seed:clean` destructively resets the database to nine approved organizations, twelve initial canonical capability Problems, zero Solution Efforts, and one generic bootstrap System Administrator identity. Set `FORGE_BOOTSTRAP_IDENTIFIER` for the intended deployment context, then replace or map that identity when a real authentication adapter is implemented. Neither seed contains credentials.
+
+Missing detailed Problem information is intentional at this stage. A receiving AI should help stakeholders structure approved capability-level refinements when asked; it must not invent operational context, technical requirements, ownership, priority, Unit relationships, or proposed solutions. Demo records remain isolated in the development-only demo seed.
 
 Problems → Solution Efforts / Projects → Units → Capabilities → Phases and tests → Lessons → Outcomes.
 

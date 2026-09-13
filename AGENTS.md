@@ -24,3 +24,8 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - `prisma/seed.ts` is fictional demo data. `prisma/seed-clean.ts` is the empty operational baseline with only a generic bootstrap administrator.
 - Validate with Prisma validation and migration status, TypeScript, lint, tests, and production build.
 - Preserve Executive, Technical, AI Handoff, reference-only knowledge, and meaningful empty states.
+- Demo and clean operational initialization are intentionally separate. Never merge or silently load demo records into a clean environment.
+- The clean operational seed is a destructive reset to nine approved organizations, twelve stakeholder-supplied canonical Problems, zero Projects, and the generic bootstrap administrator.
+- The initial Problem summaries are discovery-level records. Detailed statements, ownership, priority, affected/reporting Units, requirements, and relationships are intentionally pending stakeholder refinement.
+- Do not invent Projects, Unit–Problem relationships, priorities, owners, locations, POCs, capabilities, requirements, solutions, or activity.
+- Keep fictional test/demo users and operational content isolated in the demo seed. Preserve authorization while testing clean data with temporary isolated fixtures.

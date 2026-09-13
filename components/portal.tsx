@@ -111,7 +111,19 @@ export function Portal({
         title: x.name,
         meta: `${x.solutionTypeLabel} · ${x.unit}`,
       }));
-    return [...problemMatches, ...projectMatches]
+    const unitMatches = data.units
+      .filter((x) =>
+        `${x.id} ${x.name} ${x.abbreviation} ${x.parentOrganization}`
+          .toLowerCase()
+          .includes(needle),
+      )
+      .map((x) => ({
+        type: 'Unit',
+        id: x.id,
+        title: x.name,
+        meta: `${x.abbreviation} · ${x.type}`,
+      }));
+    return [...problemMatches, ...projectMatches, ...unitMatches]
       .sort((a, b) =>
         a.id.toLowerCase() === needle
           ? -1
@@ -230,7 +242,11 @@ export function Portal({
                 </select>
               </div>
             )}
-            <div className="classification">FICTIONAL DATA</div>
+            <div className="classification">
+              {data.datasetMode === 'demo'
+                ? 'DEMO DATA — DEVELOPMENT ONLY'
+                : 'UNCLASSIFIED'}
+            </div>
             <button className="nav-item" onClick={() => router.push('/guide')}>
               <HelpCircle size={17} /> Help & guidance
             </button>
@@ -267,7 +283,11 @@ export function Portal({
                       key={m.id}
                       onClick={() => {
                         open(
-                          m.type === 'Project' ? 'projects' : 'problems',
+                          m.type === 'Project'
+                            ? 'projects'
+                            : m.type === 'Unit'
+                              ? 'units'
+                              : 'problems',
                           m.id,
                         );
                         setQuery('');
@@ -418,7 +438,7 @@ function Dashboard() {
           tone="violet"
           label="Participating Units"
           value={String(units.length)}
-          note={`Across ${new Set(units.map((x) => x.location)).size} locations`}
+          note={`${units.filter((x) => x.hasLocation).length} with approved location data`}
         />
         <Stat
           icon={<CircleDot />}
@@ -430,6 +450,15 @@ function Dashboard() {
           note={`${projects.filter((x) => x.status === 'Transitioning').length} ready to transition`}
         />
       </section>
+      {!projects.length && (
+        <div className="notice">
+          <Wrench size={18} />
+          <div>
+            <strong>{problems.length} initial capability Problems are ready for collaboration.</strong>
+            <p>Participating Units can now associate existing work and create Solution Efforts. Detailed Problem statements and prioritization remain pending stakeholder refinement.</p>
+          </div>
+        </div>
+      )}
       <section
         className="solution-strip"
         aria-label="Solution effort distribution"
@@ -457,7 +486,7 @@ function Dashboard() {
                 priority={p.priority.toUpperCase().slice(0, 4)}
                 title={`${p.id} · ${p.title}`}
                 meta={`${p.projectIds.length} projects · ${p.unitCount} units · ${p.category}`}
-                updated={i ? 'Updated 5h ago' : 'Updated 2h ago'}
+                updated={activities.length ? (i ? 'Recently updated' : 'Latest update') : 'Awaiting stakeholder refinement'}
               />
             ))}
           </div>
@@ -510,23 +539,27 @@ function Dashboard() {
           <PanelHead title="Network pulse" note="Last 7 days" />
           <div className="pulse">
             <div>
-              <strong>28</strong>
+              <strong>{activities.length}</strong>
               <span>Updates</span>
             </div>
             <div>
-              <strong>7</strong>
+              <strong>{activities.filter((item) => item.eventType === 'LESSON_ADDED').length}</strong>
               <span>Lessons</span>
             </div>
             <div>
-              <strong>5</strong>
+              <strong>{activities.filter((item) => item.eventType === 'TEST_RESULT').length}</strong>
               <span>Tests</span>
             </div>
           </div>
-          <div className="spark" aria-label="Activity trend">
-            {[25, 38, 32, 66, 54, 86, 72].map((n) => (
-              <i key={n} style={{ height: `${n}%` }} />
-            ))}
-          </div>
+          {activities.length ? (
+            <div className="spark" aria-label="Activity trend">
+              {[25, 38, 32, 66, 54, 86, 72].map((n) => (
+                <i key={n} style={{ height: `${n}%` }} />
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No operational activity has been recorded.</p>
+          )}
         </section>
       </div>
     </>
@@ -666,13 +699,12 @@ function ProblemView({
       </div>
       <div className="problem-hero">
         <div>
-          <span className="priority high">
-            {problem.priority.toUpperCase()} PRIORITY
+          <span className={`priority ${problem.priority === 'High' ? 'high' : 'med'}`}>
+            {problem.priority.toUpperCase()}
           </span>
           <h1>{problem.title}</h1>
           <p>
-            {problem.id} · {problem.category} · Reported by {problem.unitCount}{' '}
-            units
+            {problem.id} · {problem.category} · Owner: {problem.owner}
           </p>
         </div>
         <button className="create" onClick={onCompare}>
@@ -683,10 +715,17 @@ function ProblemView({
         <strong>What is happening?</strong>
         <p>{problem.description}</p>
       </div>
+      <div className="notice">
+        <BookOpen size={18} />
+        <div>
+          <strong>Detailed Problem Statement: Pending Stakeholder Refinement</strong>
+          <p>{problem.problemStatement}</p>
+        </div>
+      </div>
       <h2 className="section-title">
         Solution efforts addressing this problem <span>{all.length}</span>
       </h2>
-      <div className="approach-grid">
+      {all.length ? <div className="approach-grid">
         {all.map((p) => (
           <article key={p.id}>
             <div>
@@ -708,7 +747,7 @@ function ProblemView({
             </button>
           </article>
         ))}
-      </div>
+      </div> : <div className="empty-state"><Wrench /><h2>No Solution Efforts have been linked to this Problem yet.</h2><p>Participating Units can associate existing work or create an authorized Solution Effort from the Projects area.</p></div>}
     </>
   );
 }
@@ -1316,7 +1355,7 @@ function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
             note={`${portfolio.length} connected solution efforts`}
           />
           <div className="project-cards">
-            {portfolio.map((p) => (
+            {portfolio.length ? portfolio.map((p) => (
               <div className="project-card" key={p.id}>
                 <span className="maturity">{p.solutionTypeLabel}</span>
                 <strong>{p.name}</strong>
@@ -1325,7 +1364,7 @@ function UnitView({ id, onMap }: { id?: string; onMap: () => void }) {
                 </p>
                 <Progress value={p.progress} />
               </div>
-            ))}
+            )) : <div className="empty-state"><Wrench /><h3>No Solution Efforts have been associated with this Unit yet.</h3><p>Authorized Unit members can add existing or new work as participation begins.</p></div>}
           </div>
         </section>
         <section className="panel">
@@ -1506,8 +1545,8 @@ function ProjectsView({
       ) : (
         <div className="empty-state">
           <Wrench />
-          <h2>No solution efforts match these filters.</h2>
-          <p>Clear one or more filters to broaden the result set.</p>
+          <h2>{projects.length ? 'No solution efforts match these filters.' : 'No Solution Efforts have been created yet.'}</h2>
+          <p>{projects.length ? 'Clear one or more filters to broaden the result set.' : 'Participating Units can create and associate their actual work with the initial capability Problems.'}</p>
         </div>
       )}
     </>
@@ -1818,7 +1857,8 @@ function ListHead({ title, note }: { title: string; note: string }) {
 
 function MapView({ onProject }: { onProject: () => void }) {
   const { units } = useData();
-  if (!units.length)
+  const geolocatedUnits = units.filter((unit) => unit.hasLocation);
+  if (!geolocatedUnits.length)
     return (
       <>
         <ListHead
@@ -1827,7 +1867,7 @@ function MapView({ onProject }: { onProject: () => void }) {
         />
         <div className="empty-state">
           <MapPin />
-          <h2>No approved Units or locations yet.</h2>
+          <h2>No approved location data available.</h2>
           <p>
             The map will populate after an administrator adds Unit and location
             metadata.
@@ -1844,7 +1884,7 @@ function MapView({ onProject }: { onProject: () => void }) {
       <div className="map-panel">
         <div className="map-controls">
           <strong>
-            {new Set(units.map((x) => x.location)).size} locations
+            {new Set(geolocatedUnits.map((x) => x.location)).size} locations
           </strong>
           <input placeholder="Search locations…" />
           <label>
@@ -1860,7 +1900,7 @@ function MapView({ onProject }: { onProject: () => void }) {
         <div className="map-canvas">
           <div className="terrain t1" />
           <div className="terrain t2" />
-          {units.slice(0, 3).map((u, i) => (
+          {geolocatedUnits.slice(0, 3).map((u, i) => (
             <button
               key={u.id}
               className={`map-pin p${i + 1}`}
@@ -1873,10 +1913,10 @@ function MapView({ onProject }: { onProject: () => void }) {
           <div className="map-note">
             <MapPin />
             <div>
-              <strong>{units[0].name}</strong>
+              <strong>{geolocatedUnits[0].name}</strong>
               <small>
-                {units[0].projectIds.length} projects ·{' '}
-                {units[0].capabilities.join(', ')}
+                {geolocatedUnits[0].projectIds.length} projects ·{' '}
+                {geolocatedUnits[0].capabilities.join(', ')}
               </small>
             </div>
           </div>
@@ -2098,7 +2138,7 @@ function CreateModal({
             setError(
               value instanceof Error
                 ? value.message
-                : 'Unable to create Problem.',
+                : 'Unable to submit potential Problem.',
             );
             setSaving(false);
           }
@@ -2107,9 +2147,9 @@ function CreateModal({
         <button className="modal-x" type="button" onClick={onClose}>
           <X />
         </button>
-        <p className="eyebrow">NEW RECORD</p>
-        <h2>Create capability problem</h2>
-        <p>Capture an enduring gap before proposing a solution.</p>
+        <p className="eyebrow">GOVERNED SUBMISSION</p>
+        <h2>Submit potential capability Problem</h2>
+        <p>Surface a possible enduring gap for authorized review before it enters the canonical portfolio.</p>
         <div className="security-callout">
           <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
           <p>
@@ -2148,7 +2188,7 @@ function CreateModal({
                 {Math.round(match.score * 100)}% deterministic match
               </p>
             ))}
-            <button type="button">Review before creating</button>
+            <button type="button">Review before submitting</button>
           </div>
         )}
         {error && <p className="form-error">{error}</p>}
@@ -2157,7 +2197,7 @@ function CreateModal({
             Cancel
           </button>
           <button className="create" disabled={saving}>
-            {saving ? 'Creating…' : 'Create problem'}
+            {saving ? 'Submitting…' : 'Submit for review'}
           </button>
         </div>
       </form>

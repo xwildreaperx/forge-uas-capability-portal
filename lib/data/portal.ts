@@ -126,11 +126,18 @@ export async function getPortalData(
   ]);
 
   return {
+    datasetMode:
+      projects.length > 0 || units.some((unit) => unit.name.startsWith('Fictional Unit'))
+        ? 'demo'
+        : 'operational',
     problems: problems.map((p) => ({
       dbId: p.id,
       id: p.trackingId,
       title: p.title,
       description: p.shortDescription,
+      detailedDescription: p.detailedDescription,
+      problemStatement: p.problemStatement,
+      owner: p.owner ?? 'Unassigned',
       category: p.category,
       priority: p.priority,
       status: p.status,
@@ -288,6 +295,8 @@ export async function getPortalData(
       projectIds: u.projectLinks.map((x) => x.project.trackingId),
       isActive: u.isActive,
       forgePointOfContact: u.forgePointOfContact ?? '',
+      parentOrganization: u.parentOrganization ?? '',
+      hasLocation: Boolean(u.location),
     })),
     activities: activities.map((a) => ({
       id: a.id,

@@ -9,6 +9,10 @@ Information boundary: fictional, non-sensitive prototype data; UNCLASSIFIED INFO
 
 ## 1. Executive Summary
 
+FORGE has moved from a fictional-only prototype toward controlled initial operational population. The clean initializer now begins with nine approved organizations, twelve stakeholder-supplied canonical capability Problems, and zero Projects. Participating organizations are expected to add their own existing and future Solution Efforts. Detailed Problem statements, ownership, prioritization, locations, and organizational relationships remain intentionally incomplete pending stakeholder refinement. The fictional demo portfolio remains separately available for development and regression testing.
+
+A receiving AI must treat the initial summaries as discovery-level abstractions, not final requirements. Do not fill missing detail through speculation or external research. Help users refine approved capability-level information only when asked and within the information boundary.
+
 FORGE is a capability problem-solving and institutional-knowledge portal focused on unmanned aircraft system (UAS) work. It connects enduring capability Problems, the Projects or Solution Efforts attempting to address them, the organizations involved, development phases, evidence, lessons, outcomes, and references to existing knowledge.
 
 FORGE exists because useful capability work is often decentralized and difficult to discover. Separate teams may investigate the same gap, repeat a vendor evaluation, rediscover a failed approach, or lose context when personnel and tools change. Leaders may see individual projects without seeing the underlying capability gap or the portfolio of alternative responses.

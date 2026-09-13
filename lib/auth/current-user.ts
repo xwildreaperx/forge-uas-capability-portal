@@ -33,8 +33,10 @@ export async function userContextById(
 export async function getCurrentUser(): Promise<CurrentUserContext | null> {
   if (!isDevUserSwitcherEnabled()) return null;
   const selected = Number((await cookies()).get(DEV_USER_COOKIE)?.value);
-  if (Number.isInteger(selected) && selected > 0)
-    return userContextById(selected);
+  if (Number.isInteger(selected) && selected > 0) {
+    const selectedUser = await userContextById(selected);
+    if (selectedUser) return selectedUser;
+  }
   const fallback = await db.user.findFirst({
     where: { status: 'ACTIVE' },
     orderBy: [{ role: 'desc' }, { id: 'asc' }],
