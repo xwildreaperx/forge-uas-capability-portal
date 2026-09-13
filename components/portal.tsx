@@ -35,6 +35,17 @@ import { ProjectActions } from './project-actions';
 import { AiHandoffView } from './ai-handoff-view';
 
 const DataContext = createContext<PortalData | null>(null);
+type ProblemMatchResult = {
+  dbId?: number;
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  status?: string;
+  score: number;
+  classification: 'POSSIBLE_DUPLICATE' | 'RELATED_PROBLEM';
+  reasons: string[];
+};
 const useData = () => {
   const value = useContext(DataContext);
   if (!value) throw new Error('Portal data is unavailable.');
@@ -168,26 +179,27 @@ export function Portal({
     return () => lifecycle.abort();
   }, []);
 
-  const saveProblem = async (title: string, description: string) => {
+  const saveProblem = async (body: {
+    title: string;
+    description: string;
+    duplicateReviewed: boolean;
+    coveredProblemId?: number;
+  }) => {
     const response = await fetch('/api/problems', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify(body),
     });
     const item = (await response.json()) as {
-      trackingId: string;
-      title: string;
-      shortDescription: string;
-      category: string;
-      priority: string;
-      status: string;
+      trackingId?: string;
       error?: string;
+      matches?: ProblemMatchResult[];
     };
-    if (!response.ok)
-      throw new Error(item.error || 'Unable to create Problem.');
+    if (!response.ok) return { ok: false as const, ...item };
     setCreating(false);
     router.refresh();
     setActive('Problems');
+    return { ok: true as const, ...item };
   };
 
   return (
@@ -1702,9 +1714,24 @@ function AdministrationView() {
                   </strong>
                   <small>
                     {item.status.replaceAll('_', ' ')} · {item.submitter} ·{' '}
-                    {item.unit}
+                    {item.unit} · Submitted {new Date(item.createdAt).toLocaleDateString()}
                   </small>
                   <p>{item.description}</p>
+                  {item.relatedProblemId && (
+                    <p className="form-success">Contributor identified {item.relatedProblemId} as covering this issue.</p>
+                  )}
+                  {item.matches.length > 0 && (
+                    <div className="review-matches">
+                      <strong>Canonical Problems to review</strong>
+                      {item.matches.map((match) => (
+                        <div key={match.id}>
+                          <span className="maturity">{match.classification === 'POSSIBLE_DUPLICATE' ? 'Possible Duplicate' : 'Related Problem'}</span>
+                          <b>{match.id} — {match.title}</b>
+                          <small>{match.reasons.join(' · ')}</small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <form
                     className="quick-form"
                     onSubmit={(event) => {
@@ -1723,7 +1750,12 @@ function AdministrationView() {
                       </option>
                       <option value="REJECTED">Reject</option>
                     </select>
-                    <select name="relatedProblemId" defaultValue="">
+                    <select
+                      name="relatedProblemId"
+                      defaultValue={
+                        problems.find((problem) => problem.id === item.relatedProblemId)?.dbId ?? ''
+                      }
+                    >
                       <option value="">No canonical Problem link</option>
                       {problems.map((problem) => (
                         <option key={problem.id} value={problem.dbId}>
@@ -2089,41 +2121,57 @@ function CreateModal({
   onSave,
 }: {
   onClose: () => void;
-  onSave: (title: string, description: string) => Promise<void>;
+  onSave: (input: {
+    title: string;
+    description: string;
+    duplicateReviewed: boolean;
+    coveredProblemId?: number;
+  }) => Promise<{
+    ok: boolean;
+    error?: string;
+    matches?: ProblemMatchResult[];
+  }>;
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [matches, setMatches] = useState<
-    { id: string; title: string; score: number }[]
-  >([]);
+  const [matches, setMatches] = useState<ProblemMatchResult[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(false);
+  const [duplicateReviewed, setDuplicateReviewed] = useState(false);
+  const [coveredProblemId, setCoveredProblemId] = useState<number>();
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    if (title.trim().length < 3) {
+    if (`${title} ${description}`.trim().length < 3) {
       setTimeout(() => setMatches([]), 0);
       return;
     }
+    setTimeout(() => {
+      setLoadingMatches(true);
+      setDuplicateReviewed(false);
+      setCoveredProblemId(undefined);
+    }, 0);
     const controller = new AbortController();
     const timer = setTimeout(
       () =>
-        fetch(`/api/problems?q=${encodeURIComponent(title)}`, {
+        fetch(`/api/problems?q=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`, {
           signal: controller.signal,
         })
           .then(
             (r) =>
               r.json() as Promise<
-                { id: string; title: string; score: number }[]
+                ProblemMatchResult[]
               >,
           )
           .then(setMatches)
-          .catch(() => {}),
+          .catch(() => setMatches([]))
+          .finally(() => setLoadingMatches(false)),
       250,
     );
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [title]);
+  }, [title, description]);
   return (
     <div className="modal-backdrop" role="presentation">
       <form
@@ -2133,7 +2181,17 @@ function CreateModal({
           setSaving(true);
           setError('');
           try {
-            await onSave(title, description);
+            const result = await onSave({
+              title,
+              description,
+              duplicateReviewed,
+              coveredProblemId,
+            });
+            if (!result.ok) {
+              if (result.matches?.length) setMatches(result.matches);
+              setError(result.error || 'Unable to submit potential Problem.');
+              setSaving(false);
+            }
           } catch (value) {
             setError(
               value instanceof Error
@@ -2150,6 +2208,10 @@ function CreateModal({
         <p className="eyebrow">GOVERNED SUBMISSION</p>
         <h2>Submit potential capability Problem</h2>
         <p>Surface a possible enduring gap for authorized review before it enters the canonical portfolio.</p>
+        <div className="question-callout">
+          <strong>Check existing Problems first</strong>
+          <p>FORGE works best when similar capability gaps are connected to a common Problem. Describe the issue below and review potentially related Problems before submitting a new one.</p>
+        </div>
         <div className="security-callout">
           <strong>UNCLASSIFIED INFORMATION ONLY.</strong>
           <p>
@@ -2178,26 +2240,45 @@ function CreateModal({
         </label>
         {matches.length > 0 && (
           <div className="possible">
-            <strong>Possible existing work</strong>
+            <strong>Existing Problems to review</strong>
             {matches.map((match) => (
-              <p key={match.id}>
-                <b>
-                  {match.id} · {match.title}
-                </b>
-                <br />
-                {Math.round(match.score * 100)}% deterministic match
-              </p>
+              <article className={`match-card ${match.classification === 'POSSIBLE_DUPLICATE' ? 'duplicate' : ''}`} key={match.id}>
+                <span className="maturity">{match.classification === 'POSSIBLE_DUPLICATE' ? 'Possible Duplicate' : 'Related Problem'}</span>
+                <h3>{match.id} — {match.title}</h3>
+                <p>{match.description}</p>
+                <small>{match.status ?? 'Open'} · {match.category}</small>
+                <strong>Why this appeared</strong>
+                <ul>{match.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                <div className="match-actions">
+                  <a className="secondary" href={`/problems/${match.id}`} target="_blank" rel="noreferrer">View Problem <ExternalLink size={14} /></a>
+                  <button type="button" className="secondary" onClick={() => {
+                    setCoveredProblemId(match.dbId);
+                    setDuplicateReviewed(true);
+                    setError('');
+                  }}>This Existing Problem Covers My Issue</button>
+                </div>
+              </article>
             ))}
-            <button type="button">Review before submitting</button>
+            {matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') && !duplicateReviewed && (
+              <button type="button" className="secondary" onClick={() => {
+                setDuplicateReviewed(true);
+                setCoveredProblemId(undefined);
+                setError('');
+              }}>My Problem Is Different — Continue Submission</button>
+            )}
           </div>
         )}
+        {!loadingMatches && `${title} ${description}`.trim().length >= 3 && matches.length === 0 && (
+          <div className="notice"><Search size={18} /><div><strong>No strong matches found</strong><p>FORGE did not identify a strong existing match. This does not guarantee that related work does not exist. You may continue your submission.</p></div></div>
+        )}
+        {coveredProblemId && <p className="form-success">This observation will be linked to the selected canonical Problem for reviewer awareness; no new canonical Problem will be created.</p>}
         {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">
           <button type="button" className="secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="create" disabled={saving}>
-            {saving ? 'Submitting…' : 'Submit for review'}
+          <button className="create" disabled={saving || loadingMatches || (matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') && !duplicateReviewed)}>
+            {saving ? 'Submitting…' : coveredProblemId ? 'Record connection for review' : 'Submit for review'}
           </button>
         </div>
       </form>

@@ -29,3 +29,4 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - The initial Problem summaries are discovery-level records. Detailed statements, ownership, priority, affected/reporting Units, requirements, and relationships are intentionally pending stakeholder refinement.
 - Do not invent Projects, Unit–Problem relationships, priorities, owners, locations, POCs, capabilities, requirements, solutions, or activity.
 - Keep fictional test/demo users and operational content isolated in the demo seed. Preserve authorization while testing clean data with temporary isolated fixtures.
+- Preserve the product rule that Problems are canonicalized while Projects remain free to overlap. Problem submission must provide explainable server-backed duplicate/related discovery and human governance; Project creation should surface existing work for awareness without blocking parallel experimentation.

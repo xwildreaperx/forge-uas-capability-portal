@@ -34,6 +34,7 @@ const documentationValue = (value: unknown): DocumentationValue =>
 
 export async function detectRelatedProblems(input: {
   title: string;
+  description?: string;
   category?: string;
   tags?: string[];
 }) {
@@ -43,12 +44,23 @@ export async function detectRelatedProblems(input: {
   return findRelatedProblems(
     input,
     problems.map((p) => ({
+      dbId: p.id,
       id: p.trackingId,
       title: p.title,
+      description: p.shortDescription,
       category: p.category,
+      status: p.status,
       tags: p.tags.map((x) => x.tag.name),
     })),
   );
+}
+
+export class ProblemMatchReviewRequired extends Error {
+  matches: Awaited<ReturnType<typeof detectRelatedProblems>>;
+  constructor(matches: Awaited<ReturnType<typeof detectRelatedProblems>>) {
+    super('Review the possible existing Problem before continuing.');
+    this.matches = matches;
+  }
 }
 
 export async function createProblem(
@@ -441,6 +453,18 @@ export async function submitProblem(
   const actor = requirePermission(user, 'problem:submit');
   const title = requiredString(input.title, 'Title');
   const description = requiredString(input.description, 'Description');
+  const matches = await detectRelatedProblems({ title, description });
+  const strongMatches = matches.filter(
+    (match) => match.classification === 'POSSIBLE_DUPLICATE',
+  );
+  const relatedProblemId = input.coveredProblemId
+    ? Number(input.coveredProblemId)
+    : null;
+  if (relatedProblemId) {
+    await db.problem.findUniqueOrThrow({ where: { id: relatedProblemId } });
+  } else if (strongMatches.length && input.duplicateReviewed !== true) {
+    throw new ProblemMatchReviewRequired(strongMatches);
+  }
   const requestedUnitId = Number(input.unitId || actor.primaryUnitId);
   const unitId =
     Number.isInteger(requestedUnitId) && actor.unitIds.includes(requestedUnitId)
@@ -457,6 +481,7 @@ export async function submitProblem(
         operationalImpact: optional(input.operationalImpact),
         supportingContext: optional(input.supportingContext),
         originatorContact: optional(input.originatorContact),
+        relatedProblemId,
         submitterId: actor.id,
         unitId,
       },

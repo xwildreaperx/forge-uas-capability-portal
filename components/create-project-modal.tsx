@@ -1,9 +1,13 @@
 'use client';
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ExternalLink, X } from 'lucide-react';
 import type { PortalData } from '@/lib/data/types';
 import { SOLUTION_TYPES } from '@/lib/domain/solution-types';
 import { DOCUMENTATION_OPTIONS } from '@/lib/domain/documentation';
+import {
+  findProjectsForProblems,
+  isPotentiallySimilarProject,
+} from '@/lib/domain/matching';
 
 export function CreateProjectModal({
   data,
@@ -19,9 +23,32 @@ export function CreateProjectModal({
   const [type, setType] = useState('ORGANIC_DEVELOPMENT');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedProblems, setSelectedProblems] = useState<number[]>([]);
   const includesVendor = type === 'VENDOR_SOLUTION' || type === 'HYBRID';
   const includesTactic = type === 'TACTIC_TECHNIQUE' || type === 'HYBRID';
   const includesTraining = type === 'TRAINING' || type === 'HYBRID';
+  const existingEfforts = useMemo(
+    () =>
+      findProjectsForProblems(
+        data.problems
+          .filter((problem) => selectedProblems.includes(problem.dbId))
+          .map((problem) => problem.id),
+        data.projects,
+      ),
+    [data, selectedProblems],
+  );
+  const similarEffortIds = new Set(
+    existingEfforts
+      .filter((project) =>
+        isPotentiallySimilarProject(
+          { name, description },
+          { name: project.name, description: project.solutionApproach },
+        ),
+      )
+      .map((project) => project.id),
+  );
   return (
     <div className="modal-backdrop" role="presentation">
       <form
@@ -134,7 +161,7 @@ export function CreateProjectModal({
         </div>
         <label>
           Name
-          <input name="name" required />
+          <input name="name" required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <label>
           Solution type
@@ -152,7 +179,7 @@ export function CreateProjectModal({
         </label>
         <label>
           Detailed description
-          <textarea name="detailedDescription" required />
+          <textarea name="detailedDescription" required value={description} onChange={(event) => setDescription(event.target.value)} />
         </label>
         <label>
           Solution approach
@@ -254,11 +281,50 @@ export function CreateProjectModal({
           <legend>Problems addressed</legend>
           {data.problems.map((p) => (
             <label className="checkline" key={p.id}>
-              <input type="checkbox" name="problemIds" value={p.dbId} />
+              <input
+                type="checkbox"
+                name="problemIds"
+                value={p.dbId}
+                checked={selectedProblems.includes(p.dbId)}
+                onChange={(event) =>
+                  setSelectedProblems((current) =>
+                    event.target.checked
+                      ? [...current, p.dbId]
+                      : current.filter((id) => id !== p.dbId),
+                  )
+                }
+              />
               {p.id} · {p.title}
             </label>
           ))}
         </fieldset>
+        {selectedProblems.length > 0 && (
+          <section className="existing-work-panel">
+            <h3>Other Solution Efforts Addressing This Problem</h3>
+            <p>Parallel work is allowed. Review existing efforts for awareness, potential collaboration, previous results, and Lessons Learned.</p>
+            {existingEfforts.length ? (
+              <div className="existing-work-grid">
+                {existingEfforts.map((project) => (
+                  <article className="match-card" key={project.id}>
+                    {similarEffortIds.has(project.id) && <span className="maturity">Potentially Similar Solution Effort</span>}
+                    <h3>{project.id} — {project.name}</h3>
+                    <p>{project.solutionTypeLabel} · Lead: {project.unit}</p>
+                    <small>{project.status} · {project.maturity} · Updated {new Date(project.updatedAt).toLocaleDateString()}</small>
+                    <p><strong>Latest result:</strong> {project.latestResult || project.outcome || 'No result recorded yet.'}</p>
+                    <p><strong>Documentation:</strong> {project.documentationLabel}</p>
+                    {project.lessons[0] && <p><strong>Important Lesson:</strong> {project.lessons[0].finding}</p>}
+                    <div className="match-actions">
+                      <a className="secondary" href={`/projects/${project.id}`} target="_blank" rel="noreferrer">View Project <ExternalLink size={14} /></a>
+                      {project.originatorContact && <span className="contact-note">Contact: {project.originatorContact}</span>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="notice"><strong>No existing Solution Efforts are linked to the selected Problem.</strong><p>This does not guarantee related work does not exist elsewhere in FORGE. You may continue creating this effort.</p></div>
+            )}
+          </section>
+        )}
         <label>
           Lead unit
           <select name="leadUnitId">

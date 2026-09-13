@@ -201,5 +201,16 @@ export type PortalData = {
     unitId: number | null;
     createdAt: string;
     relatedProblemId: string;
+    matches: {
+      dbId?: number;
+      id: string;
+      title: string;
+      description?: string;
+      category: string;
+      status?: string;
+      score: number;
+      classification: 'POSSIBLE_DUPLICATE' | 'RELATED_PROBLEM';
+      reasons: string[];
+    }[];
   }[];
 };

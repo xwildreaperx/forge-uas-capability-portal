@@ -116,6 +116,8 @@ The fictional seed contains 12 Problems, 20 Solution Efforts, 12 Units across 8 
 
 Dashboard, search, comparison, Units, map markers, Related Work, Capability Graph, Executive/Technical/AI Handoff views, phases, lessons, repositories, activity, and help requests derive from SQLite. New Problems and conditional Solution Efforts persist through server routes and survive refresh/restart. Detail pages are addressable at `/problems/[id]`, `/projects/[id]`, and `/units/[id]`; project pages expose edit, phase, Lesson, and repository forms. `/guide` explains the operating model and provides the portable platform manual.
 
+Problem intake performs deterministic, server-backed canonicalization checks using the proposed title and description. It explains Possible Duplicate and Related Problem suggestions, preserves directional and aircraft-type distinctions, and lets Contributors either link an observation to an existing canonical Problem or deliberately continue into governed review. Solution Effort creation separately surfaces Projects already linked to selected Problems; parallel Projects remain permitted.
+
 Demo-seed records are fictional and non-sensitive. Clean-seed records are controlled stakeholder-supplied capability abstractions and approved organization names.
 
 ## Remaining limitations

@@ -11,6 +11,7 @@ import {
 import type { CurrentUserContext } from '../auth/permissions.ts';
 import { hasPermission } from '../auth/permissions.ts';
 import { isDevUserSwitcherEnabled } from '../auth/config.ts';
+import { findRelatedProblems } from '../domain/matching.ts';
 
 const tones: Record<string, string> = {
   Concept: 'amber',
@@ -353,6 +354,18 @@ export async function getPortalData(
       unitId: item.unitId,
       createdAt: item.createdAt.toISOString(),
       relatedProblemId: item.relatedProblem?.trackingId ?? '',
+      matches: findRelatedProblems(
+        { title: item.title, description: item.description, category: item.category },
+        problems.map((problem) => ({
+          dbId: problem.id,
+          id: problem.trackingId,
+          title: problem.title,
+          description: problem.shortDescription,
+          category: problem.category,
+          status: problem.status,
+          tags: problem.tags.map((tag) => tag.tag.name),
+        })),
+      ),
     })),
   };
 }

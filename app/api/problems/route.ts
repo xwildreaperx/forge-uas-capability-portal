@@ -1,12 +1,20 @@
-import { detectRelatedProblems, submitProblem } from '@/lib/data/mutations';
+import {
+  detectRelatedProblems,
+  ProblemMatchReviewRequired,
+  submitProblem,
+} from '@/lib/data/mutations';
 import { getRequestUser } from '@/lib/auth/current-user';
 import { requirePermission } from '@/lib/auth/permissions';
 
 export async function GET(request: Request) {
   requirePermission(await getRequestUser(request), 'portal:read');
   const query = new URL(request.url).searchParams.get('q')?.trim() ?? '';
-  if (!query) return Response.json([]);
-  return Response.json(await detectRelatedProblems({ title: query }));
+  const description =
+    new URL(request.url).searchParams.get('description')?.trim() ?? '';
+  if (!query && !description) return Response.json([]);
+  return Response.json(
+    await detectRelatedProblems({ title: query, description }),
+  );
 }
 
 export async function POST(request: Request) {
@@ -26,6 +34,11 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
+    if (error instanceof ProblemMatchReviewRequired)
+      return Response.json(
+        { error: error.message, matches: error.matches },
+        { status: 409 },
+      );
     return Response.json(
       {
         error:
