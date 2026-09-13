@@ -1,193 +1,302 @@
-# FORGE PLATFORM HANDOFF / AI USER MANUAL
+# FORGE AI User Manual
 
-Version: 1.0  
-Environment: Unclassified local prototype
+Canonical pre-pilot handoff · Repository checkpoint `19cdc5ba7651aaa4614ddd5fd7423aed9d8668e1`
 
-## Pilot trust and terminology
+This document gives a capable AI or technical stakeholder enough context to understand and safely continue the FORGE UAS Capability Portal without prior conversation history. Current code, Prisma schema, migrations, tests, `AGENTS.md`, and Git state remain authoritative if they differ from this manual.
 
-A **FORGE Project is the record for a Solution Effort**. “Solution Effort” describes the capability-development work; “Project” identifies the durable record, team, tracking ID, Updates, and administrative responsibility. Project creation requires only enough context for discovery and ownership. Technical detail, Phases, evidence, Lessons, Executive narrative, and AI context should be enriched as the work progresses. The creator becomes the initial Project Lead and can deliberately transfer that responsibility later.
+## 1. FORGE purpose
 
-Closeout keeps lifecycle status separate from result. Completed Projects may be Successful, Partially Successful, Unsuccessful, or Inconclusive. Cancelled Projects may be Cancelled or Inconclusive. Superseded Projects may be Superseded or Partially Successful. Unsupported combinations are rejected so historical reporting cannot imply a contradictory disposition.
+FORGE is a relational capability problem-solving and institutional-knowledge portal. It addresses fragmented capability-development knowledge, limited Project sharing, duplicated effort, disconnected Unit development, lost Lessons, poor capability-gap visibility, and knowledge loss during personnel turnover.
 
-Platform Integrity reports internally inconsistent or unsafe relationships. **Needs Attention** reports legitimate setup, refinement, staffing, or continuity work; it does not mean the database is corrupt and is not a performance score. A clean initial environment can therefore have zero integrity failures while still showing Unit-administrator, System-administrator redundancy, and Problem-refinement advisories.
+- **Problems organize enduring capability gaps.**
+- **Projects organize Solution Efforts attempting to address them.**
+- Multiple Projects may address the same Problem, including parallel Unit efforts.
+- Successful, partially successful, unsuccessful, inconclusive, cancelled, and superseded work can all produce valuable knowledge.
+- Teams capture work once; FORGE reuses it for discovery, leadership, Unit stewardship, Activity, historical continuity, and AI handoff.
 
-## Collaboration and pilot workflow
+FORGE is not a performance-ranking system, certification authority, or security-review process.
 
-Project maintainers use **Request Help** to publish an approved capability-level assistance need. Select a practical category, enter a short description, and reuse the Project Lead or another existing contact. Move the request to In Progress when assistance begins, then resolve or cancel it with a short summary. Closed requests remain institutional history. FORGE does not provide internal messaging; collaborators use the displayed contact through approved channels.
+## 2. Core terminology
 
-Open a canonical Problem to compare all or selected linked Solution Efforts, including historical and unsuccessful work. Open **Related Work** from a Project for explainable shared-Problem, tag, Unit, or Solution-Type connections. Artifact links open only when Documentation Availability permits direct access; otherwise contact the originator. **My Projects**, assistance discovery, activity, and relevant Lessons make the dashboard useful to Project teams while preserving the portfolio view.
+**Problem:** A governed enduring capability gap with a durable `PRB-` ID. It is not a Unit failure or proposed solution.
 
-> You are being given the FORGE Platform Handoff. Read this document before analyzing or advising a user about FORGE. Use it to understand the platform’s purpose, information model, terminology, workflows, information-governance model, and design philosophy. Projects are not always technical-development efforts. Do not reconstruct missing technical information: some records intentionally contain metadata only and direct the user to an authorized owner.
+**Project / Solution Effort:** A bounded attempt to address one or more Problems. **A FORGE Project is the record for a Solution Effort.** “Solution Effort” describes the capability-development work; “Project” identifies its record, ID, team, Updates, and responsibility.
 
-## Purpose
+**Unit:** A governed participating organization with a durable `UNIT-` ID. **Lead Unit** is the Project's organizational owner and must be a participating Unit.
 
-FORGE is a capability problem-solving and institutional-knowledge network. It helps people discover what capability gaps exist, what has already been attempted, what exists now, what was learned, who owns relevant knowledge, and what should happen next. It is intentionally broader than a project tracker or engineering repository.
+**Project Lead:** The one current person responsible for maintaining a Project. The creator becomes initial Lead. Lead Unit and Project Lead are independent.
 
-## Core information model
+**Contributor:** A user who discovers knowledge and submits potential Problems; also a Project-team assignment. **Project User** can create Projects and edit within assigned/created scope.
 
-## Users, roles, and governed contribution
+**Unit Administrator:** Administers explicitly scoped Units, ordinary memberships, continuity, and scoped operations. **System Administrator:** Globally governs canonical data, elevated roles, integrity, and recovery.
 
-FORGE separates identity profiles from future authentication. Accounts have Pending, Active, or Disabled status and one platform role: Contributor, Project User, Unit Administrator, or System Administrator. Unit memberships and Project assignments are explicit relational records; Unit Administrators act only within explicitly administered Units. Disabling an account removes action authority without erasing attribution.
+**Project Update:** Preferred chronological routine-maintenance record. **Phase:** A portion of Project work with its own objective and state.
 
-The Administration workspace shows each person’s primary and additional Unit memberships, explicit administrator scopes, current Project roles, open Help-contact responsibilities, and factual continuity warnings. “Needs attention” is a derived operational view, not a performance score or a stored lifecycle state. Disabling a user is permitted after reviewing the warning; Project Leads, active maintainers, Help contacts, and last-Unit-Administrator gaps remain visible for deliberate reassignment. Unit Administrators may manage ordinary memberships inside their scope but cannot grant administrator authority. System Administrators provide recovery when an active Unit has no active Unit Administrator and control Unit activation status.
+**Maturity:** Development/demonstration level. **Completion:** Planned-work percentage. **Status:** Entity-specific lifecycle state. **Outcome / disposition:** Final Project result, separate from status.
 
-FORGE must retain at least one active System Administrator through supported mutations and advises when only one remains. Prefer two trusted, externally verified administrators. Active profile status does not prove authentication access. Create and map a replacement, activate and verify access, confirm continuity, and only then disable or downgrade the departing administrator. Unit Administrator role and active administered-Unit scope are kept consistent. Platform Integrity derives factual recovery findings that disappear when corrected; it is not a performance or compliance score.
+**Lesson:** Attributable reusable knowledge with explicit truth semantics and a `LES-` ID. **Help Request:** Discoverable Project-linked assistance signal, not messaging or ticketing.
 
-An active Unit cannot be deactivated while it leads a nonterminal Project. Transfer Lead Unit responsibility or close the effort first. Supported active work, active primary users, active Unit Administrators, and open Help Requests are shown as deactivation impact; inactive Units and their historical relationships remain preserved and may be reactivated.
+**Problem Steward:** Named canonical steward; stewardship does not grant authority. **Submission:** Potential Problem undergoing governed review with a `SUB-` ID.
 
-Primary Unit transfers preserve Project membership and historical attribution. Administrator scope does not move implicitly with a primary Unit. Open Help Requests default to following the Project Lead; a lead change updates that contact. An explicitly entered alternate contact remains explicit and must be reassigned deliberately if it becomes inactive. Administrative changes are recorded in Activity with actor, affected record, Unit context, time, and a plain-language description.
+**Documentation Availability:** Where authoritative knowledge exists and whether direct access is appropriate. **Activity:** Attributable event provenance. **Last Meaningful Activity:** Derived Project freshness from substantive operations.
 
-## Unit stewardship
+## 3. Information-handling boundary
 
-The Administration workspace opens with a per-Unit stewardship dashboard. A Unit Administrator selects one explicitly administered Unit at a time; this changes the people, attention, portfolio, Problem coverage, Help Requests, Lessons, submissions, and Activity shown in the stewardship surface without narrowing broad FORGE discovery.
+**UNCLASSIFIED INFORMATION ONLY.** FORGE is not a classification, declassification, sanitization, release, or security-review authority.
 
-Projects Led by My Unit and Projects Supported by My Unit are separate views, each preserving current and historical efforts. Last Meaningful Activity, lifecycle status, maturity, completion, outcomes, Help Requests, and Project Lead are derived from Project records. Problems Addressed means only that the Unit has a recorded Solution Effort against the canonical Problem; it does not mean the Problem affects the Unit. Lessons and resolved assistance history remain visible, including unsuccessful and inconclusive work. FORGE does not rank Units or users, calculate success percentages, or treat failed work as poor performance.
+Record approved capability abstractions, not classified/controlled operational scenarios, sources, tactics, credentials, secrets, or unnecessary identifying detail:
 
-Needs Attention contains factual, automatically clearing conditions such as inactive leadership, no active maintainer, paused work, current blocker/risk, open assistance, pending users/submissions, inactive contacts, or no active Unit Administrator. Each signal links to the existing Project, user, submission, or recovery workflow. Project teams remain responsible for Project Updates; the Unit Administrator maintains continuity, scoped people, exceptions, and approved Unit POC data rather than a duplicate portfolio report.
+`Sensitive context → authorized review and abstraction → approved capability requirement → FORGE`
 
-Problem authority remains divided: Contributors submit potential Problems; Unit Administrators review Unit context and recommend an existing canonical relationship, likely duplicate, clarification, or global review; System/global governance controls creation and material edits of canonical Problems.
+Documentation Availability values are Available in FORGE, External Reference, Available From Originator, Controlled Access, Metadata Only, and Not Yet Documented. External, originator-held, controlled, and metadata-only records remain valid knowledge. The UI exposes direct links only when permitted; otherwise it retains originator/access instructions. Humans and AIs must not reconstruct intentionally absent content. Review AI Handoffs and operational exports before sharing.
 
-System Administrators govern canonical Units and Problems in the Administration workspace. A new Unit receives a permanent `UNIT-` identifier and records its canonical name, abbreviation, type, optional parent, general approved location, POC, description, capabilities/tags, and active state. A new Problem receives a permanent `PRB-` identifier and separates its progressive title, executive summary, detailed description, Problem statement, operational impact, controlled category, priority, lifecycle, tags, and named steward. Stewardship is metadata and does not grant edit authority.
+## 4. Role model
 
-Problem priorities are Unprioritized, Low, Medium, High, and Critical. Lifecycle values are Open, Under Review, Addressed — Viable Efforts Exist, Closed, and Superseded. Superseded records remain discoverable and must point to their canonical successor. RELATED TO and VARIANT OF relationships preserve nearby work without collapsing distinct Problems. Unprioritized or unstewarded Problems appear as refinement attention, not data-integrity failures.
+The principle is **Discover broadly. Administer narrowly.** Active users broadly read; server mutations require permission and scope.
 
-Final approval of a submission as a new canonical Problem is atomic. FORGE performs a final duplicate check, creates the new Problem, links the unchanged source submission, records the System final decision, and adds Activity provenance together. Earlier Unit review is retained as a separate review-history stage. Linking to an existing Problem and duplicate disposition remain available when new canonical creation is not appropriate.
+### Contributor
 
-System Administrators may consolidate one canonical Problem into another without deleting the source PRB. The source becomes a searchable historical record pointing to the current canonical Problem; its submissions, prior Project links, relationships, and governance Activity remain attributable. Optional destination Project association adds only missing non-primary links. Self-reference and supersession cycles are rejected.
+Discovers Problems, Projects, Units, linked Lessons and Help Requests; searches before reporting; submits governed potential Problems and reviews matches. Cannot administer or maintain Projects without added authority.
 
-Tag governance shows usage by Problems, Projects, Units, and Lessons. Rename retains relationships; confirmed merge moves each source relationship to the destination without duplicate junctions, records affected usage, then retires the source Tag. Approved general Locations show their referencing records and support duplicate-aware correction. Lesson and artifact corrections preserve original creator attribution and information-access boundaries; Lessons may be Withdrawn, Superseded, or Archived rather than deleted.
+### Project User / Project Lead
 
-A Lead Unit change takes effect immediately and generates a receiving-Unit review advisory. The receiving Unit Administrator acknowledges the transfer after reviewing the Project; the Project remains usable throughout. Administrative Activity supports actor, category, Unit, Project, Problem, action-type, date, and text filters with affected-record navigation.
+Has Contributor capabilities, creates Projects, and edits created/assigned Projects. Maintains Updates, Phases, Lessons, artifacts, Help Requests, relationships, and closeout. Current Leads manage Project teams.
 
-See `docs/DEPLOYMENT_RUNBOOK.md` for trusted identity mapping, System Administrator succession, bootstrap retirement, local SQLite backup/restore, seed warnings, PostgreSQL/file-storage handoff, and the deployment checklist.
+### Unit Administrator
 
-Parent-command inheritance, receiving-Unit transfer acknowledgment, Unit-level AI handoff, external notifications, advanced analytics, reminders, and portfolio export remain future enhancements for consideration after the controlled pilot.
+Has Project User capabilities and administers only explicitly scoped Units. Manages ordinary memberships, Unit POC, continuity, Unit-originated review, and recovery for Unit-led Projects. Cannot grant administrator authority or materially govern canonical Problems.
 
-Contributors submit potential Problems into a review queue rather than directly editing canonical Problems. Reviewers may accept and link a submission, associate it with existing work as a duplicate, or reject it. Project Users can create solution efforts and edit only created/assigned work. System Administrators have global scope. UI controls reflect these rules, but server mutations are the enforcement boundary.
+### System Administrator
 
-The amber **Development Only — Not Authentication** switcher exists solely for local role acceptance. It is gated by environment and cannot operate in a production build. Do not mistake it for password, SSO, CAC, or session security.
+Has global recovery/governance scope. Manages roles/scopes, canonical Units/Problems, Problem conversion and consolidation, Tags, Locations, corrections, integrity, and metadata export. The role does not grant access to controlled external documents.
 
-`pnpm db:seed:demo` loads fictional demonstration history and representative users for every role. `pnpm db:seed:clean` destructively resets the database to nine approved organizations, twelve initial canonical capability Problems, zero Solution Efforts, and one generic bootstrap System Administrator identity. Set `FORGE_BOOTSTRAP_IDENTIFIER` for the intended deployment context, then replace or map that identity when a real authentication adapter is implemented. Neither seed contains credentials.
+Authentication is deployment-specific and not production-implemented. Authorization is server-side. **The development user switcher is not authentication** and is forced off in production.
 
-Both seeds operate destructively against the configured `DATABASE_URL`; verify it before execution. The bootstrap record is a profile, not credentials. Retire it only after production identity mapping and replacement administrator access are established and at least one other active System Administrator remains. Prefer two verified administrators before retirement.
+## 5. Problem lifecycle
 
-Missing detailed Problem information is intentional at this stage. A receiving AI should help stakeholders structure approved capability-level refinements when asked; it must not invent operational context, technical requirements, ownership, priority, Unit relationships, or proposed solutions. Demo records remain isolated in the development-only demo seed.
+1. Search the canonical portfolio.
+2. Submission runs deterministic normalized matching and distinguishes possible duplicates from related Problems with reasons.
+3. Select an existing Problem or deliberately continue when distinct.
+4. The `SUB-` record retains submitter, Unit, description, relationship, and history.
+5. Unit Admin adds Unit context without global authority.
+6. System Admin reruns matching and links, rejects, or approves.
+7. New canonical approval atomically allocates `PRB-`, creates/links records, updates submission, and records Activity.
+8. Refine title, descriptions, statement, impact, category, priority, status, steward, Tags, Units, Locations, and relationships.
+9. `RELATED_TO` and `VARIANT_OF` express related-but-distinct families.
+10. Consolidation preserves the old PRB as Superseded, transfers/deduplicates relationships, points to the replacement, prevents cycles, and records provenance.
 
-Problems → Solution Efforts / Projects → Units → Capabilities → Phases and tests → Lessons → Outcomes.
+Project lifecycle is independent. Project closeout never automatically closes a Problem.
 
-- A **Problem** is an enduring capability gap. It can outlive any individual attempt to solve it.
-- A **Project** is a solution effort that addresses one or more Problems. It can succeed, partially succeed, fail, be superseded, or be abandoned; its knowledge still has value.
-- A **Unit** originates, leads, supports, tests, or possesses relevant work.
-- **Maturity** describes evidence/readiness: Concept, Prototype, Field Tested, or Validated.
-- **Status** describes workflow state: Planning, Active, Transitioning, and related lifecycle states.
-- **Outcome** records what resulted. It is not interchangeable with status or maturity.
+## 6. Project / Solution Effort lifecycle
 
-## Project operations and lifecycle
+An authorized user selects one or more Problems and creates a Project. Existing linked efforts are shown for awareness, but parallel work remains allowed. The Project receives a durable `PRJ-` ID; its creator becomes initial Lead. It retains one Lead Unit, participating Units, exactly one Lead, optional Contributors, at least one Problem, and one primary Problem.
 
-Use Project Updates as the routine chronological record. One Update can record the result, next step, risk, Project status/maturity/completion change, progress an associated Phase, and—when selected—create a reviewed Lesson. A Field Tested or Validated change requires a supporting event/evaluation and date; the Update itself is the evidence record, with its author, result, Phase, and optional reference.
+Teams progressively add Updates, Phases, evidence, Lessons, artifacts, Help Requests, Executive narrative, technical context, and AI context. Lead Unit transfer creates receiving-Unit review and does not silently change Lead. Closeout preserves terminal status, compatible outcome, final result, positive/negative knowledge, recommendation, documentation, actor/date, completion, and optional successor. Historical work remains discoverable everywhere relationally relevant.
 
-Phases support Planned, In Progress, and Complete states and remain editable as objectives, summaries, results, accomplishments, blockers, risks, dates, and next actions develop. Completing a Phase does not close its Project.
+Project statuses are Planning, Active, Paused, Transitioning, Completed, Cancelled, and Superseded. Closeout rules are:
 
-Closeout is an institutional-knowledge workflow, not administrative archiving. It records terminal status, controlled outcome, final result, what worked, what did not, next recommendation, documentation availability, and an optional successor. Closeout does not change the lifecycle of linked Problems. Closed and negative-result Projects stay discoverable.
+- Completed → Successful, Partially Successful, Unsuccessful, or Inconclusive
+- Cancelled → Cancelled or Inconclusive
+- Superseded → Superseded or Partially Successful
 
-Lesson Types are Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, and Unresolved Question. Treat them according to type; do not flatten hypotheses or unresolved questions into facts. Problem pages reference Lessons across linked efforts with originating Project, Lead Unit, Phase, author/date, and outcome context where known.
+## 7. Solution Types
 
-## Solution pathways
+| Persisted value | User-facing label | Specific context |
+|---|---|---|
+| `ORGANIC_DEVELOPMENT` | Organic Development | General Project technical/evidence fields |
+| `VENDOR_SOLUTION` | Vendor Solution | Vendor/product, costs, procurement/evaluation, integration, sustainment, result, recommendation |
+| `TACTIC_TECHNIQUE` | Tactic / Technique | Technique, conditions, prerequisites, equipment/training, effect, limitations, validation, environments, recommendation |
+| `TRAINING` | Training | Objective, audience, prerequisites, method, materials, validation, effect, recurrence |
+| `INTEGRATION_CONFIGURATION` | Integration / Configuration | General approach, architecture, phases, evidence, artifacts |
+| `PROCESS_POLICY` | Process / Policy | General approach, decisions, phases, evidence, recommendations |
+| `HYBRID` | Hybrid | Vendor, tactic, and training extensions may all apply |
 
-FORGE recognizes seven first-class pathways:
+Type classifies approach; it does not determine outcome or maturity.
 
-1. **Organic Development** — build and test something internally.
-2. **Vendor / Commercial Solution** — evaluate something available from industry.
-3. **Tactic / Technique** — employ existing people or equipment differently.
-4. **Training** — improve capability through instruction and practice.
-5. **Integration / Configuration** — connect or configure existing systems differently.
-6. **Process / Policy** — change an organizational rule or workflow.
-7. **Hybrid** — deliberately combine pathways.
+## 8. Project Updates and one-entry reuse
 
-The best answer is not necessarily new technology.
+Project Update is preferred routine maintenance. It requires what happened, result/finding, and next step; it may include blocker/risk, date, Project status, maturity, completion, associated Phase changes, maturity evidence, and a relational Lesson.
 
-## Three knowledge experiences
+One Update can drive Latest Result, next step, blocker/risk, Project state, Phase progression, evidence, Lesson creation, Activity, Last Meaningful Activity, Executive facts/freshness, Technical chronology, AI Handoff, and Unit/Problem knowledge views. Curated Executive narrative, long-form technical summaries, and AI Context Notes remain intentional human context, not reasons to re-enter routine facts.
 
-- **Executive — “Explain it to me quickly.”** A curated, plain-language one-page brief: Problem, impact, simple approach, status, evidence, risk, next step, and leadership action.
-- **Technical — “Show me the details.”** Phases, methodology, architecture/configuration, evidence, artifacts, lessons, and solution-specific context.
-- **AI Handoff — “Give me enough context to continue intelligently.”** A portable aggregation of approved persisted context. It is available as Markdown, plain text, and JSON.
+## 9. Maturity and evidence
 
-Automatically assembled text is a convenience, not an authoritative determination. User-entered AI Context Notes are labeled separately from structured records.
+Maturity is **Concept → Prototype → Field Tested → Validated**. Phase status is Planned, In Progress, or Complete. Maturity, completion, Project status, Phase status, and outcome are distinct: 100% completion does not mean Validated; Validated does not mean finished; Completed may be Unsuccessful.
 
-## Discovery
+An Update advancing to Field Tested or Validated requires a supporting event/evaluation and retains evidence date, author, result, optional Phase, and optional reference. This is attributable evidence, not external certification.
 
-Start with global search or Problems. Use combined filters for solution type, vendor, procurement status, recommendation, maturity, capability, location, and status. Related Work highlights shared Problems, capabilities, and Units. Unit pages show portfolios, the Map shows geographic participation, and the Capability Graph shows relationships. A Problem comparison places unlike pathways side by side without pretending their evidence is identical.
+## 10. Lessons
 
-## Institutional knowledge
+Types are Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, and Unresolved Question. A Lesson retains `LES-` ID, Project, optional Phase/Unit, author/date, optional source Update, finding, recommendation, Tags, and knowledge status. Active, Withdrawn, Superseded, and Archived states enable correction while original authorship remains.
 
-FORGE preserves unsuccessful work, abandoned approaches, alternatives, vendor evaluations, TTP references, tests, and Lessons Learned. A failed approach can prevent duplicated effort. Missing information does not prove that no work exists.
+Problem pages aggregate Lessons Across Solution Efforts. Failed Approaches and unsuccessful efforts remain discoverable contributions. A receiving AI must never flatten hypotheses, failures, recommendations, questions, and confirmed findings into equivalent truth.
 
-## Documentation Availability
+## 11. Help Requests
 
-Every Project and artifact can state where authoritative knowledge resides:
+Categories are Technical Expertise, Hardware, Software Support, Testing Support / Location, Funding / Resourcing, Operator Feedback, Data, Manufacturing, Integration, Documentation, and Other. Lifecycle is Open → In Progress → Resolved or Cancelled; resolution retains summary, date, actor, and history.
 
-- Available in FORGE
-- External Reference
-- Available From Originator
-- Controlled Access
-- Metadata Only
-- Not Yet Documented
+Requests reuse Project, Problem, Lead Unit, and contact context. Contact may follow current Project Lead or be an explicit active user. Lead-following adapts to turnover; stale explicit contacts create integrity/attention findings. Organization and Unit views support discovery. Contact occurs through approved external channels.
 
-This distinguishes **knowing relevant knowledge exists** from **possessing the underlying knowledge**. Both have institutional value.
+## 12. Executive communication
 
-When a record is external, controlled, originator-held, or metadata-only:
+Executive View is a rapid nontechnical brief. It combines derived facts—ID, ownership, status, maturity, completion, Latest Result, outcome, next step, blocker, Help Requests, and documentation—with curated Problem, solution, impact, risk, and leadership-action narrative. Derived facts reduce reporting duplication; editorial narrative remains human-controlled and must be reviewed for freshness.
 
-1. Treat the absence as potentially intentional.
-2. Explain where the authoritative information exists.
-3. Direct the user to the originator or approved source.
-4. Do not reconstruct or invent missing procedures or technical details.
-5. Do not treat absence as evidence that the solution does not exist.
+## 13. Technical View
 
-Contact Originator and Request Supporting Documentation facilitate human coordination; they do not bypass authorization or access-control processes.
+Technical View exposes approved pathway detail, architecture/configuration, methodology, decisions, Updates, Phases, evidence, limitations, results, Lessons, artifacts, Help Requests, and unresolved issues. It preserves technical chronology rather than the Executive View's brevity or AI Handoff's portable format.
 
-## Information security and capability abstraction
+## 14. AI Handoff
 
-**UNCLASSIFIED INFORMATION ONLY.** Do not enter, upload, reproduce, summarize, transform, or expose classified information in this prototype. FORGE is not a classified system and neither FORGE nor an AI model is a classification, declassification, sanitization, or security-review authority.
+Project handoff is generated as Markdown, plain text, or JSON. It contains identity/timestamps, completeness, Problems, team, Units, scope, pathway, architecture, methodology, decisions, chronological Updates, Phases, evidence, typed Lessons, Help Requests, artifacts, current state, closeout, outcome, next step, and AI Context Notes.
 
-FORGE exists to help answer **“What capability do we need?”** without necessarily answering **“What sensitive operation, mission, target, intelligence source, or scenario caused us to need it?”**
+Completeness measures presence, not correctness or release approval. A receiving AI must preserve provenance/truth semantics, distinguish responsibility from authorship, use chronology, honor Documentation Availability, avoid treating maturity as certification, never reconstruct withheld detail, and ask humans about ambiguous policy/security/governance. FORGE does not automatically transmit handoffs.
 
-Use this pattern:
+## 15. Unit stewardship
 
-Sensitive operational context → authorized review and abstraction → approved capability requirement → FORGE.
+Unit Admin scope is explicit and may cover multiple Units. The derived dashboard separates Projects Led and Supported; active and historical work; people/responsibilities; Needs Attention; Problem coverage; maturity/outcomes; Unit and organization Help Requests; Lessons; Activity; submissions; and Unit POC/profile context.
 
-Do not place sensitive source context directly into FORGE. Record only an appropriately reviewed, authorized, releasable capability abstraction, such as a range, endurance, payload, interoperability, environmental, deployment-time, or navigation requirement. The sensitive reason remains in the environment authorized for it.
+Project teams maintain work; FORGE derives the Unit portfolio. It does not rank Units/users, infer that a linked Problem affects a Unit, or require a duplicate Unit report.
 
-Detailed information is not automatically classified, and generic-looking information is not automatically safe. Follow organizational policy and authorized security guidance.
+## 16. Personnel continuity
 
-## AI handoff and aggregation
+Account states are Pending, Active, and Disabled; only Active users mutate. Disablement preserves Updates, Lessons, reviews, closeouts, and Activity. Derived findings identify inactive/missing Leads, no active maintainer, inactive Help contacts, disabled responsibilities, pending users, and missing Unit Admins. Authorized administrators reassign current responsibility without rewriting history.
 
-Project handoffs aggregate information from multiple fields and can become more sensitive in combination. Review every export before sharing it. A handoff does not determine releasability, even when each source field was entered separately. FORGE never automatically transmits a handoff to an external AI service; copy and download are intentional user actions.
+Primary Unit, additional memberships, Unit-admin scopes, and Project memberships are separate. Primary Unit transfer preserves other roles. Unit Admin succession assigns/activates a scoped replacement before removal. **Historical authorship and current responsibility are different concepts.**
 
-Receiving AI systems must:
+## 17. System administration
 
-- Work only from approved information present in the handoff.
-- Avoid asking for sensitive source context merely to improve analysis.
-- Never invent intentionally omitted information.
-- Recognize metadata-only records as valid.
-- Direct users to listed information owners and approved sources.
-- Treat exports as user-reviewed context, not automatically releasable information.
+System Admin controls lockout prevention/succession; user roles/accounts and Unit-admin scopes; Project responsibility/contact recovery; canonical Unit creation/edit and safe deactivation; Problem governance/conversion/relationships/consolidation; Tag creation/rename/merge; approved Location governance; Lesson/Help/artifact correction; receiving-Unit acknowledgment; Platform Integrity; system Needs Attention; filterable administrative Activity; and System-only UNCLASSIFIED metadata export.
 
-## Typical workflow
+An active Unit cannot be deactivated while leading nonterminal work. Supported mutations retain at least one active System Admin; two verified administrators are operationally preferred. Corrections retain original attribution and record actor provenance.
 
-1. Search for the capability Problem before creating new work.
-2. Review related Projects and compare different solution pathways.
-3. Open Executive View for decision context, Technical View for evidence, or AI Handoff for portable continuity.
-4. Check Documentation Availability before assuming detail should be in FORGE.
-5. Contact the originator when authoritative material is maintained elsewhere.
-6. Add appropriately releasable phases, Lessons, artifact metadata, executive language, and AI Context Notes.
-7. Review any handoff or large export before copying it to another system.
+## 18. Platform Integrity
 
-## Current prototype
+**Integrity failure** means internally inconsistent or unsafe data, such as invalid controlled canonical state, invalid relationships, incompatible role/scope, stale Help contact, or inactive Unit leading active work.
 
-The local prototype supports relational SQLite persistence; many-to-many Problem/Project and Project/Unit relationships; seven solution pathways; vendor, TTP, and training details; stable entity URLs; search and combined filters; comparison; executive, technical, and AI experiences; phases; Lessons; artifact metadata; Unit/Map/Graph discovery; and copy/download handoffs.
+**Setup / Governance Attention** means legitimate incomplete work, such as one System Admin, missing Unit Admin, unprioritized/unstewarded Problem, pending profile/submission, paused Project, blocker, or open Help Request.
 
-It intentionally does not provide classification review, automated sanitization, external-AI transmission, authorization bypass, repository ingestion, automated document ingestion, a classified environment, or a cross-domain solution. Authentication, cloud deployment, and production infrastructure are outside the current pass.
+Both are derived and clear automatically. They are continuity safeguards—not corruption flags, stored states, performance scores, or rankings. A clean environment can have zero failures and multiple initialization advisories.
 
-## How to begin
+## 19. Tracking IDs
 
-Open the Dashboard, search the capability phrase or tracking ID, select a Problem, compare existing Solution Efforts, and choose the audience-appropriate Project view. Create new work only after checking related records. If detail is intentionally external, contact the listed originator instead of duplicating or reconstructing it.
+Transactionally allocated families are `PRB-000001` (Problem), `PRJ-000001` (Project), `UNIT-000001` (Unit), `LES-000001` (Lesson), `USR-000001` (User), and `SUB-000001` (Submission). Integer IDs are internal. Public IDs remain stable across name/title changes; consolidation preserves historical IDs.
+
+## 20. Data model
+
+Core entities are Problem, Project, Unit, User, ProblemSubmission, SubmissionReview, ProjectUpdate, ProjectPhase, LessonLearned, HelpRequest, RepositoryLink, Tag, Location, and ActivityEvent.
+
+Junctions include ProblemProject (with primary Problem), ProjectUnit (separate from Lead Unit), ProblemUnit, UnitMembership (primary/additional/admin scope), ProjectMembership (Lead/Contributor), shared Tag junctions, Location junctions, and directional ProblemRelationship. VendorDetail, TacticDetail, and TrainingDetail extend pathways one-to-one. Project successor and Problem supersession are self-relations. Activity connects actors and affected entities.
+
+## 21. Application architecture
+
+FORGE is a Next.js 16 / React 19 / TypeScript full-stack application using Prisma 6 and local SQLite. `prisma/` owns schema/migrations/seeds; `lib/db.ts` the client; `lib/data/portal.ts` role-aware projections/derived state; `lib/data/mutations.ts` transactional mutations; `lib/auth/` identity/permissions; `lib/domain/` matching, search, IDs, types, documentation, validation, and handoff; `app/api/` server endpoints; and `components/` UI.
+
+Stable pages are `/problems/[id]`, `/projects/[id]`, `/units/[id]`, and `/guide`; top-level views are query-addressable. Tests create isolated disposable demo/operational SQLite databases, apply migrations/seeds, execute, then delete them. Broad client projections/filtering are pilot-safe but should be monitored with growth.
+
+## 22. Authorization architecture
+
+Server context contains identity, role, account state, primary Unit, memberships, administered Units, and Project memberships. Role grants capability; scope limits it. Project edit covers System Admin, creator, Project member, or qualifying Lead-Unit Admin. Team management is narrower: current Lead, Lead-Unit Admin, or System Admin. Canonical governance requires platform administration.
+
+UI gating is usability, never authority. Pending/Disabled users are denied server-side. Production identity must provide a stable trusted identifier mapped to an active record; never trust a client-provided role.
+
+## 23. Search and discovery
+
+Global search covers Problems, Projects, and Units. Submission matching is deterministic/explainable. Project creation surfaces existing work without blocking overlap. Explore filters Projects by query, maturity, capability, location, status, type, vendor, procurement, and recommendation. Problem comparison contrasts selected efforts. Related Work is current-Project driven, deterministic, explainable, and historical-inclusive. Problem/Unit views, map, graph, Lessons, Help Requests, and Activity provide linked discovery.
+
+Limits: global search omits direct Lesson/Help/submission/user indexing; matching is not semantic; Activity lacks deep pagination; map/graph are lightweight; comparison is wide on phones.
+
+## 24. Administrative provenance
+
+Activity retains actor, description, type, timestamp, and relevant Problem, Project, Unit, affected user, source Update, or entity link. It covers Project work, responsibility, Lessons, Help, closeout, accounts/roles, Units, canonical governance, consolidation, Tags, Locations, corrections, and recovery. Problem governance history is distinct from routine activity; submission reviews are append-only; corrections preserve original creators/authors.
+
+## 25. Clean versus demo data
+
+`pnpm db:seed:demo` and legacy `pnpm db:seed` load fictional development data. `pnpm db:seed:clean` destructively resets to approved Units, discovery-level Problems, zero Projects, governed Tags, and one generic bootstrap System Admin without inferring priorities, stewards, links, locations, POCs, or activity.
+
+Both commands are destructive against configured `DATABASE_URL`. Confirm target and mode. Never merge demo into operational data. Tests use temporary isolated databases.
+
+## 26. Current operational baseline
+
+Verified at this checkpoint: 9 Units; 12 canonical discovery-level Problems; 1 active generic bootstrap System Admin profile; 6 Tags; 0 Projects, submissions, Updates, Phases, Lessons, Help Requests, artifacts, Locations, or Activities; 0 fictional operational records; 0 blocking integrity failures; and 22 expected advisories (12 Problem refinements, 9 Unit-admin assignments, 1 System-admin redundancy). The bootstrap profile is not a credential.
+
+## 27. Pilot readiness
+
+**READY WITH MINOR INITIALIZATION.** Application development is substantially complete for a controlled local pilot. Remaining work: protect/push the stable checkpoint; establish two verified System Admins; select pilot Units; assign their Unit Admins; refine relevant Problems; add genuine approved Solution Efforts; confirm Leads; validate UNCLASSIFIED guidance; exercise backup/restore; run integrity/operational audits; and conduct brief role orientations. Never invent pilot content.
+
+## 28. Recommended pilot scope
+
+Recommendation, not a constraint: 2–3 Units, 3–6 Project teams, approximately 15–30 users, approximately 6–8 weeks. Start with administrators and Leads, seed genuine work, then add Contributors and leadership reviewers.
+
+## 29. Pilot success measures
+
+Measure duplicate Problems prevented/linked; cross-Unit discovery before repeated work; Lessons reused; Failed Approaches preventing repetition; Help Requests producing assistance; Lead/freshness continuity; turnover recovery; Executive View replacing separate briefs; AI Handoff continuity; and governance without database intervention. Do not optimize for success rate, login count, rankings, or activity leaderboards.
+
+## 30. Deployment architecture and boundaries
+
+Implemented: SQLite, Prisma migrations, relational authorization data, server enforcement, development identity switching, reference metadata, clean/demo initialization, tests/build, integrity, and metadata export.
+
+Not production-implemented: trusted authentication, PostgreSQL deployment validation, file/blob storage, automated backup/disaster recovery, HTTPS/proxy, notifications, monitoring/observability, and operational support. SQLite is for prototype/controlled pilot, not intended production. External references may remain preferred for controlled material.
+
+## 31. Deployment runbook summary
+
+`docs/DEPLOYMENT_RUNBOOK.md` is canonical for trusted identity mapping, switcher disablement, System Admin succession/bootstrap retirement, SQLite backup/restore, seed warnings, PostgreSQL/file-storage boundaries, HTTPS/hosting responsibilities, and deployment checklist. Stop SQLite before copying, record matching commit, test restore, check migrations/counts/integrity, and never mistake JSON export for database backup.
+
+## 32. Known limitations
+
+- No production authentication; SQLite concurrency/recovery is prototype-grade.
+- No internal production file blobs, notifications, messaging, or subscriptions.
+- Global search does not index all knowledge domains; matching is deterministic, not semantic.
+- Activity lacks deep server pagination; broad projections/client filters need scale monitoring.
+- Comparison is best on tablet/desktop; map/graph are lightweight aids.
+- Clean baseline intentionally lacks operational content, staffing, refinement, and Locations.
+- Parent organization is textual; no inherited authority hierarchy or Unit AI Handoff.
+
+## 33. Deferred enhancements
+
+Production authentication, PostgreSQL, object storage, automated backups, notifications, relational parent hierarchy, inherited administration, advanced analytics, CSV import, Unit AI Handoff, semantic similarity, external repository synchronization, deep Activity pagination, and richer map/graph visualization are intentionally deferred and are not controlled-pilot blockers unless scope changes.
+
+## 34. Developer modification guidance
+
+1. Read `AGENTS.md`, this manual, and Git state.
+2. Inspect current schema, migrations, domain/data/auth, UI, routes, tests, and deployment docs.
+3. Preserve stable IDs; use migrations for schema changes.
+4. Preserve clean/demo separation; never fabricate operations.
+5. Enforce role, account, Unit, and Project scope server-side.
+6. Preserve attribution; prefer correction/archive/supersession/consolidation over deletion.
+7. Preserve independent Problem/Project lifecycles and permitted parallel Projects.
+8. Keep Project Update the routine entry point and reuse facts downstream.
+9. Preserve Documentation Availability, originator guidance, and UNCLASSIFIED boundary.
+10. Test in disposable databases and restore/verify operational state.
+11. Run Prisma validation/migration status, TypeScript, lint, tests, build, whitespace, operational, and sensitive-file checks.
+12. Review, checkpoint, and push only when directed.
+
+## 35. Critical invariants
+
+- Problems and Projects have independent lifecycles; multiple Projects may address one Problem.
+- Each Project retains a Problem, primary Problem, participating Unit, Lead Unit, and exactly one Lead.
+- Project closeout never closes a Problem; status/outcome must be compatible.
+- Failed/inconclusive/cancelled/superseded knowledge remains discoverable.
+- Historical authorship remains; current responsibility may change.
+- At least one active System Admin remains; two are operationally preferred.
+- Unit Admin scope is explicit and separate from membership.
+- Canonical IDs remain stable; Problem/Unit creation is governed.
+- Consolidation preserves old PRBs and prevents cycles.
+- Lead Unit change does not silently change Project Lead.
+- UNCLASSIFIED only; capability abstraction precedes entry.
+- Metadata-only knowledge is valid; withheld content is never reconstructed.
+- Updates minimize duplicate maintenance; integrity/attention are safeguards, not scores.
+
+## 36. Instructions to a future AI
+
+1. Read this manual completely.
+2. Read `AGENTS.md`.
+3. Inspect Git HEAD, branch, status, and remote state.
+4. Inspect relevant schema, migrations, domain, data, authorization, routes, UI, tests, and deployment code.
+5. Treat current code as authoritative; this document does not override it.
+6. Preserve security, governance, continuity, and cultural-safety invariants.
+7. Make incremental scoped changes.
+8. Validate before committing.
+9. Never fabricate operational data.
+10. Ask humans when policy, classification, ownership, or operational meaning is ambiguous.
+
+Markdown remains canonical. A separate static plain-text copy is intentionally not maintained because it would duplicate and drift; runtime Project AI Handoffs already generate plain text where needed.
