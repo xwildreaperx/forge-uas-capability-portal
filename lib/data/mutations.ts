@@ -38,6 +38,17 @@ const documentationValue = (value: unknown): DocumentationValue =>
     ? (value as DocumentationValue)
     : 'AVAILABLE_IN_FORGE';
 
+const PROJECT_STATUSES = ['Planning', 'Active', 'Paused', 'Transitioning', 'Completed', 'Cancelled', 'Superseded'] as const;
+const PROJECT_MATURITIES = ['Concept', 'Prototype', 'Field Tested', 'Validated'] as const;
+const PROJECT_OUTCOMES = ['SUCCESSFUL', 'PARTIALLY_SUCCESSFUL', 'UNSUCCESSFUL', 'INCONCLUSIVE', 'SUPERSEDED', 'CANCELLED'] as const;
+const PHASE_STATUSES = ['Planned', 'In Progress', 'Complete'] as const;
+const LESSON_TYPES = ['CONFIRMED_FINDING', 'WORKING_HYPOTHESIS', 'FAILED_APPROACH', 'RECOMMENDATION', 'UNRESOLVED_QUESTION'] as const;
+const controlled = <T extends readonly string[]>(value: unknown, values: T, label: string): T[number] => {
+  if (typeof value !== 'string' || !values.includes(value as T[number])) throw new Error(`${label} is invalid.`);
+  return value as T[number];
+};
+const nullableDate = (value: unknown) => value ? optionalDate(value) : null;
+
 export async function detectRelatedProblems(input: {
   title: string;
   description?: string;
@@ -325,12 +336,13 @@ export async function addProjectUpdate(
   const actor = assertProjectEdit(user, project);
   const occurredAt = optionalDate(input.occurredAt);
   const phaseId = input.phaseId ? Number(input.phaseId) : null;
+  let associatedPhase: { id: number; status: string; startedAt: Date | null; completedAt: Date | null } | null = null;
   if (phaseId) {
-    const phase = await db.projectPhase.findFirst({
+    associatedPhase = await db.projectPhase.findFirst({
       where: { id: phaseId, projectId },
-      select: { id: true },
+      select: { id: true, status: true, startedAt: true, completedAt: true },
     });
-    if (!phase) throw new Error('Associated Phase must belong to this Project.');
+    if (!associatedPhase) throw new Error('Associated Phase must belong to this Project.');
   }
   const summary = requiredString(input.summary, 'Update summary');
   const result = requiredString(input.result, 'Result / finding');
@@ -338,6 +350,10 @@ export async function addProjectUpdate(
   const blockerRisk = optional(input.blockerRisk);
   const statusAfter = optional(input.status);
   const maturityAfter = optional(input.maturity);
+  if (statusAfter) controlled(statusAfter, PROJECT_STATUSES, 'Project status');
+  if (statusAfter && ['Completed', 'Cancelled', 'Superseded'].includes(statusAfter))
+    throw new Error('Use Close Out Project to record a terminal status and final disposition.');
+  if (maturityAfter) controlled(maturityAfter, PROJECT_MATURITIES, 'Project maturity');
   const completionAfter =
     input.completion === undefined || input.completion === ''
       ? null
@@ -347,6 +363,20 @@ export async function addProjectUpdate(
     project.lastMeaningfulActivityAt > occurredAt
       ? project.lastMeaningfulActivityAt
       : occurredAt;
+  const phaseStatus = optional(input.phaseStatus);
+  const phaseCompletion = input.phaseCompletion === undefined || input.phaseCompletion === '' ? null : completionValue(input.phaseCompletion);
+  const phaseResult = optional(input.phaseResult) ?? (input.updatePhaseResult ? result : null);
+  const phaseBlockerRisk = optional(input.phaseBlockerRisk) ?? (input.updatePhaseRisk ? blockerRisk : null);
+  const phaseNextAction = optional(input.phaseNextAction) ?? (input.updatePhaseNextAction ? nextStep : null);
+  if (phaseStatus) controlled(phaseStatus, PHASE_STATUSES, 'Phase status');
+  if (!phaseId && (phaseStatus || phaseCompletion !== null || phaseResult || phaseBlockerRisk || phaseNextAction))
+    throw new Error('Select an associated Phase before changing Phase state.');
+  const significantMaturity = maturityAfter === 'Field Tested' || maturityAfter === 'Validated';
+  const maturityEvidenceEvent = optional(input.maturityEvidenceEvent);
+  const maturityEvidenceReference = optional(input.maturityEvidenceReference);
+  const maturityEvidenceDate = significantMaturity ? nullableDate(input.maturityEvidenceDate ?? input.occurredAt) : null;
+  if (significantMaturity && !maturityEvidenceEvent)
+    throw new Error('Supporting event or evaluation is required for Field Tested or Validated maturity.');
 
   return db.$transaction(async (tx) => {
     const update = await tx.projectUpdate.create({
@@ -362,8 +392,23 @@ export async function addProjectUpdate(
         statusAfter,
         maturityAfter,
         completionAfter,
+        maturityEvidenceEvent,
+        maturityEvidenceDate,
+        maturityEvidenceReference,
       },
     });
+    if (phaseId && (phaseStatus || phaseCompletion !== null || phaseResult || phaseBlockerRisk || phaseNextAction)) {
+      await tx.projectPhase.update({ where: { id: phaseId }, data: {
+        status: phaseStatus ?? undefined,
+        completion: phaseCompletion ?? undefined,
+        result: phaseResult ?? undefined,
+        blocker: phaseBlockerRisk ?? undefined,
+        risk: phaseBlockerRisk ?? undefined,
+        nextAction: phaseNextAction ?? undefined,
+        startedAt: phaseStatus === 'In Progress' && !associatedPhase?.startedAt ? occurredAt : undefined,
+        completedAt: phaseStatus === 'Complete' && !associatedPhase?.completedAt ? occurredAt : undefined,
+      } });
+    }
     await tx.project.update({
       where: { id: projectId },
       data: {
@@ -376,11 +421,21 @@ export async function addProjectUpdate(
         lastMeaningfulActivityAt,
       },
     });
+    if (input.saveAsLesson === true || input.saveAsLesson === 'true') {
+      const lessonType = controlled(input.lessonType, LESSON_TYPES, 'Lesson Type');
+      const lessonTitle = requiredString(input.lessonTitle, 'Lesson title');
+      await tx.lessonLearned.create({ data: {
+        trackingId: await nextTrackingId(tx, 'Lesson'), projectId, phaseId, sourceUpdateId: update.id,
+        createdByUserId: actor.id, unitId: project.leadUnitId, lessonType, title: lessonTitle,
+        finding: result, recommendation: optional(input.lessonRecommendation) ?? '', date: occurredAt,
+      } });
+      await tx.activityEvent.create({ data: { timestamp: occurredAt, eventType: 'LESSON_ADDED', description: `Saved Update finding as Lesson Learned: ${lessonTitle}.`, actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id } });
+    }
     await tx.activityEvent.create({
       data: {
         timestamp: occurredAt,
         eventType: 'PROJECT_UPDATE',
-        description: `${project.trackingId} update: ${summary}`,
+        description: `${project.trackingId} update: ${summary}${statusAfter ? `; status → ${statusAfter}` : ''}${maturityAfter ? `; maturity → ${maturityAfter}` : ''}${phaseStatus ? `; Phase → ${phaseStatus}${phaseCompletion !== null ? ` (${phaseCompletion}%)` : ''}` : ''}`,
         actor: actor.displayName,
         projectId,
         unitId: project.leadUnitId,
@@ -399,10 +454,19 @@ export async function updateProject(
 ) {
   const project = await db.project.findUniqueOrThrow({
     where: { trackingId: id },
-    select: { id: true, leadUnitId: true, createdByUserId: true },
+    select: { id: true, trackingId: true, leadUnitId: true, createdByUserId: true, status: true, maturity: true, lastMeaningfulActivityAt: true },
   });
-  assertProjectEdit(user, project);
-  return db.project.update({
+  const actor = assertProjectEdit(user, project);
+  const status = typeof input.status === 'string' ? controlled(input.status, PROJECT_STATUSES, 'Project status') : undefined;
+  const maturity = typeof input.maturity === 'string' ? controlled(input.maturity, PROJECT_MATURITIES, 'Project maturity') : undefined;
+  if (maturity && maturity !== project.maturity && ['Field Tested', 'Validated'].includes(maturity))
+    throw new Error('Advance to Field Tested or Validated through a Project Update with supporting evidence.');
+  const meaningfulStatusChange = status && status !== project.status;
+  if (meaningfulStatusChange && status && ['Completed', 'Cancelled', 'Superseded'].includes(status))
+    throw new Error('Use Close Out Project to record a terminal status and final disposition.');
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const updated = await tx.project.update({
     where: { trackingId: id },
     data: {
       name: input.name ? requiredString(input.name, 'Name') : undefined,
@@ -422,8 +486,8 @@ export async function updateProject(
         input.completion === undefined
           ? undefined
           : completionValue(input.completion),
-      status: typeof input.status === 'string' ? input.status : undefined,
-      maturity: typeof input.maturity === 'string' ? input.maturity : undefined,
+      status,
+      maturity,
       outcome: optional(input.outcome) ?? undefined,
       keyAdvantage: optional(input.keyAdvantage) ?? undefined,
       keyLimitation: optional(input.keyLimitation) ?? undefined,
@@ -452,7 +516,15 @@ export async function updateProject(
       leadershipAction: optional(input.leadershipAction) ?? undefined,
       originatorContact: optional(input.originatorContact) ?? undefined,
       accessInstructions: optional(input.accessInstructions) ?? undefined,
+      lastMeaningfulActivityAt: meaningfulStatusChange ? occurredAt : undefined,
     },
+  });
+    if (meaningfulStatusChange) await tx.activityEvent.create({ data: {
+      timestamp: occurredAt, eventType: status === 'Paused' ? 'PROJECT_PAUSED' : project.status === 'Paused' && status === 'Active' ? 'PROJECT_RESUMED' : 'PROJECT_STATUS_CHANGED',
+      description: `${project.trackingId} status changed from ${project.status} to ${status}.`, actor: actor.displayName,
+      projectId: project.id, unitId: project.leadUnitId, userId: actor.id,
+    } });
+    return updated;
   });
 }
 
@@ -662,16 +734,13 @@ export async function addProjectPhase(
       projectId,
       phaseName: requiredString(input.phaseName, 'Phase name'),
       objective: requiredString(input.objective, 'Objective'),
-      status: typeof input.status === 'string' ? input.status : 'Planned',
+      status: input.status ? controlled(input.status, PHASE_STATUSES, 'Phase status') : 'Planned',
       completion: completionValue(input.completion ?? 0),
-      executiveSummary: requiredString(
-        input.executiveSummary,
-        'Executive summary',
-      ),
-      technicalSummary: requiredString(
-        input.technicalSummary,
-        'Technical summary',
-      ),
+      executiveSummary: optional(input.executiveSummary) ?? '',
+      technicalSummary: optional(input.technicalSummary) ?? '',
+      result: optional(input.result), accomplishment: optional(input.accomplishment),
+      blocker: optional(input.blocker), risk: optional(input.risk), nextAction: optional(input.nextAction),
+      startedAt: nullableDate(input.startedAt), completedAt: nullableDate(input.completedAt),
       sortOrder: Number(input.sortOrder ?? 1),
       createdByUserId: actor.id,
     } });
@@ -685,6 +754,35 @@ export async function addProjectPhase(
   });
 }
 
+export async function updateProjectPhase(user: CurrentUserContext | null, projectId: number, phaseId: number, input: Record<string, unknown>) {
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { id: true, trackingId: true, leadUnitId: true, createdByUserId: true, lastMeaningfulActivityAt: true } });
+  const actor = assertProjectEdit(user, project);
+  const phase = await db.projectPhase.findFirstOrThrow({ where: { id: phaseId, projectId } });
+  const status = input.status ? controlled(input.status, PHASE_STATUSES, 'Phase status') : phase.status;
+  const completion = input.completion === undefined ? phase.completion : completionValue(input.completion);
+  const meaningful = status !== phase.status || completion !== phase.completion || (optional(input.result) && optional(input.result) !== phase.result);
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const updated = await tx.projectPhase.update({ where: { id: phaseId }, data: {
+      phaseName: input.phaseName ? requiredString(input.phaseName, 'Phase name') : undefined,
+      objective: optional(input.objective) ?? undefined, status, completion,
+      executiveSummary: optional(input.executiveSummary) ?? undefined,
+      technicalSummary: optional(input.technicalSummary) ?? undefined,
+      result: optional(input.result) ?? undefined, accomplishment: optional(input.accomplishment) ?? undefined,
+      blocker: optional(input.blocker) ?? undefined, risk: optional(input.risk) ?? undefined,
+      nextAction: optional(input.nextAction) ?? undefined,
+      startedAt: status === 'In Progress' && !phase.startedAt ? occurredAt : nullableDate(input.startedAt) ?? undefined,
+      completedAt: status === 'Complete' && !phase.completedAt ? occurredAt : nullableDate(input.completedAt) ?? undefined,
+    } });
+    if (meaningful) {
+      const eventType = status === 'Complete' && phase.status !== 'Complete' ? 'PHASE_COMPLETED' : status === 'In Progress' && phase.status === 'Planned' ? 'PHASE_STARTED' : 'PHASE_PROGRESSED';
+      await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+      await tx.activityEvent.create({ data: { timestamp: occurredAt, eventType, description: `${phase.phaseName}: ${status}, ${completion}%${optional(input.result) ? ' — result recorded.' : '.'}`, actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id } });
+    }
+    return updated;
+  });
+}
+
 export async function addLesson(
   user: CurrentUserContext | null,
   projectId: number,
@@ -695,6 +793,11 @@ export async function addLesson(
     select: { id: true, leadUnitId: true, createdByUserId: true },
   });
   const actor = assertProjectEdit(user, project);
+  const lessonType = input.lessonType ? controlled(input.lessonType, LESSON_TYPES, 'Lesson Type') : 'CONFIRMED_FINDING';
+  const phaseId = input.phaseId ? Number(input.phaseId) : null;
+  const sourceUpdateId = input.sourceUpdateId ? Number(input.sourceUpdateId) : null;
+  if (phaseId && !(await db.projectPhase.findFirst({ where: { id: phaseId, projectId } }))) throw new Error('Associated Phase must belong to this Project.');
+  if (sourceUpdateId && !(await db.projectUpdate.findFirst({ where: { id: sourceUpdateId, projectId } }))) throw new Error('Originating Update must belong to this Project.');
   const occurredAt = new Date();
   return db.$transaction(async (tx) => {
     const lesson = await tx.lessonLearned.create({
@@ -703,9 +806,13 @@ export async function addLesson(
         projectId,
         title: requiredString(input.title, 'Title'),
         finding: requiredString(input.finding, 'Finding'),
-        recommendation: requiredString(input.recommendation, 'Recommendation'),
-        date: new Date(),
+        recommendation: optional(input.recommendation) ?? '',
+        lessonType,
+        date: nullableDate(input.date) ?? new Date(),
         createdByUserId: actor.id,
+        phaseId,
+        unitId: input.unitId ? Number(input.unitId) : project.leadUnitId,
+        sourceUpdateId,
       },
     });
     await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
@@ -715,6 +822,31 @@ export async function addLesson(
       projectId, unitId: project.leadUnitId, userId: actor.id,
     } });
     return lesson;
+  });
+}
+
+export async function closeOutProject(user: CurrentUserContext | null, projectId: number, input: Record<string, unknown>) {
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { problemLinks: { include: { problem: true } }, phases: true, lessons: true, helpRequests: { where: { status: 'Open' } }, userMemberships: { include: { user: true } }, leadUnit: true } });
+  const actor = assertProjectEdit(user, project);
+  const status = controlled(input.status, ['Completed', 'Cancelled', 'Superseded'] as const, 'Final status');
+  const outcomeDisposition = controlled(input.outcomeDisposition, PROJECT_OUTCOMES, 'Outcome');
+  const finalResult = requiredString(input.finalResult, 'Final result');
+  const successorProjectId = input.successorProjectId ? Number(input.successorProjectId) : null;
+  if (status === 'Superseded' && successorProjectId === projectId) throw new Error('A Project cannot supersede itself.');
+  if (successorProjectId && !(await db.project.findUnique({ where: { id: successorProjectId } }))) throw new Error('Successor Project is invalid.');
+  const occurredAt = nullableDate(input.closedAt) ?? new Date();
+  return db.$transaction(async (tx) => {
+    const updated = await tx.project.update({ where: { id: projectId }, data: {
+      status, outcomeDisposition, outcome: optional(input.outcomeNarrative), finalResult,
+      latestResult: finalResult, whatWorked: optional(input.whatWorked), whatDidNotWork: optional(input.whatDidNotWork),
+      recommendedNextAction: optional(input.recommendedNextAction), nextStep: optional(input.recommendedNextAction) ?? undefined,
+      documentationAvailability: input.documentationAvailability ? documentationValue(input.documentationAvailability) : undefined,
+      successorProjectId, closedAt: occurredAt, closedByUserId: actor.id,
+      completion: input.completion === undefined || input.completion === '' ? undefined : completionValue(input.completion),
+      lastMeaningfulActivityAt: occurredAt,
+    } });
+    await tx.activityEvent.create({ data: { timestamp: occurredAt, eventType: 'PROJECT_CLOSED_OUT', description: `${project.trackingId} closed as ${status}; outcome: ${outcomeDisposition.replaceAll('_', ' ').toLowerCase()}. Final result: ${finalResult}`, actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id } });
+    return updated;
   });
 }
 

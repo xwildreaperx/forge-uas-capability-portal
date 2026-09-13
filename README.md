@@ -32,6 +32,14 @@ Accounts are Pending, Active, or Disabled. Unit membership, Unit-administrator s
 
 Every Project has exactly one current Project Lead and may have multiple Contributors. Creation records the creator as the initial Lead; later Lead changes preserve the creator and all historical authorship. Current Project Leads, the Lead Unit's administrators, and System Administrators may manage the team. Assigned active contributors may maintain Project content, while removing an assignment removes that edit scope. Disabled members remain visible as inactive historical participants until an authorized maintainer reassigns or removes them.
 
+## Project lifecycle and institutional knowledge
+
+Project status (Planning, Active, Paused, Transitioning, Completed, Cancelled, or Superseded), maturity (Concept, Prototype, Field Tested, or Validated), completion, current Phase, and outcome are intentionally separate. Phases are progressively editable. A Project Update can progress its associated Phase and serve as evidence for a Field Tested or Validated maturity change without duplicate entry. These maturity labels are FORGE knowledge-management indicators, not acquisition or doctrinal certification.
+
+Closeout records a controlled outcome—Successful, Partially Successful, Unsuccessful, Inconclusive, Superseded, or Cancelled—plus final result, what worked, what did not, recommended next action, optional successor, and documentation availability. Closeout never closes a related Problem or removes team, Unit, Phase, Update, Lesson, or artifact history. Negative and inconclusive results remain searchable.
+
+Lessons are typed as Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, or Unresolved Question. New Lessons retain author, date, Phase, Unit, and originating Update provenance where available. Problem pages reference Lessons Across Solution Efforts without duplicating records or implying automated consensus.
+
 ## Three knowledge experiences
 
 - **Executive** is a one-minute, plain-language brief with the problem, approach, demonstrated result, risk, next step, and leadership action.
@@ -95,7 +103,7 @@ pnpm test
 pnpm build
 ```
 
-Tests cover both many-to-many relationships, Lead Unit and Project Lead invariants, scoped team management, contributor edit access, durable attribution, tracking formats, persisted Problem/Project creation, editable multi-Problem and multi-Unit links, conditional organic/vendor/TTP/training detail persistence, exact ID/keyword search, solution-type/vendor filtering, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
+Tests cover both many-to-many relationships, Lead Unit and Project Lead invariants, scoped team management, contributor edit access, phase progression, Update-driven Phase and maturity evidence, typed Lesson provenance, lifecycle status/outcome separation, closeout, failed-work preservation, tracking formats, persisted Problem/Project creation, editable multi-Problem and multi-Unit links, deterministic duplicate detection, governed reference-only metadata, and portable handoff formats.
 
 ## Seed and persistence
 

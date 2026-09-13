@@ -44,6 +44,23 @@ enum ProjectMembershipRole {
   CONTRIBUTOR
 }
 
+enum ProjectOutcome {
+  SUCCESSFUL
+  PARTIALLY_SUCCESSFUL
+  UNSUCCESSFUL
+  INCONCLUSIVE
+  SUPERSEDED
+  CANCELLED
+}
+
+enum LessonType {
+  CONFIRMED_FINDING
+  WORKING_HYPOTHESIS
+  FAILED_APPROACH
+  RECOMMENDATION
+  UNRESOLVED_QUESTION
+}
+
 enum ProblemSubmissionStatus {
   SUBMITTED
   UNDER_REVIEW
@@ -104,6 +121,8 @@ model User {
   unitMemberships     UnitMembership[]
   projectMemberships  ProjectMembership[]
   projectUpdates      ProjectUpdate[]
+  lessonsRecorded     LessonLearned[]      @relation("LessonAuthor")
+  projectsClosed      Project[]            @relation("ProjectCloser")
   createdProjects     Project[]           @relation("ProjectCreator")
   submissions         ProblemSubmission[] @relation("ProblemSubmitter")
   reviewedSubmissions ProblemSubmission[] @relation("SubmissionReviewer")
@@ -204,6 +223,17 @@ model Project {
   maturity                      String
   completion                    Int
   outcome                       String?
+  outcomeDisposition            ProjectOutcome?
+  finalResult                   String?
+  whatWorked                    String?
+  whatDidNotWork                String?
+  recommendedNextAction         String?
+  closedAt                      DateTime?
+  closedByUserId                Int?
+  closedBy                      User?                     @relation("ProjectCloser", fields: [closedByUserId], references: [id])
+  successorProjectId            Int?
+  successorProject              Project?                  @relation("ProjectSuccessor", fields: [successorProjectId], references: [id])
+  supersededProjects            Project[]                 @relation("ProjectSuccessor")
   keyAdvantage                  String?
   keyLimitation                 String?
   latestResult                  String?
@@ -425,6 +455,10 @@ model ProjectUpdate {
   statusAfter     String?
   maturityAfter   String?
   completionAfter Int?
+  maturityEvidenceEvent     String?
+  maturityEvidenceDate      DateTime?
+  maturityEvidenceReference String?
+  lessons                   LessonLearned[]
   createdAt       DateTime      @default(now())
   activity        ActivityEvent?
 
@@ -437,6 +471,7 @@ model LessonLearned {
   title           String
   finding         String
   recommendation  String
+  lessonType      LessonType     @default(CONFIRMED_FINDING)
   date            DateTime
   projectId       Int
   project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -446,6 +481,9 @@ model LessonLearned {
   unit            Unit?         @relation(fields: [unitId], references: [id])
   tags            LessonTag[]
   createdByUserId Int?
+  createdBy       User?          @relation("LessonAuthor", fields: [createdByUserId], references: [id])
+  sourceUpdateId  Int?
+  sourceUpdate    ProjectUpdate? @relation(fields: [sourceUpdateId], references: [id])
 }
 
 model RepositoryLink {

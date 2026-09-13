@@ -9,6 +9,8 @@ const counts = {
   phases: await db.projectPhase.count(), lessons: await db.lessonLearned.count(), repositories: await db.repositoryLink.count(), updates: await db.projectUpdate.count(),
   activities: await db.activityEvent.count(), helpRequests: await db.helpRequest.count(), vendors: await db.vendorDetail.count(),
   tactics: await db.tacticDetail.count(), training: await db.trainingDetail.count(), locations: await db.location.count(), tags: await db.tag.count(),
+  maturityEvidence: await db.projectUpdate.count({ where: { maturityEvidenceEvent: { not: null } } }),
+  successorRelationships: await db.project.count({ where: { successorProjectId: { not: null } } }),
 };
 const knownFictional = {
   demoProjects: await db.project.count({ where: { name: { in: ['Airborne Communications Relay', 'Directional Antenna Employment Technique'] } } }),

@@ -34,3 +34,8 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - Keep Project creator, current Project Lead, and Contributors distinct. Lead reassignment must never rewrite creator identity or historical authorship, and each Project must retain exactly one current Lead assignment.
 - Project team changes are limited to the current Project Lead, the Lead Unit's administrators, and System Administrators. Relationship edits follow existing Project edit scope. Enforce both rules server-side.
 - Preserve at least one related Problem, one primary Problem, one participating Unit, and one Lead Unit. Lead Unit changes do not imply Project Lead changes.
+- Never collapse Project status, maturity, completion, Phase, and outcome into one concept. Status is lifecycle state; maturity is evidence/readiness; completion is planned-work progress; a Phase is the work portion underway; outcome is final disposition.
+- Project closeout never closes or resolves a Problem. Completed, Cancelled, Superseded, Unsuccessful, and Inconclusive efforts remain discoverable institutional knowledge.
+- Prefer one Project Update for routine progress, Phase progression, Project state, and maturity evidence. Avoid asking users to enter the same result into disconnected forms or generating redundant Activity.
+- Field Tested and Validated maturity changes must retain supporting event, date, author, result, and optional Phase/reference provenance through their Project Update.
+- Lesson Type changes interpretation, especially in AI Handoff. Preserve Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, and Unresolved Question distinctions and their known provenance.

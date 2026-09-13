@@ -12,6 +12,17 @@ export type PortalProject = {
   updatedAt: string;
   lastMeaningfulActivityAt: string;
   outcome: string;
+  outcomeDisposition: string;
+  outcomeLabel: string;
+  finalResult: string;
+  whatWorked: string;
+  whatDidNotWork: string;
+  recommendedNextAction: string;
+  closedAt: string;
+  closedByName: string;
+  successorProjectId: string;
+  successorProjectName: string;
+  openHelpRequestCount: number;
   documentationAvailability: string;
   documentationLabel: string;
   executiveSummaryPlainLanguage: string;
@@ -62,6 +73,14 @@ export type PortalProject = {
     completion: number;
     summary: string;
     result: string;
+    objective: string;
+    executiveSummary: string;
+    accomplishment: string;
+    blocker: string;
+    risk: string;
+    nextAction: string;
+    startedAt: string;
+    completedAt: string;
   }[];
   updates: {
     id: number;
@@ -76,12 +95,21 @@ export type PortalProject = {
     statusAfter: string;
     maturityAfter: string;
     completionAfter: number | null;
+    maturityEvidenceEvent: string;
+    maturityEvidenceDate: string;
+    maturityEvidenceReference: string;
   }[];
   lessons: {
     id: string;
     title: string;
     finding: string;
     recommendation: string;
+    lessonType: string;
+    lessonTypeLabel: string;
+    date: string;
+    phaseName: string;
+    authorName: string;
+    sourceUpdateId: number | null;
   }[];
   repositories: {
     id: number;

@@ -2159,6 +2159,18 @@ main {
   margin-top: 7px;
   color: var(--green);
 }
+.update-integration { border: 1px solid #ccd7d4; border-radius: 12px; padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.update-integration legend { color: #173f3a; font-weight: 750; padding: 0 6px; }
+.closeout-review { background: #eef5f3; border-left: 4px solid #1f5c53; border-radius: 8px; padding: 14px 16px; }
+.closeout-review p { margin: 7px 0 0; line-height: 1.6; }
+.knowledge-summary > p { margin: 10px 0 0; }
+.evidence-note { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #edf4fa; color: #264b67; }
+.lesson-type, .outcome-chip { display: inline-flex; width: fit-content; border-radius: 999px; padding: 3px 8px; background: #e9f1ef; color: #24524b; font-size: .75rem; font-weight: 750; letter-spacing: .03em; }
+.outcome-card { border-top-color: #456e68; }
+.problem-lessons { margin-top: 28px; }
+.cross-project-lesson { display: grid; width: 100%; text-align: left; gap: 6px; padding: 14px; margin-top: 10px; border: 1px solid #dbe2e0; border-radius: 10px; background: #fff; }
+.cross-project-lesson p { margin: 0; color: #485d58; }
+.cross-project-lesson small { color: #637671; }
 @media (max-width: 700px) {
   .team-roster,
   .team-responsibility-grid,
@@ -2166,6 +2178,7 @@ main {
   .relationship-unit {
     grid-template-columns: 1fr;
   }
+  .update-integration { grid-template-columns: 1fr; }
 }
 .fact-grid {
   margin-top: 15px;

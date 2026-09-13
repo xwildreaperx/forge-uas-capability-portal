@@ -4,7 +4,7 @@ import type { PortalData, PortalProject } from '@/lib/data/types';
 import { DOCUMENTATION_OPTIONS } from '@/lib/domain/documentation';
 import { findProjectsForProblems } from '@/lib/domain/matching';
 
-type Action = 'update' | 'edit' | 'team' | 'relationships' | 'phase' | 'lesson' | 'repository' | null;
+type Action = 'update' | 'edit' | 'team' | 'relationships' | 'phase' | 'phase_edit' | 'lesson' | 'repository' | 'closeout' | null;
 export function ProjectActions({ project, data, canManageTeam }: { project: PortalProject; data: PortalData; canManageTeam: boolean }) {
   const [action, setAction] = useState<Action>(null);
   const [error, setError] = useState('');
@@ -12,6 +12,8 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
   const [unitSearch, setUnitSearch] = useState('');
   const initialLeadUnitId = data.units.find((unit) => unit.id === project.unitId)?.dbId ?? 0;
   const [leadUnitId, setLeadUnitId] = useState(initialLeadUnitId);
+  const [selectedPhaseId, setSelectedPhaseId] = useState(project.phases[0]?.id ?? 0);
+  const selectedPhase = project.phases.find((phase) => phase.id === selectedPhaseId);
   const [selectedProblemIds, setSelectedProblemIds] = useState(
     data.problems.filter((problem) => project.problems.some((item) => item.id === problem.id)).map((problem) => problem.dbId),
   );
@@ -47,17 +49,21 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
         ? ''
         : action === 'update'
           ? '/updates'
+        : action === 'closeout'
+          ? '/closeout'
         : action === 'team'
           ? '/team'
           : action === 'relationships'
             ? '/relationships'
         : action === 'phase'
           ? '/phases'
+          : action === 'phase_edit'
+            ? `/phases/${selectedPhaseId}`
           : action === 'lesson'
             ? '/lessons'
             : '/repositories';
     const response = await fetch(`/api/projects/${project.id}${suffix}`, {
-      method: ['edit', 'team', 'relationships'].includes(action) ? 'PATCH' : 'POST',
+      method: ['edit', 'team', 'relationships', 'phase_edit'].includes(action) ? 'PATCH' : 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(values),
     });
@@ -71,7 +77,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
   return (
     <div className="project-actions">
       <div>
-          {(['update', 'edit', ...(canManageTeam ? ['team' as const] : []), 'relationships', 'phase', 'lesson', 'repository'] as const).map((value) => (
+          {(['update', 'edit', ...(canManageTeam ? ['team' as const] : []), 'relationships', 'phase', ...(project.phases.length ? ['phase_edit' as const] : []), 'lesson', 'repository', 'closeout'] as const).map((value) => (
           <button
             className={value === 'update' ? 'create' : 'secondary'}
             key={value}
@@ -83,6 +89,10 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                 ? 'Manage Team'
                 : value === 'relationships'
                   ? 'Manage Relationships'
+                : value === 'phase_edit'
+                  ? 'Progress phase'
+                : value === 'closeout'
+                  ? 'Close Out Project'
               : value === 'edit'
               ? 'Edit effort'
               : value === 'phase'
@@ -142,6 +152,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                   <option>Planning</option>
                   <option>Active</option>
                   <option>Transitioning</option>
+                  <option>Paused</option>
                 </select>
               </label>
               <label>
@@ -158,6 +169,27 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                 Completion change <small>Optional</small>
                 <input name="completion" type="number" min="0" max="100" placeholder={`${project.progress}% currently`} />
               </label>
+              <fieldset className="wide-field update-integration">
+                <legend>Apply this Update to the selected Phase <small>Optional</small></legend>
+                <label>Phase status<select name="phaseStatus" defaultValue=""><option value="">No change</option><option>Planned</option><option>In Progress</option><option>Complete</option></select></label>
+                <label>Phase completion<input name="phaseCompletion" type="number" min="0" max="100" /></label>
+                <label className="checkline"><input type="checkbox" name="updatePhaseResult" value="true" />Use this result as the Phase result</label>
+                <label className="checkline"><input type="checkbox" name="updatePhaseRisk" value="true" />Use this blocker/risk in the Phase</label>
+                <label className="checkline"><input type="checkbox" name="updatePhaseNextAction" value="true" />Use this next step as the Phase next action</label>
+              </fieldset>
+              <fieldset className="wide-field update-integration">
+                <legend>Maturity evidence <small>Required when advancing to Field Tested or Validated</small></legend>
+                <label>Supporting event / evaluation<input name="maturityEvidenceEvent" placeholder="Field event, test, or evaluation" /></label>
+                <label>Evidence date<input name="maturityEvidenceDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+                <label>Artifact / reference <small>Optional</small><input name="maturityEvidenceReference" placeholder="Approved reference or access pointer" /></label>
+              </fieldset>
+              <fieldset className="wide-field update-integration">
+                <legend>Save this finding as a Lesson <small>Optional</small></legend>
+                <label className="checkline"><input type="checkbox" name="saveAsLesson" value="true" />Create a relational Lesson from this Update</label>
+                <label>Lesson Type<select name="lessonType" defaultValue="CONFIRMED_FINDING"><option value="CONFIRMED_FINDING">Confirmed Finding</option><option value="WORKING_HYPOTHESIS">Working Hypothesis</option><option value="FAILED_APPROACH">Failed Approach</option><option value="RECOMMENDATION">Recommendation</option><option value="UNRESOLVED_QUESTION">Unresolved Question</option></select></label>
+                <label>Lesson title<input name="lessonTitle" placeholder="Review and name the finding" /></label>
+                <label>Recommendation <small>Optional</small><input name="lessonRecommendation" /></label>
+              </fieldset>
               <p className="update-author wide-field">Author is recorded from your current FORGE identity.</p>
             </>
           )}
@@ -257,7 +289,9 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                   <option>Planning</option>
                   <option>Active</option>
                   <option>Transitioning</option>
+                  <option>Paused</option>
                 </select>
+                <small>Lifecycle state: Planning, underway, paused, or transitioning. Use Close Out Project for terminal states.</small>
               </label>
               <label>
                 Maturity
@@ -267,6 +301,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                   <option>Field Tested</option>
                   <option>Validated</option>
                 </select>
+                <small>FORGE knowledge maturity: Concept, working Prototype, representative Field Test, or evidence-supported Validation—not formal certification.</small>
               </label>
               <label>
                 Completion
@@ -279,7 +314,7 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
                 />
               </label>
               <label>
-                Outcome
+                Outcome context
                 <input name="outcome" defaultValue={project.outcome} />
               </label>
               <label>
@@ -417,20 +452,57 @@ export function ProjectActions({ project, data, canManageTeam }: { project: Port
               />
             </>
           )}
+          {action === 'phase_edit' && selectedPhase && (
+            <>
+              <div className="wide-field update-form-intro"><strong>Progress an existing Phase.</strong><span>Phase state is distinct from overall Project status, maturity, completion, and outcome.</span></div>
+              <label className="wide-field">Phase<select value={selectedPhaseId} onChange={(event) => setSelectedPhaseId(Number(event.target.value))}>{project.phases.map((phase) => <option key={phase.id} value={phase.id}>{phase.name}</option>)}</select></label>
+              <label>Phase name<input name="phaseName" defaultValue={selectedPhase.name} required /></label>
+              <label>Status<select name="status" defaultValue={selectedPhase.status}><option>Planned</option><option>In Progress</option><option>Complete</option></select></label>
+              <label>Completion<input name="completion" type="number" min="0" max="100" defaultValue={selectedPhase.completion} /></label>
+              <label>Start date<input name="startedAt" type="date" defaultValue={selectedPhase.startedAt.slice(0, 10)} /></label>
+              <label>End date<input name="completedAt" type="date" defaultValue={selectedPhase.completedAt.slice(0, 10)} /></label>
+              <label className="wide-field">Objective<textarea name="objective" defaultValue={selectedPhase.objective} /></label>
+              <label>Executive summary<textarea name="executiveSummary" defaultValue={selectedPhase.executiveSummary} /></label>
+              <label>Technical summary<textarea name="technicalSummary" defaultValue={selectedPhase.summary} /></label>
+              <label>Result<textarea name="result" defaultValue={selectedPhase.result} /></label>
+              <label>Key accomplishment<textarea name="accomplishment" defaultValue={selectedPhase.accomplishment} /></label>
+              <label>Blocker<textarea name="blocker" defaultValue={selectedPhase.blocker} /></label>
+              <label>Risk<textarea name="risk" defaultValue={selectedPhase.risk} /></label>
+              <label>Next action<textarea name="nextAction" defaultValue={selectedPhase.nextAction} /></label>
+            </>
+          )}
           {action === 'lesson' && (
             <>
               <label>
                 Title
                 <input name="title" required />
               </label>
+              <label>Lesson Type<select name="lessonType" defaultValue="CONFIRMED_FINDING"><option value="CONFIRMED_FINDING">Confirmed Finding</option><option value="WORKING_HYPOTHESIS">Working Hypothesis</option><option value="FAILED_APPROACH">Failed Approach</option><option value="RECOMMENDATION">Recommendation</option><option value="UNRESOLVED_QUESTION">Unresolved Question</option></select></label>
+              <label>Associated Phase <small>Optional</small><select name="phaseId" defaultValue=""><option value="">No Phase selected</option>{project.phases.map((phase) => <option value={phase.id} key={phase.id}>{phase.name}</option>)}</select></label>
               <label>
                 Finding
                 <textarea name="finding" required />
               </label>
               <label>
                 Recommendation
-                <textarea name="recommendation" required />
+                <textarea name="recommendation" />
               </label>
+            </>
+          )}
+          {action === 'closeout' && (
+            <>
+              <div className="wide-field closeout-review"><strong>Closeout preserves institutional knowledge—it does not close any related Problem.</strong><p>{project.id} · {project.name}<br />Problems: {project.problems.map((problem) => problem.id).join(', ')} · Lead Unit: {project.unit}<br />Maturity: {project.maturity} · Completion: {project.progress}% · Lessons: {project.lessons.length}</p>{!project.latestResult && <p>Review note: no final/latest result is recorded.</p>}{!project.lessons.length && <p>Review note: no Lessons are recorded.</p>}{project.phases.some((phase) => phase.status !== 'Complete') && <p>Review note: unfinished Phases will remain unchanged.</p>}{project.openHelpRequestCount > 0 && <p>Review note: {project.openHelpRequestCount} open Help Request{project.openHelpRequestCount === 1 ? '' : 's'} will remain open.</p>}</div>
+              <label>Final status<select name="status" required defaultValue="Completed"><option>Completed</option><option>Cancelled</option><option>Superseded</option></select></label>
+              <label>Outcome / disposition<select name="outcomeDisposition" required><option value="SUCCESSFUL">Successful</option><option value="PARTIALLY_SUCCESSFUL">Partially Successful</option><option value="UNSUCCESSFUL">Unsuccessful</option><option value="INCONCLUSIVE">Inconclusive</option><option value="SUPERSEDED">Superseded</option><option value="CANCELLED">Cancelled</option></select></label>
+              <label className="wide-field">Final result<textarea name="finalResult" required defaultValue={project.latestResult} /></label>
+              <label>What worked<textarea name="whatWorked" /></label><label>What did not work<textarea name="whatDidNotWork" /></label>
+              <label className="wide-field">Recommended next action<textarea name="recommendedNextAction" defaultValue={project.nextStep} /></label>
+              <label>Outcome context <small>Optional</small><textarea name="outcomeNarrative" defaultValue={project.outcome} /></label>
+              <label>Successor Project <small>Optional</small><select name="successorProjectId" defaultValue=""><option value="">No successor recorded</option>{data.projects.filter((item) => item.dbId !== project.dbId).map((item) => <option key={item.id} value={item.dbId}>{item.id} · {item.name}</option>)}</select></label>
+              <label>Final completion <small>Optional</small><input name="completion" type="number" min="0" max="100" defaultValue={project.progress} /></label>
+              <label>Closeout date<input name="closedAt" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+              <label>Documentation availability<select name="documentationAvailability" defaultValue={project.documentationAvailability}>{DOCUMENTATION_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+              <p className="wide-field update-author">Before saving, consider what another Unit should avoid repeating, what remains unresolved, and where supporting knowledge can be obtained. Unfinished Phases and open Help Requests remain preserved.</p>
             </>
           )}
           {action === 'repository' && (

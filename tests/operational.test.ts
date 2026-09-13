@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { db } from '../lib/db.ts';
-import { addProjectPhase, addProjectUpdate, createProject, manageProjectTeam, ProblemMatchReviewRequired, submitProblem, updateProjectRelationships } from '../lib/data/mutations.ts';
+import { addLesson, addProjectPhase, addProjectUpdate, closeOutProject, createProject, manageProjectTeam, ProblemMatchReviewRequired, submitProblem, updateProject, updateProjectPhase, updateProjectRelationships } from '../lib/data/mutations.ts';
 import { getPortalData } from '../lib/data/portal.ts';
 import { canAccessUnit, canEditProject, hasPermission, type CurrentUserContext } from '../lib/auth/permissions.ts';
 import { findProjectsForProblems, findRelatedProblems, isPotentiallySimilarProject } from '../lib/domain/matching.ts';
@@ -103,6 +103,9 @@ test('clean operational initialization, discovery, and authorization remain vali
     summary: 'Field test completed.', result: 'Primary objective was met under the test conditions.',
     nextStep: 'Evaluate the revised configuration.', blockerRisk: 'One integration issue remains.',
     phaseId: phase.id, status: 'Active', maturity: 'Field Tested', completion: 60,
+    phaseStatus: 'In Progress', phaseCompletion: 50, updatePhaseResult: true, updatePhaseRisk: true, updatePhaseNextAction: true,
+    maturityEvidenceEvent: 'Temporary representative field evaluation', maturityEvidenceDate: '2026-09-07', maturityEvidenceReference: 'External temporary test reference',
+    saveAsLesson: true, lessonType: 'CONFIRMED_FINDING', lessonTitle: 'Temporary confirmed finding', lessonRecommendation: 'Retain the tested configuration.',
   });
   const updatedProject = await db.project.findUniqueOrThrow({ where: { id: project.id } });
   assert.equal(update.authorId, projectUser.id);
@@ -117,6 +120,17 @@ test('clean operational initialization, discovery, and authorization remain vali
   assert.ok(updatedProject.lastMeaningfulActivityAt && updatedProject.lastMeaningfulActivityAt >= update.occurredAt);
   assert.ok(updatedProject.lastMeaningfulActivityAt && updatedProject.lastMeaningfulActivityAt > project.lastMeaningfulActivityAt!);
   assert.ok(await db.activityEvent.findUnique({ where: { projectUpdateId: update.id } }));
+  const progressedPhase = await db.projectPhase.findUniqueOrThrow({ where: { id: phase.id } });
+  assert.equal(progressedPhase.status, 'In Progress');
+  assert.equal(progressedPhase.completion, 50);
+  assert.equal(progressedPhase.result, update.result);
+  assert.equal(progressedPhase.blocker, update.blockerRisk);
+  assert.equal((await db.projectUpdate.findUniqueOrThrow({ where: { id: update.id } })).maturityEvidenceEvent, 'Temporary representative field evaluation');
+  const updateLesson = await db.lessonLearned.findFirstOrThrow({ where: { sourceUpdateId: update.id } });
+  assert.equal(updateLesson.lessonType, 'CONFIRMED_FINDING');
+  assert.equal(updateLesson.createdByUserId, projectUser.id);
+  await updateProjectPhase(projectUser, project.id, phase.id, { status: 'Complete', completion: 100, result: 'Phase objective complete.', accomplishment: 'Evidence captured.', nextAction: 'Review maturity.' });
+  assert.equal((await db.projectPhase.findUniqueOrThrow({ where: { id: phase.id } })).completedAt instanceof Date, true);
   await assert.rejects(
     addProjectUpdate(contributor, project.id, { summary: 'Unauthorized update.', result: 'No result.', nextStep: 'None.' }),
     /permission|assigned, created, or administered-Unit Projects/,
@@ -204,4 +218,26 @@ test('clean operational initialization, discovery, and authorization remain vali
   assert.match(handoff, /PRB-000002/);
   assert.match(handoff, new RegExp(secondUnit.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.ok((await getPortalData(systemAdmin)).activities.some((event) => /Lead Unit changed|Project Lead changed/.test(event.description)));
+  for (const lessonType of ['WORKING_HYPOTHESIS', 'FAILED_APPROACH', 'RECOMMENDATION', 'UNRESOLVED_QUESTION'] as const)
+    await addLesson(projectUser, project.id, { title: `Temporary ${lessonType}`, finding: `Finding for ${lessonType}.`, lessonType, phaseId: phase.id });
+  assert.equal(await db.lessonLearned.count({ where: { projectId: project.id } }), 5);
+  await assert.rejects(addLesson(contributor, project.id, { title: 'Unauthorized lesson', finding: 'No.', lessonType: 'FAILED_APPROACH' }), /permission|assigned, created, or administered-Unit Projects/);
+  const problemStatusBeforeCloseout = (await db.problem.findUniqueOrThrow({ where: { id: secondProblem.id } })).status;
+  await closeOutProject(projectUser, project.id, { status: 'Completed', outcomeDisposition: 'UNSUCCESSFUL', finalResult: 'The temporary approach did not achieve the intended result.', whatDidNotWork: 'The tested configuration was insufficient.', recommendedNextAction: 'Avoid repeating the recorded dead end.', completion: 100, documentationAvailability: 'METADATA_ONLY' });
+  const closed = await db.project.findUniqueOrThrow({ where: { id: project.id } });
+  assert.equal(closed.status, 'Completed');
+  assert.equal(closed.outcomeDisposition, 'UNSUCCESSFUL');
+  assert.equal((await db.problem.findUniqueOrThrow({ where: { id: secondProblem.id } })).status, problemStatusBeforeCloseout);
+  const closedProjection = (await getPortalData(systemAdmin)).projects.find((item) => item.id === project.trackingId)!;
+  assert.match(projectHandoffMarkdown(closedProjection), /Final Disposition and Closeout/);
+  assert.match(projectHandoffMarkdown(closedProjection), /Failed Approach/);
+  assert.ok((await getPortalData(systemAdmin)).activities.some((event) => event.eventType === 'PROJECT_CLOSED_OUT'));
+  await updateProject(projectUser, secondProject.trackingId, { status: 'Paused' });
+  await updateProject(projectUser, secondProject.trackingId, { status: 'Active' });
+  assert.ok((await db.activityEvent.findMany({ where: { projectId: secondProject.id } })).some((event) => event.eventType === 'PROJECT_PAUSED'));
+  for (const [status, disposition] of [['Completed', 'SUCCESSFUL'], ['Completed', 'PARTIALLY_SUCCESSFUL'], ['Completed', 'INCONCLUSIVE'], ['Cancelled', 'CANCELLED'], ['Superseded', 'SUPERSEDED']] as const)
+    await closeOutProject(projectUser, secondProject.id, { status, outcomeDisposition: disposition, finalResult: `Temporary ${disposition} closeout.`, successorProjectId: status === 'Superseded' ? project.id : undefined });
+  const superseded = await db.project.findUniqueOrThrow({ where: { id: secondProject.id } });
+  assert.equal(superseded.status, 'Superseded');
+  assert.equal(superseded.successorProjectId, project.id);
 });

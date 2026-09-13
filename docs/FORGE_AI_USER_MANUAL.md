@@ -32,6 +32,16 @@ Problems → Solution Efforts / Projects → Units → Capabilities → Phases a
 - **Status** describes workflow state: Planning, Active, Transitioning, and related lifecycle states.
 - **Outcome** records what resulted. It is not interchangeable with status or maturity.
 
+## Project operations and lifecycle
+
+Use Project Updates as the routine chronological record. One Update can record the result, next step, risk, Project status/maturity/completion change, progress an associated Phase, and—when selected—create a reviewed Lesson. A Field Tested or Validated change requires a supporting event/evaluation and date; the Update itself is the evidence record, with its author, result, Phase, and optional reference.
+
+Phases support Planned, In Progress, and Complete states and remain editable as objectives, summaries, results, accomplishments, blockers, risks, dates, and next actions develop. Completing a Phase does not close its Project.
+
+Closeout is an institutional-knowledge workflow, not administrative archiving. It records terminal status, controlled outcome, final result, what worked, what did not, next recommendation, documentation availability, and an optional successor. Closeout does not change the lifecycle of linked Problems. Closed and negative-result Projects stay discoverable.
+
+Lesson Types are Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, and Unresolved Question. Treat them according to type; do not flatten hypotheses or unresolved questions into facts. Problem pages reference Lessons across linked efforts with originating Project, Lead Unit, Phase, author/date, and outcome context where known.
+
 ## Solution pathways
 
 FORGE recognizes seven first-class pathways:

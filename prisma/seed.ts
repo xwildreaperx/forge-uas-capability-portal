@@ -385,7 +385,7 @@ async function main() {
           i === 0
             ? 'Use an additional airborne node to relay control and video around terrain masks.'
             : `Apply a focused ${tagNames[i % tagNames.length].toLowerCase()} approach with staged bench and field evaluation.`,
-        status: statuses[i % statuses.length],
+        status: i === 5 ? 'Completed' : i === 6 ? 'Completed' : i === 9 ? 'Completed' : i === 10 ? 'Superseded' : i === 11 ? 'Cancelled' : i === 12 ? 'Paused' : statuses[i % statuses.length],
         maturity,
         completion,
         outcome:
@@ -394,6 +394,12 @@ async function main() {
             : maturity === 'Field Tested'
               ? 'Promising field result'
               : 'Evaluation ongoing',
+        outcomeDisposition: i === 5 ? 'SUCCESSFUL' : i === 6 ? 'PARTIALLY_SUCCESSFUL' : i === 9 ? 'UNSUCCESSFUL' : i === 10 ? 'SUPERSEDED' : i === 11 ? 'CANCELLED' : null,
+        finalResult: [5, 6, 9, 10, 11].includes(i) ? (i === 9 ? 'The approach did not achieve the intended result under the recorded fictional conditions.' : projectNames[i] + ' reached its recorded end state.') : null,
+        whatWorked: [5, 6].includes(i) ? 'The staged evaluation produced reusable evidence.' : null,
+        whatDidNotWork: i === 9 ? 'The tested approach did not meet the recorded capability objective.' : null,
+        recommendedNextAction: [5, 6, 9, 10, 11].includes(i) ? 'Review the recorded Lessons before beginning related work.' : null,
+        closedAt: [5, 6, 9, 10, 11].includes(i) ? d('2026-08-28') : null,
         keyAdvantage:
           i === 0
             ? 'Extends connectivity around terrain limitations.'
@@ -558,13 +564,16 @@ async function main() {
             ? 'Mounting position affects link stability'
             : `${projectNames[i]} integration lesson`,
         finding:
-          i === 0
+          i === 9
+            ? 'The tested approach did not achieve the intended result under the recorded fictional conditions.'
+            : i === 0
             ? 'Airframe shadowing was more significant than predicted.'
             : 'Early interface checks reduced field troubleshooting time.',
         recommendation:
           i === 0
             ? 'Elevate the relay mounting position and verify antenna clearance.'
             : 'Use the shared pre-field integration checklist.',
+        lessonType: i === 9 ? 'FAILED_APPROACH' : i === 10 ? 'UNRESOLVED_QUESTION' : i % 4 === 0 ? 'RECOMMENDATION' : 'CONFIRMED_FINDING',
         date: d('2026-08-20'),
         projectId: project.id,
         phaseId: phases[1].id,
@@ -601,6 +610,12 @@ async function main() {
       { userId: users[2].id, projectId: projects[1].id, role: 'PROJECT_LEAD' },
     ],
   });
+  await db.project.update({ where: { id: projects[10].id }, data: { successorProjectId: projects[18].id } });
+  await db.projectUpdate.create({ data: {
+    projectId: projects[0].id, authorId: users[1].id, phaseId: (await db.projectPhase.findFirstOrThrow({ where: { projectId: projects[0].id }, orderBy: { sortOrder: 'desc' } })).id,
+    occurredAt: d('2026-08-20'), summary: 'Representative field evaluation completed.', result: 'Repeatable fictional field result recorded.', nextStep: 'Review evidence for transition.',
+    maturityAfter: 'Field Tested', completionAfter: 72, maturityEvidenceEvent: 'Fictional multi-unit field evaluation', maturityEvidenceDate: d('2026-08-20'), maturityEvidenceReference: 'External Reference — fictional evaluation report',
+  } });
   await db.problemSubmission.create({
     data: {
       trackingId: 'SUB-000001',

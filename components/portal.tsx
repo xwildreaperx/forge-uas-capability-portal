@@ -707,6 +707,22 @@ function ProblemView({
       </div>
     );
   const all = data.projects.filter((x) => problem.projectIds.includes(x.id));
+  const terminalStatuses = new Set(['Completed', 'Cancelled', 'Superseded']);
+  const activeEfforts = all.filter((project) => !terminalStatuses.has(project.status));
+  const historicalEfforts = all.filter((project) => terminalStatuses.has(project.status));
+  const lessonsAcrossEfforts = all.flatMap((project) => project.lessons.map((lesson) => ({ ...lesson, project })));
+  const effortCards = (projects: typeof all) => projects.length ? <div className="approach-grid">
+    {projects.map((p) => (
+      <article key={p.id}>
+        <div><span className={`dot ${p.tone}`} /><small>{p.status}</small><span className="maturity">{p.solutionTypeLabel}</span></div>
+        <h3>{p.name}</h3><p>{p.id} · {p.unit}</p>
+        {p.outcomeLabel && <p className="outcome-chip">Outcome: {p.outcomeLabel}</p>}
+        {p.finalResult && <p>{p.finalResult}</p>}
+        <Progress value={p.progress} /><footer><small>Completion</small><strong>{p.progress}%</strong></footer>
+        <button onClick={() => onProject(p.id)}>Open effort <ArrowRight size={15} /></button>
+      </article>
+    ))}
+  </div> : <p className="body-copy">No efforts in this lifecycle group.</p>;
   return (
     <>
       <div className="crumb">
@@ -737,32 +753,13 @@ function ProblemView({
           <p>{problem.problemStatement}</p>
         </div>
       </div>
-      <h2 className="section-title">
-        Solution efforts addressing this problem <span>{all.length}</span>
-      </h2>
-      {all.length ? <div className="approach-grid">
-        {all.map((p) => (
-          <article key={p.id}>
-            <div>
-              <span className={`dot ${p.tone}`} />
-              <small>{p.status}</small>
-              <span className="maturity">{p.solutionTypeLabel}</span>
-            </div>
-            <h3>{p.name}</h3>
-            <p>
-              {p.id} · {p.unit}
-            </p>
-            <Progress value={p.progress} />
-            <footer>
-              <small>Completion</small>
-              <strong>{p.progress}%</strong>
-            </footer>
-            <button onClick={() => onProject(p.id)}>
-              Open effort <ArrowRight size={15} />
-            </button>
-          </article>
-        ))}
-      </div> : <div className="empty-state"><Wrench /><h2>No Solution Efforts have been linked to this Problem yet.</h2><p>Participating Units can associate existing work or create an authorized Solution Effort from the Projects area.</p></div>}
+      <h2 className="section-title">Active Solution Efforts <span>{activeEfforts.length}</span></h2>
+      {all.length ? effortCards(activeEfforts) : <div className="empty-state"><Wrench /><h2>No Solution Efforts have been linked to this Problem yet.</h2><p>Participating Units can associate existing work or create an authorized Solution Effort from the Projects area.</p></div>}
+      {historicalEfforts.length > 0 && <><h2 className="section-title">Historical / Closed Solution Efforts <span>{historicalEfforts.length}</span></h2>{effortCards(historicalEfforts)}</>}
+      <section className="panel problem-lessons">
+        <PanelHead title="Lessons Across Solution Efforts" note="Persisted findings are referenced from their originating Projects; no consensus is inferred." />
+        {lessonsAcrossEfforts.length ? lessonsAcrossEfforts.map((lesson) => <button key={`${lesson.project.id}-${lesson.id}`} className="cross-project-lesson" onClick={() => onProject(lesson.project.id)}><span className="lesson-type">{lesson.lessonTypeLabel}</span><strong>{lesson.title}</strong><p>{lesson.finding}</p><small>{lesson.project.id} · {lesson.project.name} · {lesson.project.unit}{lesson.phaseName ? ` · ${lesson.phaseName}` : ''}{lesson.project.outcomeLabel ? ` · ${lesson.project.outcomeLabel}` : ''}</small></button>) : <p className="body-copy">No Lessons have been recorded across linked Solution Efforts.</p>}
+      </section>
     </>
   );
 }
@@ -866,6 +863,7 @@ function CompareView() {
                 </td>
               ))}
             </tr>
+            <tr><th>Status / outcome</th>{projects.map((p) => <td key={p.id}><b>{p.status}</b>{p.outcomeLabel ? ` · ${p.outcomeLabel}` : ''}</td>)}</tr>
             <tr>
               <th>Completion</th>
               {projects.map((p) => (
@@ -1087,7 +1085,7 @@ function ExecutiveSplash({
         <section className="exec-card">
           <p className="eyebrow">WHAT WE HAVE DEMONSTRATED</p>
           <h3>
-            {project.latestResult ||
+            {project.finalResult || project.latestResult ||
               project.outcome ||
               'Evidence collection is still underway.'}
           </h3>
@@ -1096,7 +1094,9 @@ function ExecutiveSplash({
               <li key={l.id}>{l.finding}</li>
             ))}
           </ul>
+          {['Field Tested', 'Validated'].includes(project.maturity) && <p>{project.updates.some((update) => update.maturityAfter === project.maturity && update.maturityEvidenceEvent) ? `${project.maturity} — supporting evidence recorded.` : `${project.maturity} — supporting evidence not yet linked.`}</p>}
         </section>
+        {project.outcomeLabel && <section className="exec-card outcome-card"><p className="eyebrow">FINAL DISPOSITION</p><h3>{project.status} · {project.outcomeLabel}</h3><p>{project.finalResult || project.outcome}</p>{project.successorProjectId && <p>Successor: {project.successorProjectId} · {project.successorProjectName}</p>}</section>}
         <section className="exec-card risk-card">
           <p className="eyebrow">KEY RISK / LIMITATION</p>
           <h3>{project.keyRisk || 'No material risk has been recorded.'}</h3>
@@ -1161,6 +1161,15 @@ function TechnicalView({ project }: { project: PortalProject }) {
         </p>
       </div>
       <SolutionDetail project={project} />
+      <section className="panel span-2 knowledge-summary">
+        <PanelHead title="Project knowledge state" note="Status, maturity, completion, Phase, and outcome answer different questions." />
+        <div className="fact-grid"><span><small>Status · current lifecycle</small><strong>{project.status}</strong></span><span><small>Maturity · demonstrated development</small><strong>{project.maturity}</strong></span><span><small>Completion · planned work</small><strong>{project.progress}%</strong></span><span><small>Outcome · final disposition</small><strong>{project.outcomeLabel || 'Not set'}</strong></span></div>
+        {project.finalResult && <p><b>Final result:</b> {project.finalResult}</p>}
+        {project.whatWorked && <p><b>What worked:</b> {project.whatWorked}</p>}
+        {project.whatDidNotWork && <p><b>What did not work:</b> {project.whatDidNotWork}</p>}
+        {project.recommendedNextAction && <p><b>Recommended next action:</b> {project.recommendedNextAction}</p>}
+        {project.successorProjectId && <p><b>Successor:</b> {project.successorProjectId} · {project.successorProjectName}</p>}
+      </section>
       <section className="panel span-2 project-team-panel">
         <PanelHead title="Project team and relationships" note="Current responsibility and authorized maintainers" />
         <div className="team-responsibility-grid">
@@ -1197,6 +1206,7 @@ function TechnicalView({ project }: { project: PortalProject }) {
                     {update.completionAfter !== null && <span>Completion: {update.completionAfter}%</span>}
                   </footer>
                 )}
+                {update.maturityEvidenceEvent && <aside className="evidence-note"><b>Evidence supporting {update.maturityAfter}:</b> {update.maturityEvidenceEvent} · {new Date(update.maturityEvidenceDate).toLocaleDateString()}{update.maturityEvidenceReference ? ` · ${update.maturityEvidenceReference}` : ''}</aside>}
               </article>
             ))}
           </div>
@@ -1215,7 +1225,7 @@ function TechnicalView({ project }: { project: PortalProject }) {
               key={p.id}
               title={`Phase ${i + 1} · ${p.name}`}
               meta={`${p.status} · ${p.completion}%`}
-              text={`${p.summary} ${p.result}`}
+              text={`${p.objective} ${p.summary} ${p.result}${p.accomplishment ? ` Accomplishment: ${p.accomplishment}` : ''}${p.blocker ? ` Blocker: ${p.blocker}` : ''}${p.risk ? ` Risk: ${p.risk}` : ''}${p.nextAction ? ` Next: ${p.nextAction}` : ''}`}
             />
           ))}
         </div>
@@ -1247,10 +1257,11 @@ function TechnicalView({ project }: { project: PortalProject }) {
             <div className="lesson" key={l.id}>
               <BookOpen />
               <div>
-                <strong>{l.title}</strong>
+                <span className="lesson-type">{l.lessonTypeLabel}</span><strong>{l.title}</strong>
                 <p>
                   {l.finding} {l.recommendation}
                 </p>
+                <small>{new Date(l.date).toLocaleDateString()} · {l.authorName}{l.phaseName ? ` · ${l.phaseName}` : ''}{l.sourceUpdateId ? ` · From Update #${l.sourceUpdateId}` : ''}</small>
               </div>
             </div>
           ))

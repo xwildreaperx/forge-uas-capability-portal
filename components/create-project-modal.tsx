@@ -313,10 +313,10 @@ export function CreateProjectModal({
                     {similarEffortIds.has(project.id) && <span className="maturity">Potentially Similar Solution Effort</span>}
                     <h3>{project.id} — {project.name}</h3>
                     <p>{project.solutionTypeLabel} · Lead: {project.unit}</p>
-                    <small>{project.status} · {project.maturity} · Last meaningful activity {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}</small>
-                    <p><strong>Latest result:</strong> {project.latestResult || project.outcome || 'No result recorded yet.'}</p>
+                    <small>{project.status} · {project.maturity}{project.updates.some((update) => update.maturityAfter === project.maturity && update.maturityEvidenceEvent) ? ' · evidence recorded' : ''}{project.outcomeLabel ? ` · Outcome: ${project.outcomeLabel}` : ''} · Last meaningful activity {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}</small>
+                    <p><strong>{project.finalResult ? 'Final result' : 'Latest result'}:</strong> {project.finalResult || project.latestResult || project.outcome || 'No result recorded yet.'}</p>
                     <p><strong>Documentation:</strong> {project.documentationLabel}</p>
-                    {project.lessons[0] && <p><strong>Important Lesson:</strong> {project.lessons[0].finding}</p>}
+                    {(project.lessons.find((lesson) => lesson.lessonType === 'FAILED_APPROACH') ?? project.lessons[0]) && <p><strong>Important Lesson:</strong> {(project.lessons.find((lesson) => lesson.lessonType === 'FAILED_APPROACH') ?? project.lessons[0]).finding}</p>}
                     <div className="match-actions">
                       <a className="secondary" href={`/projects/${project.id}`} target="_blank" rel="noreferrer">View Project <ExternalLink size={14} /></a>
                       {project.originatorContact && <span className="contact-note">Contact: {project.originatorContact}</span>}

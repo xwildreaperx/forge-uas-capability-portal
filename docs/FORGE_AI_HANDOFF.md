@@ -4,7 +4,7 @@ Document purpose: transfer sufficient product, architecture, governance, and dev
 
 Repository: `xwildreaperx/forge-uas-capability-portal`  
 Branch inspected: `master`  
-Baseline checkpoint for the multi-user groundwork pass: `5795166`
+Part 3 starting checkpoint: `376e4b915453a980cc63801bfa8804e257b579e1`
 Information boundary: fictional, non-sensitive prototype data; UNCLASSIFIED INFORMATION ONLY
 
 ## 1. Executive Summary
@@ -107,11 +107,13 @@ The create/edit UI currently offers these Project values:
 - **Status**: Planning, Active, Transitioning.
 - **Maturity**: Concept, Prototype, Field Tested, Validated.
 - **Completion**: integer percentage from 0 through 100.
-- **Outcome**: free-text persisted field, projected independently from the other dimensions.
+- **Outcome / disposition**: controlled Successful, Partially Successful, Unsuccessful, Inconclusive, Superseded, or Cancelled value, supported by separate narrative and closeout fields.
 
 Status is workflow state. Maturity is strength or development level of the approach. Completion is progress against the current effort plan. Outcome describes what happened or what evidence is available. None can safely substitute for another. In particular, 100 percent completion does not mean validation or success, and “Validated” does not automatically mean enterprise adoption.
 
-Project phases currently use string statuses seeded as Complete or In Progress, while newly added phases begin as Planned. Outcome vocabulary is not an enum; seed examples use phrases such as “Evaluation ongoing,” “Promising field result,” and “Validated result available.”
+Project phases use Planned, In Progress, and Complete and can be progressively edited. Project Updates remain the preferred routine history: one Update can progress a Phase, update Project state, provide Field Tested/Validated maturity evidence, and deliberately promote its reviewed finding into a typed Lesson. Maturity evidence retains the supporting event, date, result, author, optional Phase, and optional reference.
+
+Closeout records final status, outcome, result, what worked, what did not, recommended next action, documentation availability, author/date, and optional successor. It does not close associated Problems or remove history. Closed, unsuccessful, inconclusive, cancelled, and superseded Projects remain discoverable. Lesson types—Confirmed Finding, Working Hypothesis, Failed Approach, Recommendation, and Unresolved Question—must retain their differing epistemic meaning and provenance in every AI handoff.
 
 ## 8. Executive Experience
 
