@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { db } from '../lib/db.ts';
-import { createProject, ProblemMatchReviewRequired, submitProblem } from '../lib/data/mutations.ts';
+import { addProjectPhase, addProjectUpdate, createProject, ProblemMatchReviewRequired, submitProblem } from '../lib/data/mutations.ts';
 import { getPortalData } from '../lib/data/portal.ts';
 import { canAccessUnit, hasPermission, type CurrentUserContext } from '../lib/auth/permissions.ts';
 import { findProjectsForProblems, findRelatedProblems, isPotentiallySimilarProject } from '../lib/domain/matching.ts';
+import { projectHandoffMarkdown } from '../lib/domain/handoff.ts';
 
 after(() => db.$disconnect());
 
@@ -18,11 +19,11 @@ test('clean operational initialization, discovery, and authorization remain vali
     units: await db.unit.count(), problems: await db.problem.count(), submissions: await db.problemSubmission.count(),
     projects: await db.project.count(), problemProjects: await db.problemProject.count(), projectUnits: await db.projectUnit.count(),
     problemUnits: await db.problemUnit.count(), phases: await db.projectPhase.count(), lessons: await db.lessonLearned.count(),
-    repositories: await db.repositoryLink.count(), activities: await db.activityEvent.count(), helpRequests: await db.helpRequest.count(),
+    repositories: await db.repositoryLink.count(), updates: await db.projectUpdate.count(), activities: await db.activityEvent.count(), helpRequests: await db.helpRequest.count(),
     vendors: await db.vendorDetail.count(), tactics: await db.tacticDetail.count(), training: await db.trainingDetail.count(),
     locations: await db.location.count(), tags: await db.tag.count(),
   };
-  assert.deepEqual(counts, { users: 1, unitMemberships: 0, projectMemberships: 0, units: 9, problems: 12, submissions: 0, projects: 0, problemProjects: 0, projectUnits: 0, problemUnits: 0, phases: 0, lessons: 0, repositories: 0, activities: 0, helpRequests: 0, vendors: 0, tactics: 0, training: 0, locations: 0, tags: 6 });
+  assert.deepEqual(counts, { users: 1, unitMemberships: 0, projectMemberships: 0, units: 9, problems: 12, submissions: 0, projects: 0, problemProjects: 0, projectUnits: 0, problemUnits: 0, phases: 0, lessons: 0, repositories: 0, updates: 0, activities: 0, helpRequests: 0, vendors: 0, tactics: 0, training: 0, locations: 0, tags: 6 });
 
   const data = await getPortalData(null);
   assert.equal(data.datasetMode, 'operational');
@@ -97,9 +98,36 @@ test('clean operational initialization, discovery, and authorization remain vali
   assert.equal(project.trackingId, 'PRJ-000001');
   const secondProject = await createProject(projectUser, { name: 'Temporary Acceptance Parallel Effort', executiveSummary: 'Parallel work remains permitted.', detailedDescription: 'Temporary acceptance test.', solutionApproach: 'Temporary acceptance test.', leadUnitId: firstUnit.id, unitIds: [firstUnit.id], problemIds: [problem.id] });
   assert.equal(secondProject.trackingId, 'PRJ-000002');
+  const phase = await addProjectPhase(projectUser, project.id, { phaseName: 'Field test', objective: 'Verify the update workflow.', executiveSummary: 'Test phase.', technicalSummary: 'Test phase.' });
+  const update = await addProjectUpdate(projectUser, project.id, {
+    summary: 'Field test completed.', result: 'Primary objective was met under the test conditions.',
+    nextStep: 'Evaluate the revised configuration.', blockerRisk: 'One integration issue remains.',
+    phaseId: phase.id, status: 'Active', maturity: 'Field Tested', completion: 60,
+  });
+  const updatedProject = await db.project.findUniqueOrThrow({ where: { id: project.id } });
+  assert.equal(update.authorId, projectUser.id);
+  assert.equal(update.projectId, project.id);
+  assert.equal(update.phaseId, phase.id);
+  assert.equal(updatedProject.latestResult, 'Primary objective was met under the test conditions.');
+  assert.equal(updatedProject.nextStep, 'Evaluate the revised configuration.');
+  assert.equal(updatedProject.keyRisk, 'One integration issue remains.');
+  assert.equal(updatedProject.status, 'Active');
+  assert.equal(updatedProject.maturity, 'Field Tested');
+  assert.equal(updatedProject.completion, 60);
+  assert.ok(updatedProject.lastMeaningfulActivityAt && updatedProject.lastMeaningfulActivityAt >= update.occurredAt);
+  assert.ok(updatedProject.lastMeaningfulActivityAt && updatedProject.lastMeaningfulActivityAt > project.lastMeaningfulActivityAt!);
+  assert.ok(await db.activityEvent.findUnique({ where: { projectUpdateId: update.id } }));
+  await assert.rejects(
+    addProjectUpdate(contributor, project.id, { summary: 'Unauthorized update.', result: 'No result.', nextStep: 'None.' }),
+    /permission|assigned, created, or administered-Unit Projects/,
+  );
   const withProjects = await getPortalData(projectUser);
   assert.equal(findProjectsForProblems(['PRB-000001'], withProjects.projects).length, 2);
   assert.equal(isPotentiallySimilarProject({ name: 'Temporary acceptance effort' }, { name: project.name }), true);
+  const projectedUpdate = withProjects.projects.find((item) => item.id === project.trackingId)!;
+  assert.equal(projectedUpdate.updates[0]?.authorName, projectUser.displayName);
+  assert.match(projectHandoffMarkdown(projectedUpdate), /Field test completed/);
+  assert.match(projectHandoffMarkdown(projectedUpdate), /One integration issue remains/);
 
   const secondUnit = await db.unit.findUniqueOrThrow({ where: { trackingId: 'UNIT-000002' } });
   const unitAdmin = { ...projectUser, role: 'UNIT_ADMIN' as const, administeredUnitIds: [firstUnit.id] };

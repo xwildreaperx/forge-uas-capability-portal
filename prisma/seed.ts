@@ -46,6 +46,7 @@ const projectNames = [
 async function main() {
   await db.$transaction([
     db.activityEvent.deleteMany(),
+    db.projectUpdate.deleteMany(),
     db.problemSubmission.deleteMany(),
     db.projectMembership.deleteMany(),
     db.unitMembership.deleteMany(),

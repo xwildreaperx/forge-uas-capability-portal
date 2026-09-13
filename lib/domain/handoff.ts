@@ -8,6 +8,7 @@ export function handoffCompleteness(project: PortalProject) {
     project.solutionApproach,
     project.architectureSummary,
     project.phases.length ? 'yes' : '',
+    project.updates.length ? 'yes' : '',
     project.lessons.length ? 'yes' : '',
     project.openIssues,
     project.nextStep,
@@ -19,7 +20,7 @@ export function projectHandoffMarkdown(
   generated = new Date(),
 ) {
   const withheld = referenceOnly(project.documentationAvailability);
-  const phases = project.phases.length
+  let phases = project.phases.length
     ? project.phases
         .map(
           (p, i) =>
@@ -27,6 +28,16 @@ export function projectHandoffMarkdown(
         )
         .join('\n')
     : 'No phases are recorded.';
+  const updateHistory = project.updates.length
+    ? [...project.updates]
+        .reverse()
+        .map(
+          (u) =>
+            `- ${u.occurredAt.slice(0, 10)} — ${u.summary} (${u.authorName}${u.phaseName ? `; ${u.phaseName}` : ''}). Result: ${u.result} Next: ${u.nextStep}${u.blockerRisk ? ` Blocker / risk: ${u.blockerRisk}` : ''}`,
+        )
+        .join('\n')
+    : 'No Project Updates are recorded.';
+  phases += `\n\n### Chronological Project Updates\nLast meaningful activity: ${project.lastMeaningfulActivityAt}\n${updateHistory}`;
   const lessons = project.lessons.length
     ? project.lessons
         .map(

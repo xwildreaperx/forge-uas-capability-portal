@@ -10,6 +10,7 @@ export type PortalProject = {
   solutionType: string;
   solutionTypeLabel: string;
   updatedAt: string;
+  lastMeaningfulActivityAt: string;
   outcome: string;
   documentationAvailability: string;
   documentationLabel: string;
@@ -49,6 +50,20 @@ export type PortalProject = {
     completion: number;
     summary: string;
     result: string;
+  }[];
+  updates: {
+    id: number;
+    occurredAt: string;
+    summary: string;
+    result: string;
+    nextStep: string;
+    blockerRisk: string;
+    authorId: string;
+    authorName: string;
+    phaseName: string;
+    statusAfter: string;
+    maturityAfter: string;
+    completionAfter: number | null;
   }[];
   lessons: {
     id: string;

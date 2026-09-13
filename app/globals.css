@@ -2045,6 +2045,53 @@ main {
   align-items: end;
   gap: 7px;
 }
+.quick-form .wide-field {
+  grid-column: 1 / -1;
+}
+.update-form-intro {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--green);
+  background: var(--green-soft);
+}
+.update-form-intro span,
+.update-author {
+  color: var(--muted);
+  font-size: 12px;
+}
+.update-timeline {
+  display: grid;
+  gap: 10px;
+}
+.update-timeline article {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.update-timeline header,
+.update-timeline footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.update-timeline header small,
+.update-timeline footer {
+  color: var(--muted);
+}
+.update-timeline p {
+  margin: 8px 0 0;
+}
+.update-timeline footer {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.update-risk {
+  color: #7b3f18;
+}
 .fact-grid {
   margin-top: 15px;
 }

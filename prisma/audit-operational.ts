@@ -6,7 +6,7 @@ const counts = {
   users: await db.user.count(), unitMemberships: await db.unitMembership.count(), projectMemberships: await db.projectMembership.count(),
   units: await db.unit.count(), problems: await db.problem.count(), submissions: await db.problemSubmission.count(), projects: await db.project.count(),
   problemProjects: await db.problemProject.count(), projectUnits: await db.projectUnit.count(), problemUnits: await db.problemUnit.count(),
-  phases: await db.projectPhase.count(), lessons: await db.lessonLearned.count(), repositories: await db.repositoryLink.count(),
+  phases: await db.projectPhase.count(), lessons: await db.lessonLearned.count(), repositories: await db.repositoryLink.count(), updates: await db.projectUpdate.count(),
   activities: await db.activityEvent.count(), helpRequests: await db.helpRequest.count(), vendors: await db.vendorDetail.count(),
   tactics: await db.tacticDetail.count(), training: await db.trainingDetail.count(), locations: await db.location.count(), tags: await db.tag.count(),
 };

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { PortalProject } from '@/lib/data/types';
 import { DOCUMENTATION_OPTIONS } from '@/lib/domain/documentation';
 
-type Action = 'edit' | 'phase' | 'lesson' | 'repository' | null;
+type Action = 'update' | 'edit' | 'phase' | 'lesson' | 'repository' | null;
 export function ProjectActions({ project }: { project: PortalProject }) {
   const [action, setAction] = useState<Action>(null);
   const [error, setError] = useState('');
@@ -14,6 +14,8 @@ export function ProjectActions({ project }: { project: PortalProject }) {
     const suffix =
       action === 'edit'
         ? ''
+        : action === 'update'
+          ? '/updates'
         : action === 'phase'
           ? '/phases'
           : action === 'lesson'
@@ -34,13 +36,15 @@ export function ProjectActions({ project }: { project: PortalProject }) {
   return (
     <div className="project-actions">
       <div>
-        {(['edit', 'phase', 'lesson', 'repository'] as const).map((value) => (
+          {(['update', 'edit', 'phase', 'lesson', 'repository'] as const).map((value) => (
           <button
-            className="secondary"
+            className={value === 'update' ? 'create' : 'secondary'}
             key={value}
             onClick={() => setAction(action === value ? null : value)}
           >
-            {value === 'edit'
+            {value === 'update'
+              ? 'Add Project Update'
+              : value === 'edit'
               ? 'Edit effort'
               : value === 'phase'
                 ? 'Add phase'
@@ -57,6 +61,67 @@ export function ProjectActions({ project }: { project: PortalProject }) {
             capability abstractions and technical information appropriate for
             this environment.
           </p>
+          {action === 'update' && (
+            <>
+              <div className="update-form-intro wide-field">
+                <strong>Record progress once.</strong>
+                <span>This update will refresh Project history, Latest Result, freshness, and AI Handoff.</span>
+              </div>
+              <label className="wide-field">
+                Update summary
+                <textarea name="summary" required placeholder="What happened?" />
+              </label>
+              <label className="wide-field">
+                Result / finding
+                <textarea name="result" required placeholder="What changed, worked, failed, or was learned?" />
+              </label>
+              <label className="wide-field">
+                Next step
+                <textarea name="nextStep" required placeholder="What happens next?" />
+              </label>
+              <label>
+                Blocker / risk <small>Optional</small>
+                <textarea name="blockerRisk" placeholder="What is preventing or threatening progress?" />
+              </label>
+              <label>
+                Associated phase <small>Optional</small>
+                <select name="phaseId" defaultValue="">
+                  <option value="">No phase selected</option>
+                  {project.phases.map((phase) => (
+                    <option key={phase.id} value={phase.id}>{phase.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Date
+                <input name="occurredAt" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+              </label>
+              <label>
+                Status change <small>Optional</small>
+                <select name="status" defaultValue="">
+                  <option value="">Keep {project.status}</option>
+                  <option>Planning</option>
+                  <option>Active</option>
+                  <option>Transitioning</option>
+                </select>
+              </label>
+              <label>
+                Maturity change <small>Optional</small>
+                <select name="maturity" defaultValue="">
+                  <option value="">Keep {project.maturity}</option>
+                  <option>Concept</option>
+                  <option>Prototype</option>
+                  <option>Field Tested</option>
+                  <option>Validated</option>
+                </select>
+              </label>
+              <label>
+                Completion change <small>Optional</small>
+                <input name="completion" type="number" min="0" max="100" placeholder={`${project.progress}% currently`} />
+              </label>
+              <p className="update-author wide-field">Author is recorded from your current FORGE identity.</p>
+            </>
+          )}
           {action === 'edit' && (
             <>
               <label>

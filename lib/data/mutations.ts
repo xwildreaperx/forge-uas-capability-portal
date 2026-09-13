@@ -27,6 +27,12 @@ const detail = (input: Record<string, unknown>, key: string) =>
   input[key] && typeof input[key] === 'object'
     ? (input[key] as Record<string, unknown>)
     : {};
+const optionalDate = (value: unknown) => {
+  if (typeof value !== 'string' || !value.trim()) return new Date();
+  const date = new Date(`${value.trim()}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) throw new Error('Date must be valid.');
+  return date;
+};
 const documentationValue = (value: unknown): DocumentationValue =>
   typeof value === 'string' && value in DOCUMENTATION_LABELS
     ? (value as DocumentationValue)
@@ -150,7 +156,8 @@ export async function createProject(
     const vendor = detail(input, 'vendor');
     const tactic = detail(input, 'tactic');
     const training = detail(input, 'training');
-    return tx.project.create({
+    const createdAt = new Date();
+    const project = await tx.project.create({
       data: {
         trackingId,
         name,
@@ -187,7 +194,8 @@ export async function createProject(
         maturity:
           typeof input.maturity === 'string' ? input.maturity : 'Concept',
         completion: completionValue(input.completion ?? 0),
-        startDate: new Date(),
+        startDate: createdAt,
+        lastMeaningfulActivityAt: createdAt,
         leadUnitId,
         createdByUserId: actor.id,
         userMemberships: { create: { userId: actor.id, role: 'PROJECT_LEAD' } },
@@ -284,6 +292,103 @@ export async function createProject(
             : undefined,
       },
     });
+    await tx.activityEvent.create({
+      data: {
+        timestamp: createdAt,
+        eventType: 'PROJECT_CREATED',
+        description: `Created ${project.trackingId} — ${project.name}.`,
+        actor: actor.displayName,
+        projectId: project.id,
+        unitId: leadUnitId,
+        userId: actor.id,
+      },
+    });
+    return project;
+  });
+}
+
+export async function addProjectUpdate(
+  user: CurrentUserContext | null,
+  projectId: number,
+  input: Record<string, unknown>,
+) {
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: {
+      id: true,
+      trackingId: true,
+      leadUnitId: true,
+      createdByUserId: true,
+      lastMeaningfulActivityAt: true,
+    },
+  });
+  const actor = assertProjectEdit(user, project);
+  const occurredAt = optionalDate(input.occurredAt);
+  const phaseId = input.phaseId ? Number(input.phaseId) : null;
+  if (phaseId) {
+    const phase = await db.projectPhase.findFirst({
+      where: { id: phaseId, projectId },
+      select: { id: true },
+    });
+    if (!phase) throw new Error('Associated Phase must belong to this Project.');
+  }
+  const summary = requiredString(input.summary, 'Update summary');
+  const result = requiredString(input.result, 'Result / finding');
+  const nextStep = requiredString(input.nextStep, 'Next step');
+  const blockerRisk = optional(input.blockerRisk);
+  const statusAfter = optional(input.status);
+  const maturityAfter = optional(input.maturity);
+  const completionAfter =
+    input.completion === undefined || input.completion === ''
+      ? null
+      : completionValue(input.completion);
+  const lastMeaningfulActivityAt =
+    project.lastMeaningfulActivityAt &&
+    project.lastMeaningfulActivityAt > occurredAt
+      ? project.lastMeaningfulActivityAt
+      : occurredAt;
+
+  return db.$transaction(async (tx) => {
+    const update = await tx.projectUpdate.create({
+      data: {
+        projectId,
+        authorId: actor.id,
+        phaseId,
+        occurredAt,
+        summary,
+        result,
+        nextStep,
+        blockerRisk,
+        statusAfter,
+        maturityAfter,
+        completionAfter,
+      },
+    });
+    await tx.project.update({
+      where: { id: projectId },
+      data: {
+        status: statusAfter ?? undefined,
+        maturity: maturityAfter ?? undefined,
+        completion: completionAfter ?? undefined,
+        latestResult: result,
+        nextStep,
+        keyRisk: blockerRisk ?? undefined,
+        lastMeaningfulActivityAt,
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        timestamp: occurredAt,
+        eventType: 'PROJECT_UPDATE',
+        description: `${project.trackingId} update: ${summary}`,
+        actor: actor.displayName,
+        projectId,
+        unitId: project.leadUnitId,
+        userId: actor.id,
+        projectUpdateId: update.id,
+      },
+    });
+    return update;
   });
 }
 
@@ -370,8 +475,9 @@ export async function addProjectPhase(
     select: { id: true, leadUnitId: true, createdByUserId: true },
   });
   const actor = assertProjectEdit(user, project);
-  return db.projectPhase.create({
-    data: {
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const phase = await tx.projectPhase.create({ data: {
       projectId,
       phaseName: requiredString(input.phaseName, 'Phase name'),
       objective: requiredString(input.objective, 'Objective'),
@@ -387,7 +493,14 @@ export async function addProjectPhase(
       ),
       sortOrder: Number(input.sortOrder ?? 1),
       createdByUserId: actor.id,
-    },
+    } });
+    await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+    await tx.activityEvent.create({ data: {
+      timestamp: occurredAt, eventType: 'PHASE_CREATED',
+      description: `Added Project phase: ${phase.phaseName}.`, actor: actor.displayName,
+      projectId, unitId: project.leadUnitId, userId: actor.id,
+    } });
+    return phase;
   });
 }
 
@@ -401,8 +514,9 @@ export async function addLesson(
     select: { id: true, leadUnitId: true, createdByUserId: true },
   });
   const actor = assertProjectEdit(user, project);
-  return db.$transaction(async (tx) =>
-    tx.lessonLearned.create({
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const lesson = await tx.lessonLearned.create({
       data: {
         trackingId: await nextTrackingId(tx, 'Lesson'),
         projectId,
@@ -412,8 +526,15 @@ export async function addLesson(
         date: new Date(),
         createdByUserId: actor.id,
       },
-    }),
-  );
+    });
+    await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+    await tx.activityEvent.create({ data: {
+      timestamp: occurredAt, eventType: 'LESSON_ADDED',
+      description: `Added Lesson Learned: ${lesson.title}.`, actor: actor.displayName,
+      projectId, unitId: project.leadUnitId, userId: actor.id,
+    } });
+    return lesson;
+  });
 }
 
 export async function addRepository(
@@ -426,8 +547,9 @@ export async function addRepository(
     select: { id: true, leadUnitId: true, createdByUserId: true },
   });
   const actor = assertProjectEdit(user, project);
-  return db.repositoryLink.create({
-    data: {
+  const occurredAt = new Date();
+  return db.$transaction(async (tx) => {
+    const repository = await tx.repositoryLink.create({ data: {
       projectId,
       name: requiredString(input.name, 'Name'),
       url: validUrl(input.url),
@@ -442,7 +564,14 @@ export async function addRepository(
           ? false
           : true,
       createdByUserId: actor.id,
-    },
+    } });
+    await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
+    await tx.activityEvent.create({ data: {
+      timestamp: occurredAt, eventType: 'ARTIFACT_ADDED',
+      description: `Added artifact reference: ${repository.name}.`, actor: actor.displayName,
+      projectId, unitId: project.leadUnitId, userId: actor.id,
+    } });
+    return repository;
   });
 }
 

@@ -309,7 +309,7 @@ export function CreateProjectModal({
                     {similarEffortIds.has(project.id) && <span className="maturity">Potentially Similar Solution Effort</span>}
                     <h3>{project.id} — {project.name}</h3>
                     <p>{project.solutionTypeLabel} · Lead: {project.unit}</p>
-                    <small>{project.status} · {project.maturity} · Updated {new Date(project.updatedAt).toLocaleDateString()}</small>
+                    <small>{project.status} · {project.maturity} · Last meaningful activity {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}</small>
                     <p><strong>Latest result:</strong> {project.latestResult || project.outcome || 'No result recorded yet.'}</p>
                     <p><strong>Documentation:</strong> {project.documentationLabel}</p>
                     {project.lessons[0] && <p><strong>Important Lesson:</strong> {project.lessons[0].finding}</p>}

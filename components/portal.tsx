@@ -528,7 +528,10 @@ function Dashboard() {
             action="View all projects"
           />
           <div className="project-cards">
-            {projects.slice(0, 3).map((p) => (
+            {[...projects]
+              .sort((a, b) => b.lastMeaningfulActivityAt.localeCompare(a.lastMeaningfulActivityAt))
+              .slice(0, 3)
+              .map((p) => (
               <div className="project-card" key={p.id}>
                 <div>
                   <span className={`dot ${p.tone}`} />
@@ -897,9 +900,9 @@ function CompareView() {
               ))}
             </tr>
             <tr>
-              <th>Last updated</th>
+              <th>Last meaningful activity</th>
               {projects.map((p) => (
-                <td key={p.id}>{new Date(p.updatedAt).toLocaleDateString()}</td>
+                <td key={p.id}>{new Date(p.lastMeaningfulActivityAt).toLocaleDateString()}</td>
               ))}
             </tr>
           </tbody>
@@ -1050,8 +1053,8 @@ function ExecutiveSplash({
             <strong>{currentPhase?.name ?? 'Not yet phased'}</strong>
           </span>
           <span>
-            <small>Updated</small>
-            <strong>{new Date(project.updatedAt).toLocaleDateString()}</strong>
+            <small>Last meaningful activity</small>
+            <strong>{new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}</strong>
           </span>
         </div>
       </section>
@@ -1138,6 +1141,36 @@ function TechnicalView({ project }: { project: PortalProject }) {
         </p>
       </div>
       <SolutionDetail project={project} />
+      <section className="panel span-2">
+        <PanelHead
+          title="Project updates"
+          note={`Last meaningful activity: ${new Date(project.lastMeaningfulActivityAt).toLocaleDateString()}`}
+        />
+        {project.updates.length ? (
+          <div className="update-timeline">
+            {project.updates.map((update) => (
+              <article key={update.id}>
+                <header>
+                  <strong>{update.summary}</strong>
+                  <small>{new Date(update.occurredAt).toLocaleDateString()} · {update.authorName}{update.phaseName ? ` · ${update.phaseName}` : ''}</small>
+                </header>
+                <p><b>Result / finding:</b> {update.result}</p>
+                <p><b>Next step:</b> {update.nextStep}</p>
+                {update.blockerRisk && <p className="update-risk"><b>Blocker / risk:</b> {update.blockerRisk}</p>}
+                {(update.statusAfter || update.maturityAfter || update.completionAfter !== null) && (
+                  <footer>
+                    {update.statusAfter && <span>Status: {update.statusAfter}</span>}
+                    {update.maturityAfter && <span>Maturity: {update.maturityAfter}</span>}
+                    {update.completionAfter !== null && <span>Completion: {update.completionAfter}%</span>}
+                  </footer>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="body-copy">No Project Updates have been recorded yet.</p>
+        )}
+      </section>
       <section className="panel span-2">
         <PanelHead
           title="Project phases"

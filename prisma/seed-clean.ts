@@ -33,7 +33,7 @@ const problems = [
 
 async function main() {
   await db.$transaction([
-    db.activityEvent.deleteMany(), db.problemSubmission.deleteMany(), db.projectMembership.deleteMany(),
+    db.activityEvent.deleteMany(), db.projectUpdate.deleteMany(), db.problemSubmission.deleteMany(), db.projectMembership.deleteMany(),
     db.unitMembership.deleteMany(), db.helpRequest.deleteMany(), db.repositoryLink.deleteMany(),
     db.vendorDetail.deleteMany(), db.tacticDetail.deleteMany(), db.trainingDetail.deleteMany(),
     db.lessonTag.deleteMany(), db.lessonLearned.deleteMany(), db.projectPhase.deleteMany(),

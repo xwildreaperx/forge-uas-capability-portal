@@ -30,3 +30,4 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - Do not invent Projects, Unit–Problem relationships, priorities, owners, locations, POCs, capabilities, requirements, solutions, or activity.
 - Keep fictional test/demo users and operational content isolated in the demo seed. Preserve authorization while testing clean data with temporary isolated fixtures.
 - Preserve the product rule that Problems are canonicalized while Projects remain free to overlap. Problem submission must provide explainable server-backed duplicate/related discovery and human governance; Project creation should surface existing work for awareness without blocking parallel experimentation.
+- Treat Project Updates as the primary chronological maintenance record. Reuse them for activity, freshness, Latest Result, and AI continuity instead of asking users to re-enter the same event.

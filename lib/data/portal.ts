@@ -65,6 +65,13 @@ export async function getPortalData(
           select: { location: { select: { name: true, region: true } } },
         },
         phases: { orderBy: { sortOrder: 'asc' } },
+        updates: {
+          orderBy: { occurredAt: 'desc' },
+          include: {
+            author: { select: { trackingId: true, displayName: true } },
+            phase: { select: { phaseName: true } },
+          },
+        },
         lessons: { orderBy: { date: 'desc' } },
         repositories: true,
         vendorDetail: true,
@@ -159,6 +166,9 @@ export async function getPortalData(
       solutionTypeLabel:
         SOLUTION_TYPE_LABELS[p.solutionType as SolutionTypeValue],
       updatedAt: p.updatedAt.toISOString(),
+      lastMeaningfulActivityAt: (
+        p.lastMeaningfulActivityAt ?? p.createdAt
+      ).toISOString(),
       outcome: p.outcome ?? '',
       documentationAvailability: p.documentationAvailability,
       documentationLabel:
@@ -214,6 +224,20 @@ export async function getPortalData(
         completion: x.completion,
         summary: x.technicalSummary,
         result: x.result ?? '',
+      })),
+      updates: p.updates.map((x) => ({
+        id: x.id,
+        occurredAt: x.occurredAt.toISOString(),
+        summary: x.summary,
+        result: x.result,
+        nextStep: x.nextStep,
+        blockerRisk: x.blockerRisk ?? '',
+        authorId: x.author.trackingId,
+        authorName: x.author.displayName,
+        phaseName: x.phase?.phaseName ?? '',
+        statusAfter: x.statusAfter ?? '',
+        maturityAfter: x.maturityAfter ?? '',
+        completionAfter: x.completionAfter,
       })),
       lessons: p.lessons.map((x) => ({
         id: x.trackingId,
