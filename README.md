@@ -6,6 +6,8 @@ Project Operations Part 4 adds collaboration-oriented Help Requests with control
 
 Unit Administration Part 1 adds responsibility-aware personnel profiles, controlled primary/additional Unit membership, derived continuity warnings, System Administrator recovery for Units without an active administrator, and administrative Activity provenance. Account disablement preserves attribution and is allowed after a clear impact warning; it never silently rewrites Project ownership. Help Requests that follow the Project Lead move with a valid lead reassignment, while explicitly named alternate contacts remain unchanged.
 
+Unit Administration Part 2 adds a scoped stewardship workspace that derives led and supported Project portfolios, factual attention needs, Problem coverage, Help Requests, Lessons, meaningful Unit Activity, maturity/outcome summaries, and responsibility visibility from existing records. Unit Administrators can switch among explicitly administered Units, filter the portfolio, maintain Unit POC information, and reach existing remediation workflows without recreating a parallel leadership report.
+
 ## Product philosophy
 
 Problems are enduring capability gaps. Projects are broad Solution Efforts: organic development, vendor evaluation, tactics/techniques, training, integration/configuration, process/policy, or hybrid work. Multiple efforts can address the same Problem, one effort can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.

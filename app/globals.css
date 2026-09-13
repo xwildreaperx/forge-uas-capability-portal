@@ -753,6 +753,46 @@ main {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.stewardship { display: grid; gap: 18px; margin: 20px 0 28px; }
+.steward-head { display: flex; justify-content: space-between; gap: 24px; align-items: end; padding: 22px; border-radius: 16px; background: linear-gradient(120deg, #173f3a, #245d55); color: white; }
+.steward-head h2 { margin: 2px 0 6px; font-size: 1.8rem; }
+.steward-head p { margin: 0; color: #d9ebe7; }
+.steward-head label { min-width: 260px; font-weight: 700; }
+.steward-head select { display: block; width: 100%; margin-top: 7px; }
+.summary-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.summary-row > div { padding: 16px; background: white; border: 1px solid #dbe2e0; border-radius: 12px; }
+.summary-row strong, .summary-row span { display: block; }
+.summary-row strong { font-size: 1.6rem; color: #173f3a; }
+.summary-row span { color: var(--muted); font-size: .82rem; margin-top: 3px; }
+.section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.section-heading h2, .section-heading p { margin-top: 0; }
+.attention-panel { border-top: 4px solid #a96827; }
+.attention-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.attention-grid article { display: grid; gap: 7px; padding: 14px; border-radius: 10px; background: #fff8ed; border: 1px solid #e4c99f; }
+.attention-grid article > span { color: #844618; font-size: .75rem; font-weight: 800; text-transform: uppercase; }
+.attention-grid p { margin: 0; }
+.portfolio-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(6, minmax(130px, 1fr)); gap: 8px; align-items: center; }
+.portfolio-filters > span { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+.steward-list { display: grid; gap: 10px; margin-bottom: 18px; }
+.steward-project { border: 1px solid #dbe2e0; border-radius: 11px; padding: 14px; }
+.steward-project h3 { margin: 8px 0 5px; }
+.steward-project p, .steward-project small { display: block; margin: 5px 0; color: var(--muted); }
+.steward-project .status { margin-left: 7px; }
+.metric-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 18px; }
+.metric-strip span { min-width: 100px; padding: 10px; background: #f2f6f5; border-radius: 9px; color: var(--muted); font-size: .75rem; }
+.metric-strip strong { display: block; color: #173f3a; font-size: 1.25rem; }
+@media (max-width: 1000px) {
+  .summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .attention-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 700px) {
+  .steward-head { align-items: stretch; flex-direction: column; }
+  .steward-head label { min-width: 0; }
+  .summary-row, .portfolio-filters, .attention-grid { grid-template-columns: 1fr; }
+  .section-heading { flex-direction: column; }
+}
 @media (max-width: 760px) {
   .app-shell {
     display: block;

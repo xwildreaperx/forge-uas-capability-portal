@@ -548,6 +548,32 @@ test('clean operational initialization, discovery, and authorization remain vali
     updateUnitRecord(unitAdmin, firstUnit.id, { isActive: false }),
     /System Administrator/,
   );
+  await updateUnitRecord(unitAdmin, firstUnit.id, {
+    forgePointOfContact: 'temporary-unit-poc',
+  });
+  assert.equal(
+    (await db.unit.findUniqueOrThrow({ where: { id: firstUnit.id } }))
+      .forgePointOfContact,
+    'temporary-unit-poc',
+  );
+  assert.equal(
+    unitAdmin.administeredUnitIds.includes(firstUnit.id),
+    true,
+  );
+  await assert.rejects(
+    updateUnitRecord(unitAdmin, secondUnit.id, {
+      forgePointOfContact: 'unauthorized-poc',
+    }),
+    /administered Units/,
+  );
+  assert.equal(
+    (await db.activityEvent.findMany({ where: { unitId: firstUnit.id } })).some(
+      (event) =>
+        event.eventType === 'UNIT_ADMIN_UPDATED' &&
+        event.description.includes('point of contact'),
+    ),
+    true,
+  );
   assert.ok(
     (
       await db.activityEvent.findMany({
@@ -736,6 +762,81 @@ test('clean operational initialization, discovery, and authorization remain vali
       (member) => member.role === 'PROJECT_LEAD',
     )?.userId,
     projectUser.id,
+  );
+  const firstUnitStewardship = await getPortalData(unitAdmin);
+  const firstUnitView = firstUnitStewardship.unitStewardship.find(
+    (item) => item.unitId === firstUnit.id,
+  )!;
+  assert.equal(firstUnitStewardship.unitStewardship.length, 1);
+  const multiUnitStewardship = await getPortalData({
+    ...unitAdmin,
+    administeredUnitIds: [firstUnit.id, secondUnit.id],
+  });
+  assert.deepEqual(
+    multiUnitStewardship.unitStewardship.map((item) => item.unitId).sort(),
+    [firstUnit.id, secondUnit.id].sort(),
+  );
+  assert.notDeepEqual(
+    multiUnitStewardship.unitStewardship[0]?.ledProjectIds,
+    multiUnitStewardship.unitStewardship[1]?.ledProjectIds,
+  );
+  assert.equal(
+    firstUnitView.supportedProjects.some(
+      (item) => item.projectId === project.trackingId,
+    ),
+    true,
+  );
+  assert.equal(firstUnitView.ledProjectIds.includes(secondProject.trackingId), true);
+  assert.equal(
+    firstUnitView.problemCoverage.find(
+      (item) => item.problemId === secondProblem.trackingId,
+    )?.activeEfforts,
+    1,
+  );
+  assert.equal(
+    firstUnitView.helpRequests.some(
+      (item) =>
+        item.projectId === project.trackingId &&
+        item.projectRelationship === 'SUPPORTED',
+    ),
+    true,
+  );
+  assert.equal(
+    firstUnitView.lessons.some(
+      (item) => item.projectId === project.trackingId && item.author,
+    ),
+    true,
+  );
+  assert.equal(
+    firstUnitStewardship.needsAttention.some(
+      (item) =>
+        item.unitId === firstUnit.id && item.kind === 'OPEN_HELP_REQUEST',
+    ),
+    true,
+  );
+  await addProjectUpdate(projectUser, project.id, {
+    summary: 'Temporary pause for stewardship coverage.',
+    result: 'Work held pending coordination.',
+    nextStep: 'Resume after coordination.',
+    status: 'Paused',
+  });
+  assert.equal(
+    (await getPortalData(unitAdmin)).needsAttention.some(
+      (item) => item.unitId === firstUnit.id && item.kind === 'PROJECT_PAUSED',
+    ),
+    true,
+  );
+  await addProjectUpdate(projectUser, project.id, {
+    summary: 'Temporary stewardship condition cleared.',
+    result: 'Coordination completed.',
+    nextStep: 'Continue planned work.',
+    status: 'Active',
+  });
+  assert.equal(
+    (await getPortalData(unitAdmin)).needsAttention.some(
+      (item) => item.unitId === firstUnit.id && item.kind === 'PROJECT_PAUSED',
+    ),
+    false,
   );
   await assert.rejects(
     updateProjectRelationships(projectUser, project.id, {

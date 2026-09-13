@@ -58,7 +58,7 @@ export async function getPortalData(
         unitLinks: {
           select: {
             role: true,
-            unit: { select: { trackingId: true, name: true } },
+            unit: { select: { id: true, trackingId: true, name: true } },
           },
         },
         tags: { select: { tag: { select: { name: true } } } },
@@ -256,6 +256,37 @@ export async function getPortalData(
       projectId: '',
       userId: person.id,
     });
+  for (const person of directoryUsers.filter(
+    (item) => item.status === 'DISABLED',
+  )) {
+    const responsibilityProjects = projects.filter(
+      (project) =>
+        activeStatuses.has(project.status) &&
+        project.userMemberships.some(
+          (membership) => membership.userId === person.id,
+        ),
+    );
+    const contactRequests = projects.flatMap((project) =>
+      project.helpRequests.filter(
+        (request) =>
+          ['OPEN', 'IN_PROGRESS'].includes(request.status) &&
+          request.contactUserId === person.id,
+      ),
+    );
+    if (responsibilityProjects.length || contactRequests.length)
+      for (const unitId of person.unitMemberships
+        .map((membership) => membership.unitId)
+        .filter((id) => visibleUnitIds.includes(id)))
+        needsAttention.push({
+          key: `disabled-responsibility-${unitId}-${person.id}`,
+          kind: 'DISABLED_USER_RESPONSIBILITIES',
+          severity: 'critical',
+          message: `${person.displayName} is disabled with ${responsibilityProjects.length} current Project responsibility assignment${responsibilityProjects.length === 1 ? '' : 's'} and ${contactRequests.length} open Help contact${contactRequests.length === 1 ? '' : 's'}.`,
+          unitId,
+          projectId: responsibilityProjects[0]?.trackingId ?? '',
+          userId: person.id,
+        });
+  }
   for (const submission of submissions.filter((item) =>
     ['PENDING', 'UNDER_REVIEW'].includes(item.status),
   ))
@@ -267,6 +298,198 @@ export async function getPortalData(
       unitId: submission.unitId,
       projectId: '',
       userId: submission.submitterId,
+    });
+
+  for (const unitId of visibleUnitIds) {
+    const associated = projects.filter(
+      (project) =>
+        project.leadUnitId === unitId ||
+        project.unitLinks.some((link) => link.unit.id === unitId),
+    );
+    for (const project of associated.filter((item) =>
+      activeStatuses.has(item.status),
+    )) {
+      if (project.status === 'Paused')
+        needsAttention.push({
+          key: `paused-${unitId}-${project.id}`,
+          kind: 'PROJECT_PAUSED',
+          severity: 'warning',
+          message: `${project.trackingId} — ${project.name} is paused and should be reviewed for continuity.`,
+          unitId,
+          projectId: project.trackingId,
+          userId: null,
+        });
+      const blocker = project.updates[0]?.blockerRisk || project.keyRisk;
+      if (blocker)
+        needsAttention.push({
+          key: `blocker-${unitId}-${project.id}`,
+          kind: 'CURRENT_BLOCKER_OR_RISK',
+          severity: 'warning',
+          message: `${project.trackingId} — ${project.name}: ${blocker}`,
+          unitId,
+          projectId: project.trackingId,
+          userId: null,
+        });
+      for (const request of project.helpRequests.filter((item) =>
+        ['OPEN', 'IN_PROGRESS'].includes(item.status),
+      ))
+        needsAttention.push({
+          key: `open-help-${unitId}-${request.id}`,
+          kind: 'OPEN_HELP_REQUEST',
+          severity: 'warning',
+          message: `${project.trackingId} requests help: ${request.title}.`,
+          unitId,
+          projectId: project.trackingId,
+          userId: request.contactUserId,
+        });
+    }
+  }
+
+  const maturityRank = ['Concept', 'Prototype', 'Field Tested', 'Validated'];
+  const unitStewardship: PortalData['unitStewardship'] = units
+    .filter((unit) => visibleUnitIds.includes(unit.id))
+    .map((unit) => {
+      const led = projects.filter((project) => project.leadUnitId === unit.id);
+      const supported = projects
+        .filter(
+          (project) =>
+            project.leadUnitId !== unit.id &&
+            project.unitLinks.some((link) => link.unit.id === unit.id),
+        )
+        .map((project) => ({
+          project,
+          role:
+            project.unitLinks.find((link) => link.unit.id === unit.id)?.role ??
+            'Supporting',
+        }));
+      const associated = [
+        ...led.map((project) => ({ project, relationship: 'LED' as const })),
+        ...supported.map(({ project }) => ({
+          project,
+          relationship: 'SUPPORTED' as const,
+        })),
+      ];
+      const coveredProblems = new Map<
+        string,
+        { title: string; projects: typeof associated }
+      >();
+      for (const item of associated)
+        for (const link of item.project.problemLinks) {
+          const existing = coveredProblems.get(link.problem.trackingId) ?? {
+            title: link.problem.title,
+            projects: [],
+          };
+          existing.projects.push(item);
+          coveredProblems.set(link.problem.trackingId, existing);
+        }
+      const projectIds = new Set(associated.map(({ project }) => project.id));
+      const unitActivities = activities.filter(
+        (activity) =>
+          activity.unitId === unit.id ||
+          (activity.projectId ? projectIds.has(activity.projectId) : false),
+      );
+      return {
+        unitId: unit.id,
+        unitTrackingId: unit.trackingId,
+        unitName: unit.name,
+        ledProjectIds: led.map((project) => project.trackingId),
+        supportedProjects: supported.map(({ project, role }) => ({
+          projectId: project.trackingId,
+          participationRole: role,
+        })),
+        problemCoverage: [...coveredProblems.entries()].map(
+          ([problemId, coverage]) => ({
+            problemId,
+            title: coverage.title,
+            activeEfforts: coverage.projects.filter(({ project }) =>
+              activeStatuses.has(project.status),
+            ).length,
+            historicalEfforts: coverage.projects.filter(
+              ({ project }) => !activeStatuses.has(project.status),
+            ).length,
+            highestMaturity:
+              coverage.projects
+                .map(({ project }) => project.maturity)
+                .sort(
+                  (a, b) => maturityRank.indexOf(b) - maturityRank.indexOf(a),
+                )[0] ?? 'No maturity recorded',
+            latestOutcome:
+              coverage.projects.find(({ project }) => project.outcome)
+                ?.project.outcome ?? '',
+            recentLessons: coverage.projects.reduce(
+              (count, { project }) => count + project.lessons.length,
+              0,
+            ),
+          }),
+        ),
+        helpRequests: associated.flatMap(({ project, relationship }) =>
+          project.helpRequests.map((request) => ({
+            id: request.id,
+            title: request.title,
+            category: request.category,
+            status: request.status,
+            projectId: project.trackingId,
+            projectName: project.name,
+            projectRelationship: relationship,
+            problem: project.problemLinks[0]?.problem.title ?? 'No Problem',
+            contact:
+              request.contactUser?.displayName ?? request.contact ?? 'Unassigned',
+            createdAt: request.createdAt.toISOString(),
+            resolutionSummary: request.resolutionSummary ?? '',
+          })),
+        ),
+        lessons: associated
+          .flatMap(({ project, relationship }) =>
+            project.lessons.map((lesson) => ({
+              id: lesson.trackingId,
+              type: lesson.lessonType,
+              title: lesson.title,
+              finding: lesson.finding,
+              projectId: project.trackingId,
+              projectName: project.name,
+              projectRelationship: relationship,
+              author: lesson.createdBy?.displayName ?? 'Unknown recorder',
+              date: lesson.date.toISOString(),
+              phase: lesson.phase?.phaseName ?? '',
+            })),
+          )
+          .sort((a, b) => b.date.localeCompare(a.date)),
+        activities: unitActivities.map((activity) => ({
+          id: activity.id,
+          description: activity.description,
+          eventType: activity.eventType,
+          timestamp: activity.timestamp.toISOString(),
+          actor: activity.actor ?? 'System',
+          category: activity.eventType.startsWith('USER_') ||
+            activity.eventType.startsWith('UNIT_')
+            ? ('UNIT_ADMINISTRATION' as const)
+            : ('PROJECT_KNOWLEDGE' as const),
+          projectId:
+            projects.find((project) => project.id === activity.projectId)
+              ?.trackingId ?? '',
+        })),
+        maturityCounts: Object.fromEntries(
+          maturityRank.map((maturity) => [
+            maturity,
+            associated.filter(({ project }) => project.maturity === maturity)
+              .length,
+          ]),
+        ),
+        outcomeCounts: Object.fromEntries(
+          ['SUCCESSFUL', 'PARTIALLY_SUCCESSFUL', 'UNSUCCESSFUL', 'INCONCLUSIVE', 'SUPERSEDED', 'CANCELLED'].map(
+            (outcome) => [
+              outcome,
+              associated.filter(({ project }) => project.outcome === outcome)
+                .length,
+            ],
+          ),
+        ),
+        lastMeaningfulActivityAt:
+          associated
+            .map(({ project }) => project.lastMeaningfulActivityAt ?? project.createdAt)
+            .sort((a, b) => b.getTime() - a.getTime())[0]
+            ?.toISOString() ?? '',
+      };
     });
 
   return {
@@ -570,6 +793,7 @@ export async function getPortalData(
       availableUsers,
     },
     needsAttention,
+    unitStewardship,
     directoryUsers: directoryUsers.map((user) => ({
       id: user.id,
       trackingId: user.trackingId,

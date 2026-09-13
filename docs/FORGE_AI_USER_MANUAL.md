@@ -25,6 +25,18 @@ The Administration workspace shows each person’s primary and additional Unit m
 
 Primary Unit transfers preserve Project membership and historical attribution. Administrator scope does not move implicitly with a primary Unit. Open Help Requests default to following the Project Lead; a lead change updates that contact. An explicitly entered alternate contact remains explicit and must be reassigned deliberately if it becomes inactive. Administrative changes are recorded in Activity with actor, affected record, Unit context, time, and a plain-language description.
 
+## Unit stewardship
+
+The Administration workspace opens with a per-Unit stewardship dashboard. A Unit Administrator selects one explicitly administered Unit at a time; this changes the people, attention, portfolio, Problem coverage, Help Requests, Lessons, submissions, and Activity shown in the stewardship surface without narrowing broad FORGE discovery.
+
+Projects Led by My Unit and Projects Supported by My Unit are separate views, each preserving current and historical efforts. Last Meaningful Activity, lifecycle status, maturity, completion, outcomes, Help Requests, and Project Lead are derived from Project records. Problems Addressed means only that the Unit has a recorded Solution Effort against the canonical Problem; it does not mean the Problem affects the Unit. Lessons and resolved assistance history remain visible, including unsuccessful and inconclusive work. FORGE does not rank Units or users, calculate success percentages, or treat failed work as poor performance.
+
+Needs Attention contains factual, automatically clearing conditions such as inactive leadership, no active maintainer, paused work, current blocker/risk, open assistance, pending users/submissions, inactive contacts, or no active Unit Administrator. Each signal links to the existing Project, user, submission, or recovery workflow. Project teams remain responsible for Project Updates; the Unit Administrator maintains continuity, scoped people, exceptions, and approved Unit POC data rather than a duplicate portfolio report.
+
+Problem authority remains divided: Contributors submit potential Problems; Unit Administrators review Unit context and recommend an existing canonical relationship, likely duplicate, clarification, or global review; System/global governance controls creation and material edits of canonical Problems.
+
+Parent-command inheritance, receiving-Unit transfer acknowledgment, Unit-level AI handoff, external notifications, advanced analytics, reminders, and portfolio export remain future enhancements for consideration after the controlled pilot.
+
 Contributors submit potential Problems into a review queue rather than directly editing canonical Problems. Reviewers may accept and link a submission, associate it with existing work as a duplicate, or reject it. Project Users can create solution efforts and edit only created/assigned work. System Administrators have global scope. UI controls reflect these rules, but server mutations are the enforcement boundary.
 
 The amber **Development Only — Not Authentication** switcher exists solely for local role acceptance. It is gated by environment and cannot operate in a production build. Do not mistake it for password, SSO, CAC, or session security.

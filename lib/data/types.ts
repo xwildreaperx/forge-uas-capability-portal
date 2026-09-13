@@ -302,6 +302,59 @@ export type PortalData = {
     projectId: string;
     userId: number | null;
   }[];
+  unitStewardship: {
+    unitId: number;
+    unitTrackingId: string;
+    unitName: string;
+    ledProjectIds: string[];
+    supportedProjects: { projectId: string; participationRole: string }[];
+    problemCoverage: {
+      problemId: string;
+      title: string;
+      activeEfforts: number;
+      historicalEfforts: number;
+      highestMaturity: string;
+      latestOutcome: string;
+      recentLessons: number;
+    }[];
+    helpRequests: {
+      id: number;
+      title: string;
+      category: string;
+      status: string;
+      projectId: string;
+      projectName: string;
+      projectRelationship: 'LED' | 'SUPPORTED';
+      problem: string;
+      contact: string;
+      createdAt: string;
+      resolutionSummary: string;
+    }[];
+    lessons: {
+      id: string;
+      type: string;
+      title: string;
+      finding: string;
+      projectId: string;
+      projectName: string;
+      projectRelationship: 'LED' | 'SUPPORTED';
+      author: string;
+      date: string;
+      phase: string;
+    }[];
+    activities: {
+      id: number;
+      description: string;
+      eventType: string;
+      timestamp: string;
+      actor: string;
+      category: 'PROJECT_KNOWLEDGE' | 'UNIT_ADMINISTRATION';
+      projectId: string;
+    }[];
+    maturityCounts: Record<string, number>;
+    outcomeCounts: Record<string, number>;
+    lastMeaningfulActivityAt: string;
+  }[];
   projectDirectoryUsers: {
     id: number;
     trackingId: string;

@@ -2308,6 +2308,96 @@ function ProblemsView({ onProblem }: { onProblem: (id: string) => void }) {
     </>
   );
 }
+function UnitStewardshipDashboard() {
+  const { unitStewardship, projects, directoryUsers, needsAttention, submissions, helpRequests } = useData();
+  const [unitId, setUnitId] = useState(unitStewardship[0]?.unitId ?? 0);
+  const [portfolioScope, setPortfolioScope] = useState('ALL');
+  const [status, setStatus] = useState('ALL');
+  const [maturity, setMaturity] = useState('ALL');
+  const [lead, setLead] = useState('ALL');
+  const [problem, setProblem] = useState('ALL');
+  const [helpState, setHelpState] = useState('ALL');
+  const [userRole, setUserRole] = useState('ALL');
+  const [userStatus, setUserStatus] = useState('ALL');
+  const [lessonType, setLessonType] = useState('ALL');
+  const [query, setQuery] = useState('');
+  const selected = unitStewardship.find((item) => item.unitId === unitId) ?? unitStewardship[0];
+  if (!selected) return null;
+  const ledIds = new Set(selected.ledProjectIds);
+  const supportedRoles = new globalThis.Map(selected.supportedProjects.map((item) => [item.projectId, item.participationRole]));
+  const unitProjects = projects
+    .filter((project) => ledIds.has(project.id) || supportedRoles.has(project.id))
+    .filter((project) => portfolioScope === 'ALL' || (portfolioScope === 'LED' ? ledIds.has(project.id) : supportedRoles.has(project.id)))
+    .filter((project) => status === 'ALL' || project.status === status)
+    .filter((project) => maturity === 'ALL' || project.maturity === maturity)
+    .filter((project) => lead === 'ALL' || project.team.find((member) => member.role === 'PROJECT_LEAD')?.trackingId === lead)
+    .filter((project) => problem === 'ALL' || project.problems.some((item) => item.id === problem))
+    .filter((project) => helpState === 'ALL' || (helpState === 'OPEN' ? project.openHelpRequestCount > 0 : project.openHelpRequestCount === 0))
+    .filter((project) => `${project.id} ${project.name} ${project.team.map((member) => member.displayName).join(' ')} ${project.problems.map((item) => item.title).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => b.lastMeaningfulActivityAt.localeCompare(a.lastMeaningfulActivityAt));
+  const scopedUsers = directoryUsers.filter((user) => user.unitIds.includes(selected.unitId)).filter((user) => userRole === 'ALL' || user.role === userRole).filter((user) => userStatus === 'ALL' || user.status === userStatus);
+  const scopedAttention = needsAttention.filter((signal) => signal.unitId === selected.unitId);
+  const activeStatuses = new Set(['Planning', 'Active', 'Paused', 'Transitioning']);
+  const filteredLessons = selected.lessons.filter((lesson) => lessonType === 'ALL' || lesson.type === lessonType).filter((lesson) => `${lesson.title} ${lesson.finding} ${lesson.projectName}`.toLowerCase().includes(query.toLowerCase()));
+  const filteredHelp = selected.helpRequests.filter((request) => helpState === 'ALL' || (helpState === 'OPEN' ? ['OPEN', 'IN_PROGRESS'].includes(request.status) : !['OPEN', 'IN_PROGRESS'].includes(request.status)));
+  const card = (project: PortalProject, relationship: 'LED' | 'SUPPORTED') => {
+    const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
+    const attention = scopedAttention.some((signal) => signal.projectId === project.id);
+    return <article className="steward-project" key={project.id}>
+      <div><span className="maturity">{relationship === 'LED' ? 'Led by Unit' : supportedRoles.get(project.id)}</span>{attention && <span className="status warning">Review</span>}</div>
+      <h3><a href={`/projects/${project.id}`}>{project.id} — {project.name}</a></h3>
+      <p>{project.problems.find((item) => item.isPrimary)?.title ?? 'No primary Problem'} · {project.solutionTypeLabel}</p>
+      <small>{projectLead?.displayName ?? 'Lead unassigned'} · {project.status} · {project.maturity} · {project.progress}% complete</small>
+      <small>Last meaningful activity {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()} · {project.openHelpRequestCount} open Help Request{project.openHelpRequestCount === 1 ? '' : 's'}{project.outcomeLabel ? ` · ${project.outcomeLabel}` : ''}</small>
+      <a href={`/projects/${project.id}`}>Open Project</a>
+    </article>;
+  };
+  return <section className="stewardship" aria-label="Unit stewardship dashboard">
+    <div className="steward-head">
+      <div><p className="eyebrow">UNIT STEWARDSHIP</p><h2>{selected.unitName}</h2><p>Derived awareness and exception management. Project teams maintain the work.</p></div>
+      <label>Administering Unit<select value={selected.unitId} onChange={(event) => setUnitId(Number(event.target.value))}>{unitStewardship.map((unit) => <option key={unit.unitId} value={unit.unitId}>{unit.unitName}</option>)}</select></label>
+    </div>
+    <div className="summary-row">
+      <div><strong>{unitProjects.filter((item) => activeStatuses.has(item.status)).length}</strong><span>Active Solution Efforts</span></div>
+      <div><strong>{unitProjects.filter((item) => !activeStatuses.has(item.status)).length}</strong><span>Historical Efforts</span></div>
+      <div><strong>{selected.problemCoverage.length}</strong><span>Problems Addressed</span></div>
+      <div><strong>{selected.helpRequests.filter((item) => ['OPEN', 'IN_PROGRESS'].includes(item.status)).length}</strong><span>Open Help Requests</span></div>
+      <div><strong>{scopedUsers.length}</strong><span>Unit Users</span></div>
+    </div>
+    <section className="panel attention-panel"><div className="section-heading"><div><h2>Needs Attention</h2><p>Factual stewardship conditions—not scores or performance ratings.</p></div><span>{scopedAttention.length} items</span></div>
+      {scopedAttention.length ? <div className="attention-grid">{scopedAttention.map((signal) => <article key={signal.key}><span>{signal.severity === 'critical' ? 'Action Required' : 'Review'}</span><strong>{signal.kind.replaceAll('_', ' ')}</strong><p>{signal.message}</p><a href={signal.projectId ? `/projects/${signal.projectId}` : signal.userId ? '#unit-users' : '#unit-profile'}>{signal.projectId ? 'Open Project / Manage Team' : signal.userId ? 'Review User' : 'Review Unit'}</a></article>)}</div> : <div className="empty-state"><Check/><h3>No current stewardship exceptions.</h3></div>}
+    </section>
+    <div className="portfolio-filters" aria-label="Unit portfolio filters">
+      <input aria-label="Search Unit portfolio" placeholder="Search Project, user, Problem, Help Request, or Lesson" value={query} onChange={(event) => setQuery(event.target.value)}/>
+      <select aria-label="Led or supported" value={portfolioScope} onChange={(event) => setPortfolioScope(event.target.value)}><option value="ALL">Led and supported</option><option value="LED">Led by Unit</option><option value="SUPPORTED">Supported by Unit</option></select>
+      <select aria-label="Project status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">All statuses</option>{[...new Set(projects.map((item) => item.status))].map((item) => <option key={item}>{item}</option>)}</select>
+      <select aria-label="Project maturity" value={maturity} onChange={(event) => setMaturity(event.target.value)}><option value="ALL">All maturity levels</option>{['Concept','Prototype','Field Tested','Validated'].map((item) => <option key={item}>{item}</option>)}</select>
+      <select aria-label="Project Lead" value={lead} onChange={(event) => setLead(event.target.value)}><option value="ALL">All Project Leads</option>{directoryUsers.map((item) => <option key={item.id} value={item.trackingId}>{item.displayName}</option>)}</select>
+      <select aria-label="Problem" value={problem} onChange={(event) => setProblem(event.target.value)}><option value="ALL">All Problems</option>{selected.problemCoverage.map((item) => <option key={item.problemId} value={item.problemId}>{item.problemId} — {item.title}</option>)}</select>
+      <select aria-label="Help Request state" value={helpState} onChange={(event) => setHelpState(event.target.value)}><option value="ALL">Any Help Request state</option><option value="OPEN">Has open request</option><option value="NONE">No open request</option></select>
+      <span>Sorted by Last Meaningful Activity</span>
+    </div>
+    <div className="detail-grid two">
+      <section className="panel"><h2>Projects Led by My Unit</h2><h3>Active / Current</h3><div className="steward-list">{unitProjects.filter((item) => ledIds.has(item.id) && activeStatuses.has(item.status)).map((item) => card(item, 'LED'))}</div><h3>Historical Knowledge</h3><div className="steward-list">{unitProjects.filter((item) => ledIds.has(item.id) && !activeStatuses.has(item.status)).map((item) => card(item, 'LED'))}</div></section>
+      <section className="panel"><h2>Projects Supported by My Unit</h2><h3>Active / Current</h3><div className="steward-list">{unitProjects.filter((item) => supportedRoles.has(item.id) && activeStatuses.has(item.status)).map((item) => card(item, 'SUPPORTED'))}</div><h3>Historical Knowledge</h3><div className="steward-list">{unitProjects.filter((item) => supportedRoles.has(item.id) && !activeStatuses.has(item.status)).map((item) => card(item, 'SUPPORTED'))}</div></section>
+    </div>
+    <div className="detail-grid two">
+      <section className="panel"><h2>Problems Addressed by This Unit</h2><p>Canonical Problems against which this Unit has recorded Solution Efforts. This does not imply the Problem affects the Unit.</p><div className="stack-list">{selected.problemCoverage.map((item) => <div key={item.problemId}><strong><a href={`/problems/${item.problemId}`}>{item.problemId} — {item.title}</a></strong><small>{item.activeEfforts} active · {item.historicalEfforts} historical · Highest maturity {item.highestMaturity} · {item.recentLessons} Lessons</small></div>)}</div></section>
+      <section className="panel"><h2>Portfolio Knowledge</h2><h3>Maturity distribution</h3><div className="metric-strip">{Object.entries(selected.maturityCounts).map(([label,count]) => <span key={label}><strong>{count}</strong>{label}</span>)}</div><h3>Solution Effort Outcomes</h3><p>Unsuccessful and inconclusive work remains a contribution to institutional knowledge.</p><div className="metric-strip">{Object.entries(selected.outcomeCounts).filter(([,count]) => count > 0).map(([label,count]) => <span key={label}><strong>{count}</strong>{label.replaceAll('_',' ')}</span>)}</div></section>
+    </div>
+    <div className="detail-grid two">
+      <section className="panel"><div className="section-heading"><div><h2>Help Requests from Unit Projects</h2><p>Led and supported efforts remain visibly distinct.</p></div><a href="#organization-help">Organization-wide Requests for Assistance</a></div><div className="stack-list">{filteredHelp.map((item) => <div key={item.id}><span className="maturity">{item.projectRelationship}</span><strong><a href={`/projects/${item.projectId}`}>{item.title}</a></strong><small>{item.category.replaceAll('_',' ')} · {item.projectName} · {item.problem} · Contact {item.contact} · {item.status} · {new Date(item.createdAt).toLocaleDateString()}</small>{item.resolutionSummary && <p>{item.resolutionSummary}</p>}</div>)}</div></section>
+      <section className="panel"><div className="section-heading"><div><h2>Lessons from Unit Solution Efforts</h2><p>Recent findings, failed approaches, and recommendations retain provenance.</p></div><select aria-label="Lesson type" value={lessonType} onChange={(event) => setLessonType(event.target.value)}><option value="ALL">All Lesson types</option>{['CONFIRMED_FINDING','FAILED_APPROACH','RECOMMENDATION','WORKING_HYPOTHESIS','UNRESOLVED_QUESTION'].map((item) => <option key={item}>{item}</option>)}</select></div><div className="stack-list">{filteredLessons.slice(0,8).map((item) => <div key={item.id}><span className="maturity">{item.type.replaceAll('_',' ')}</span><strong><a href={`/projects/${item.projectId}`}>{item.title}</a></strong><p>{item.finding}</p><small>{item.projectName} · {item.projectRelationship} · {item.author} · {new Date(item.date).toLocaleDateString()}{item.phase ? ` · ${item.phase}` : ''}</small></div>)}</div></section>
+    </div>
+    <div className="detail-grid two">
+      <section className="panel" id="unit-users"><div className="section-heading"><div><h2>Unit People & Responsibilities</h2><p>Continuity visibility, not a ranking.</p></div><div><select aria-label="User role" value={userRole} onChange={(event) => setUserRole(event.target.value)}><option value="ALL">All roles</option>{['CONTRIBUTOR','PROJECT_USER','UNIT_ADMIN','SYSTEM_ADMIN'].map((item) => <option key={item}>{item}</option>)}</select><select aria-label="User status" value={userStatus} onChange={(event) => setUserStatus(event.target.value)}><option value="ALL">All account states</option>{['PENDING','ACTIVE','DISABLED'].map((item) => <option key={item}>{item}</option>)}</select></div></div><div className="stack-list">{scopedUsers.map((item) => <div key={item.id}><strong>{item.displayName}</strong><small>{item.role.replaceAll('_',' ')} · {item.status} · {item.projectsLed.length} led · {item.projectsContributed.length} contributed · {item.openHelpRequests.length} Help contacts</small><a href="#responsibility-directory">View Responsibilities</a></div>)}</div></section>
+      <section className="panel"><h2>Recent Unit Activity</h2><p>Meaningful Project knowledge and administrative stewardship.</p><div className="stack-list">{selected.activities.slice(0,12).map((item) => <div key={item.id}><span className="maturity">{item.category === 'UNIT_ADMINISTRATION' ? 'Unit Administration' : 'Project Knowledge'}</span><strong>{item.description}</strong><small>{item.actor} · {new Date(item.timestamp).toLocaleString()}</small>{item.projectId && <a href={`/projects/${item.projectId}`}>Open Project</a>}</div>)}</div></section>
+    </div>
+    <section className="panel" id="unit-submissions"><h2>Problem Submissions from My Unit</h2><p>Unit Administrators provide Unit context and recommend canonical relationships. System/global governance controls new canonical Problems and material edits.</p><div className="stack-list">{submissions.filter((item) => item.unitId === selected.unitId).map((item) => <div key={item.id}><strong>{item.trackingId} — {item.title}</strong><small>{item.submitter} · {new Date(item.createdAt).toLocaleDateString()} · {item.status.replaceAll('_',' ')}</small><p>{item.matches.slice(0,2).map((match) => `${match.classification.replaceAll('_',' ')}: ${match.id}`).join(' · ') || 'No likely canonical relationship found.'}</p><a href="#submission-review">Review Unit context</a></div>)}</div></section>
+    <section className="panel" id="organization-help"><h2>Organization-wide Requests for Assistance</h2><p>Broad discovery does not imply that this Unit has claimed or accepted the work.</p><div className="stack-list">{helpRequests.filter((item) => !selected.ledProjectIds.includes(item.projectId) && !supportedRoles.has(item.projectId)).slice(0,6).map((item) => <div key={item.id}><strong><a href={`/projects/${item.projectId}`}>{item.title}</a></strong><small>{item.projectName} · {item.unitName} · {item.categoryLabel} · {item.status}</small></div>)}</div></section>
+  </section>;
+}
+
 function AdministrationView() {
   const {
     directoryUsers,
@@ -2364,6 +2454,7 @@ function AdministrationView() {
           </p>
         </div>
       </div>
+      <UnitStewardshipDashboard />
       <div className="detail-grid two">
         <section className="panel">
           <h2>Needs attention</h2>
@@ -2390,7 +2481,7 @@ function AdministrationView() {
             </div>
           )}
         </section>
-        <section className="panel">
+        <section className="panel" id="responsibility-directory">
           <h2>User directory</h2>
           {directoryUsers.length ? (
             <div className="stack-list">
@@ -2551,7 +2642,7 @@ function AdministrationView() {
             </div>
           )}
         </section>
-        <section className="panel">
+        <section className="panel" id="submission-review">
           <h2>Problem submissions</h2>
           {submissions.length ? (
             <div className="stack-list">
@@ -2602,11 +2693,11 @@ function AdministrationView() {
                   >
                     <select name="status" defaultValue={item.status}>
                       <option value="UNDER_REVIEW">Under review</option>
-                      <option value="ACCEPTED">Accept and link</option>
+                      <option value="ACCEPTED">Recommend existing Problem</option>
                       <option value="DUPLICATE_LINKED">
-                        Duplicate / link existing
+                        Mark likely duplicate / link existing
                       </option>
-                      <option value="REJECTED">Reject</option>
+                      <option value="REJECTED">Return for clarification</option>
                     </select>
                     <select
                       name="relatedProblemId"
