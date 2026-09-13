@@ -51,6 +51,9 @@ FORGE is a relational capability problem-solving and institutional-knowledge por
 - Canonical Unit and Problem creation and material identity/governance edits require System Administrator scope. Tracking IDs are immutable and counter-backed; Unit Administrators may update only approved scoped operational fields such as the FORGE point of contact.
 - Preserve every Problem submission and its staged review history. Approval as a new canonical Problem must be one transaction that performs a final duplicate review, creates the Problem, links the submission, and records provenance.
 - Treat `Unprioritized` and missing Problem stewardship as refinement signals, not integrity failures. Invalid controlled values and a Superseded Problem without a successor are integrity failures.
+- Consolidation never deletes a canonical Problem: preserve the old PRB as Superseded with a cycle-safe successor. Tag merge may retire the source only after all junction relationships have been deduplicated and transferred with Activity provenance.
+- Lesson and artifact correction preserves original authorship/creator attribution. Prefer Lesson withdrawn/superseded/archived states over deletion. Location data must remain approved and appropriately generalized.
+- Lead Unit transfer does not block Project use; it creates a receiving-Unit acknowledgment signal that clears only through explicit review.
 - An active Unit cannot be deactivated while it leads a nonterminal Project.
 - Integrity and attention findings are derived from source data and clear automatically; they are continuity safeguards, not performance scores.
 - Administrative recovery must preserve tracking IDs, historical authorship, and actor/record provenance.

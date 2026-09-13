@@ -20,13 +20,21 @@ const tones: Record<string, string> = {
   Validated: 'purple',
 };
 const administrativeActivityCategory = (eventType: string) =>
-  eventType.startsWith('PROBLEM_') || eventType.startsWith('SUBMISSION_') ? 'Problem Governance'
-    : eventType.startsWith('TAG_') ? 'Taxonomy Governance'
-    : eventType.startsWith('USER_') ? 'User Administration'
-    : eventType.includes('ADMIN') ? 'Role / Permission'
-      : eventType.startsWith('UNIT_') ? 'Unit Administration'
-        : eventType.includes('HELP') || eventType.includes('LEAD') || eventType.includes('RELATIONSHIP')
-          ? 'Project Recovery' : 'Project Knowledge';
+  eventType.startsWith('PROBLEM_') || eventType.startsWith('SUBMISSION_')
+    ? 'Problem Governance'
+    : eventType.startsWith('TAG_')
+      ? 'Taxonomy Governance'
+      : eventType.startsWith('USER_')
+        ? 'User Administration'
+        : eventType.includes('ADMIN')
+          ? 'Role / Permission'
+          : eventType.startsWith('UNIT_')
+            ? 'Unit Administration'
+            : eventType.includes('HELP') ||
+                eventType.includes('LEAD') ||
+                eventType.includes('RELATIONSHIP')
+              ? 'Project Recovery'
+              : 'Project Knowledge';
 
 export async function getPortalData(
   currentUser: CurrentUserContext | null = null,
@@ -54,8 +62,16 @@ export async function getPortalData(
         tags: { select: { tag: { select: { name: true } } } },
         steward: { select: { id: true, displayName: true, status: true } },
         supersededBy: { select: { id: true, trackingId: true, title: true } },
-        outgoingRelationships: { include: { targetProblem: { select: { trackingId: true, title: true } } } },
-        incomingRelationships: { include: { sourceProblem: { select: { trackingId: true, title: true } } } },
+        outgoingRelationships: {
+          include: {
+            targetProblem: { select: { trackingId: true, title: true } },
+          },
+        },
+        incomingRelationships: {
+          include: {
+            sourceProblem: { select: { trackingId: true, title: true } },
+          },
+        },
       },
     }),
     db.project.findMany({
@@ -126,6 +142,7 @@ export async function getPortalData(
         subjectUser: { select: { id: true, displayName: true } },
         unit: { select: { trackingId: true, name: true } },
         project: { select: { trackingId: true, name: true } },
+        problem: { select: { trackingId: true, title: true } },
       },
     }),
     db.helpRequest.findMany({
@@ -177,7 +194,15 @@ export async function getPortalData(
               ? {}
               : { unitId: { in: currentUser?.administeredUnitIds ?? [] } },
           orderBy: { createdAt: 'desc' },
-          include: { submitter: true, unit: true, relatedProblem: true, reviews: { orderBy: { createdAt: 'asc' }, include: { reviewer: true } } },
+          include: {
+            submitter: true,
+            unit: true,
+            relatedProblem: true,
+            reviews: {
+              orderBy: { createdAt: 'asc' },
+              include: { reviewer: true },
+            },
+          },
         })
       : Promise.resolve([]),
     currentUser
@@ -187,10 +212,55 @@ export async function getPortalData(
         })
       : Promise.resolve([]),
     currentUser?.role === 'SYSTEM_ADMIN'
-      ? db.tag.findMany({ orderBy: { name: 'asc' }, include: { _count: { select: { problems: true, projects: true, units: true, lessons: true } } } })
+      ? db.tag.findMany({
+          orderBy: { name: 'asc' },
+          include: {
+            problems: {
+              include: {
+                problem: { select: { trackingId: true, title: true } },
+              },
+            },
+            projects: {
+              include: {
+                project: { select: { trackingId: true, name: true } },
+              },
+            },
+            units: {
+              include: { unit: { select: { trackingId: true, name: true } } },
+            },
+            lessons: {
+              include: {
+                lesson: { select: { trackingId: true, title: true } },
+              },
+            },
+            _count: {
+              select: {
+                problems: true,
+                projects: true,
+                units: true,
+                lessons: true,
+              },
+            },
+          },
+        })
       : Promise.resolve([]),
     currentUser?.role === 'SYSTEM_ADMIN'
-      ? db.location.findMany({ orderBy: { name: 'asc' } })
+      ? db.location.findMany({
+          orderBy: { name: 'asc' },
+          include: {
+            units: { select: { trackingId: true, name: true } },
+            projects: {
+              include: {
+                project: { select: { trackingId: true, name: true } },
+              },
+            },
+            problems: {
+              include: {
+                problem: { select: { trackingId: true, title: true } },
+              },
+            },
+          },
+        })
       : Promise.resolve([]),
   ]);
 
@@ -213,14 +283,70 @@ export async function getPortalData(
     (person) => person.status === 'ACTIVE',
   );
   if (currentUser?.role === 'SYSTEM_ADMIN') {
-    const validProblemStatuses = new Set(['Open', 'Under Review', 'Addressed — Viable Efforts Exist', 'Closed', 'Superseded']);
-    const validProblemPriorities = new Set(['Unprioritized', 'Low', 'Medium', 'High', 'Critical']);
+    const validProblemStatuses = new Set([
+      'Open',
+      'Under Review',
+      'Addressed — Viable Efforts Exist',
+      'Closed',
+      'Superseded',
+    ]);
+    const validProblemPriorities = new Set([
+      'Unprioritized',
+      'Low',
+      'Medium',
+      'High',
+      'Critical',
+    ]);
     for (const problem of problems) {
-      const invalid = !problem.title.trim() || !problem.shortDescription.trim() || !problem.detailedDescription.trim() || !problem.problemStatement.trim() || !problem.category.trim() || !validProblemStatuses.has(problem.status) || !validProblemPriorities.has(problem.priority) || (problem.status === 'Superseded' && !problem.supersededById);
-      if (invalid) platformIntegrity.push({ key: `problem-${problem.id}`, kind: 'INVALID_CANONICAL_PROBLEM', severity: 'action', message: `${problem.trackingId} has invalid or incomplete canonical governance data.`, remediation: 'Correct the controlled lifecycle, priority, successor, or required descriptive fields.', entityType: 'PROBLEM', entityId: problem.trackingId, href: `/problems/${problem.trackingId}` });
-      if (problem.priority === 'Unprioritized' || !problem.stewardUserId) needsAttention.push({ key: `problem-refinement-${problem.id}`, kind: 'PROBLEM_NEEDS_REFINEMENT', severity: 'warning', message: `${problem.trackingId} needs ${problem.priority === 'Unprioritized' ? 'priority review' : 'a named steward'}.`, unitId: null, projectId: '', userId: problem.stewardUserId });
+      const invalid =
+        !problem.title.trim() ||
+        !problem.shortDescription.trim() ||
+        !problem.detailedDescription.trim() ||
+        !problem.problemStatement.trim() ||
+        !problem.category.trim() ||
+        !validProblemStatuses.has(problem.status) ||
+        !validProblemPriorities.has(problem.priority) ||
+        (problem.status === 'Superseded' && !problem.supersededById);
+      if (invalid)
+        platformIntegrity.push({
+          key: `problem-${problem.id}`,
+          kind: 'INVALID_CANONICAL_PROBLEM',
+          severity: 'action',
+          message: `${problem.trackingId} has invalid or incomplete canonical governance data.`,
+          remediation:
+            'Correct the controlled lifecycle, priority, successor, or required descriptive fields.',
+          entityType: 'PROBLEM',
+          entityId: problem.trackingId,
+          href: `/problems/${problem.trackingId}`,
+        });
+      if (problem.priority === 'Unprioritized' || !problem.stewardUserId)
+        needsAttention.push({
+          key: `problem-refinement-${problem.id}`,
+          kind: 'PROBLEM_NEEDS_REFINEMENT',
+          severity: 'warning',
+          message: `${problem.trackingId} needs ${problem.priority === 'Unprioritized' ? 'priority review' : 'a named steward'}.`,
+          unitId: null,
+          projectId: '',
+          userId: problem.stewardUserId,
+        });
     }
-    for (const unit of units) if (!unit.name.trim() || !unit.abbreviation.trim() || !unit.unitType.trim()) platformIntegrity.push({ key: `unit-canonical-${unit.id}`, kind: 'INVALID_CANONICAL_UNIT', severity: 'action', message: `${unit.trackingId} has incomplete canonical identity data.`, remediation: 'Correct the Unit name, abbreviation, and controlled type.', entityType: 'UNIT', entityId: unit.trackingId, href: `/units/${unit.trackingId}` });
+    for (const unit of units)
+      if (
+        !unit.name.trim() ||
+        !unit.abbreviation.trim() ||
+        !unit.unitType.trim()
+      )
+        platformIntegrity.push({
+          key: `unit-canonical-${unit.id}`,
+          kind: 'INVALID_CANONICAL_UNIT',
+          severity: 'action',
+          message: `${unit.trackingId} has incomplete canonical identity data.`,
+          remediation:
+            'Correct the Unit name, abbreviation, and controlled type.',
+          entityType: 'UNIT',
+          entityId: unit.trackingId,
+          href: `/units/${unit.trackingId}`,
+        });
   }
   if (currentUser?.role === 'SYSTEM_ADMIN' && activeSystemAdmins.length === 1)
     needsAttention.push({
@@ -260,6 +386,16 @@ export async function getPortalData(
       visibleUnitIds.includes(item.leadUnitId) &&
       activeStatuses.has(item.status),
   )) {
+    if (project.leadUnitTransferPending)
+      needsAttention.push({
+        key: `lead-unit-transfer-${project.id}`,
+        kind: 'RECEIVING_UNIT_TRANSFER_REVIEW',
+        severity: 'warning',
+        message: `${project.trackingId} — ${project.name} was transferred to ${project.leadUnit.name} and awaits receiving-Unit review.`,
+        unitId: project.leadUnitId,
+        projectId: project.trackingId,
+        userId: null,
+      });
     const lead = project.userMemberships.find(
       (membership) => membership.role === 'PROJECT_LEAD',
     );
@@ -355,29 +491,47 @@ export async function getPortalData(
         const message = `${person.displayName} has the Unit Administrator role but no administered Unit.`;
         needsAttention.push({
           key: `unit-admin-no-scope-${person.id}`,
-          kind: 'UNIT_ADMIN_WITHOUT_SCOPE', severity: 'critical', message,
-          unitId: person.primaryUnitId, projectId: '', userId: person.id,
+          kind: 'UNIT_ADMIN_WITHOUT_SCOPE',
+          severity: 'critical',
+          message,
+          unitId: person.primaryUnitId,
+          projectId: '',
+          userId: person.id,
         });
         platformIntegrity.push({
-          key: `unit-admin-no-scope-${person.id}`, kind: 'UNIT_ADMIN_WITHOUT_SCOPE',
-          severity: 'action', message,
+          key: `unit-admin-no-scope-${person.id}`,
+          kind: 'UNIT_ADMIN_WITHOUT_SCOPE',
+          severity: 'action',
+          message,
           remediation: 'Assign an administered Unit or change the user role.',
-          entityType: 'USER', entityId: person.trackingId,
+          entityType: 'USER',
+          entityId: person.trackingId,
           href: '#responsibility-directory',
         });
       }
-      if (!['UNIT_ADMIN', 'SYSTEM_ADMIN'].includes(person.role) && scopes.length) {
+      if (
+        !['UNIT_ADMIN', 'SYSTEM_ADMIN'].includes(person.role) &&
+        scopes.length
+      ) {
         const message = `${person.displayName} retains Unit Administrator scope without an administrator role.`;
         needsAttention.push({
-          key: `non-admin-scope-${person.id}`, kind: 'NON_ADMIN_WITH_ADMIN_SCOPE',
-          severity: 'critical', message, unitId: scopes[0]!.unitId,
-          projectId: '', userId: person.id,
+          key: `non-admin-scope-${person.id}`,
+          kind: 'NON_ADMIN_WITH_ADMIN_SCOPE',
+          severity: 'critical',
+          message,
+          unitId: scopes[0]!.unitId,
+          projectId: '',
+          userId: person.id,
         });
         platformIntegrity.push({
-          key: `non-admin-scope-${person.id}`, kind: 'NON_ADMIN_WITH_ADMIN_SCOPE',
-          severity: 'action', message,
-          remediation: 'Remove the administered-Unit scope or restore the intended role.',
-          entityType: 'USER', entityId: person.trackingId,
+          key: `non-admin-scope-${person.id}`,
+          kind: 'NON_ADMIN_WITH_ADMIN_SCOPE',
+          severity: 'action',
+          message,
+          remediation:
+            'Remove the administered-Unit scope or restore the intended role.',
+          entityType: 'USER',
+          entityId: person.trackingId,
           href: '#responsibility-directory',
         });
       }
@@ -386,10 +540,14 @@ export async function getPortalData(
       ))
         platformIntegrity.push({
           key: `inactive-admin-scope-${person.id}-${scope.unitId}`,
-          kind: 'ADMIN_SCOPE_ON_INACTIVE_UNIT', severity: 'review',
+          kind: 'ADMIN_SCOPE_ON_INACTIVE_UNIT',
+          severity: 'review',
           message: `${person.displayName} retains administrator scope for an inactive Unit.`,
-          remediation: 'Review whether the Unit should be reactivated, the user reassigned, or the scope removed.',
-          entityType: 'USER', entityId: person.trackingId, href: '#responsibility-directory',
+          remediation:
+            'Review whether the Unit should be reactivated, the user reassigned, or the scope removed.',
+          entityType: 'USER',
+          entityId: person.trackingId,
+          href: '#responsibility-directory',
         });
     }
   }
@@ -409,31 +567,106 @@ export async function getPortalData(
   if (currentUser?.role === 'SYSTEM_ADMIN') {
     for (const project of projects) {
       const active = activeStatuses.has(project.status);
-      const lead = project.userMemberships.find((member) => member.role === 'PROJECT_LEAD');
-      const maintainers = project.userMemberships.filter((member) => member.user.status === 'ACTIVE');
-      const participatingLead = project.unitLinks.some((link) => link.unit.id === project.leadUnitId);
-      const addProjectFinding = (kind: string, message: string, remediation: string) =>
-        platformIntegrity.push({ key: `${kind}-${project.id}`, kind, severity: 'action', message,
-          remediation, entityType: 'PROJECT', entityId: project.trackingId,
-          href: `/projects/${project.trackingId}` });
-      if (!project.problemLinks.length) addProjectFinding('PROJECT_WITHOUT_PROBLEM', `${project.trackingId} has no canonical Problem.`, 'Open Project Relationships and add a canonical Problem.');
-      if (!participatingLead) addProjectFinding('LEAD_UNIT_NOT_PARTICIPATING', `${project.trackingId}'s Lead Unit is not a participating Unit.`, 'Open Project Relationships and restore the Lead Unit relationship.');
+      const lead = project.userMemberships.find(
+        (member) => member.role === 'PROJECT_LEAD',
+      );
+      const maintainers = project.userMemberships.filter(
+        (member) => member.user.status === 'ACTIVE',
+      );
+      const participatingLead = project.unitLinks.some(
+        (link) => link.unit.id === project.leadUnitId,
+      );
+      const addProjectFinding = (
+        kind: string,
+        message: string,
+        remediation: string,
+      ) =>
+        platformIntegrity.push({
+          key: `${kind}-${project.id}`,
+          kind,
+          severity: 'action',
+          message,
+          remediation,
+          entityType: 'PROJECT',
+          entityId: project.trackingId,
+          href: `/projects/${project.trackingId}`,
+        });
+      if (!project.problemLinks.length)
+        addProjectFinding(
+          'PROJECT_WITHOUT_PROBLEM',
+          `${project.trackingId} has no canonical Problem.`,
+          'Open Project Relationships and add a canonical Problem.',
+        );
+      if (!participatingLead)
+        addProjectFinding(
+          'LEAD_UNIT_NOT_PARTICIPATING',
+          `${project.trackingId}'s Lead Unit is not a participating Unit.`,
+          'Open Project Relationships and restore the Lead Unit relationship.',
+        );
       if (active && !project.leadUnit.isActive) {
         const message = `${project.trackingId} is active while its Lead Unit, ${project.leadUnit.name}, is inactive.`;
-        addProjectFinding('INACTIVE_LEAD_UNIT', message, 'Transfer Lead Unit responsibility or reactivate the Unit.');
-        needsAttention.push({ key: `inactive-lead-unit-${project.id}`, kind: 'INACTIVE_UNIT_LEADS_ACTIVE_PROJECT', severity: 'critical', message, unitId: project.leadUnitId, projectId: project.trackingId, userId: lead?.userId ?? null });
+        addProjectFinding(
+          'INACTIVE_LEAD_UNIT',
+          message,
+          'Transfer Lead Unit responsibility or reactivate the Unit.',
+        );
+        needsAttention.push({
+          key: `inactive-lead-unit-${project.id}`,
+          kind: 'INACTIVE_UNIT_LEADS_ACTIVE_PROJECT',
+          severity: 'critical',
+          message,
+          unitId: project.leadUnitId,
+          projectId: project.trackingId,
+          userId: lead?.userId ?? null,
+        });
       }
-      if (active && (!lead || lead.user.status !== 'ACTIVE')) addProjectFinding('INACTIVE_PROJECT_LEAD', `${project.trackingId} has no active Project Lead.`, 'Open Manage Team and assign an active Project Lead.');
-      if (active && !maintainers.length) addProjectFinding('NO_ACTIVE_MAINTAINER', `${project.trackingId} has no active maintainer.`, 'Open Manage Team and assign an active maintainer.');
-      for (const request of project.helpRequests.filter((item) => ['OPEN','IN_PROGRESS'].includes(item.status))) {
-        if ((!request.contact && !request.contactUserId) || (request.contactUser && request.contactUser.status !== 'ACTIVE'))
-          platformIntegrity.push({ key: `help-contact-${request.id}`, kind: 'INVALID_HELP_CONTACT', severity: 'action', message: `Help Request “${request.title}” does not have an active contact.`, remediation: 'Open the Project and correct the Help Request contact.', entityType: 'HELP_REQUEST', entityId: String(request.id), href: `/projects/${project.trackingId}#help-requests` });
+      if (active && (!lead || lead.user.status !== 'ACTIVE'))
+        addProjectFinding(
+          'INACTIVE_PROJECT_LEAD',
+          `${project.trackingId} has no active Project Lead.`,
+          'Open Manage Team and assign an active Project Lead.',
+        );
+      if (active && !maintainers.length)
+        addProjectFinding(
+          'NO_ACTIVE_MAINTAINER',
+          `${project.trackingId} has no active maintainer.`,
+          'Open Manage Team and assign an active maintainer.',
+        );
+      for (const request of project.helpRequests.filter((item) =>
+        ['OPEN', 'IN_PROGRESS'].includes(item.status),
+      )) {
+        if (
+          (!request.contact && !request.contactUserId) ||
+          (request.contactUser && request.contactUser.status !== 'ACTIVE')
+        )
+          platformIntegrity.push({
+            key: `help-contact-${request.id}`,
+            kind: 'INVALID_HELP_CONTACT',
+            severity: 'action',
+            message: `Help Request “${request.title}” does not have an active contact.`,
+            remediation:
+              'Open the Project and correct the Help Request contact.',
+            entityType: 'HELP_REQUEST',
+            entityId: String(request.id),
+            href: `/projects/${project.trackingId}#help-requests`,
+          });
       }
     }
-    for (const person of directoryUsers.filter((item) => item.status === 'ACTIVE' && item.primaryUnitId)) {
+    for (const person of directoryUsers.filter(
+      (item) => item.status === 'ACTIVE' && item.primaryUnitId,
+    )) {
       const primary = units.find((unit) => unit.id === person.primaryUnitId);
       if (primary && !primary.isActive)
-        platformIntegrity.push({ key: `inactive-primary-unit-${person.id}`, kind: 'ACTIVE_USER_IN_INACTIVE_UNIT', severity: 'review', message: `${person.displayName}'s Primary Unit is inactive.`, remediation: 'Transfer the user or reactivate the Unit.', entityType: 'USER', entityId: person.trackingId, href: '#responsibility-directory' });
+        platformIntegrity.push({
+          key: `inactive-primary-unit-${person.id}`,
+          kind: 'ACTIVE_USER_IN_INACTIVE_UNIT',
+          severity: 'review',
+          message: `${person.displayName}'s Primary Unit is inactive.`,
+          remediation: 'Transfer the user or reactivate the Unit.',
+          entityType: 'USER',
+          entityId: person.trackingId,
+          href: '#responsibility-directory',
+        });
     }
   }
 
@@ -551,8 +784,8 @@ export async function getPortalData(
                   (a, b) => maturityRank.indexOf(b) - maturityRank.indexOf(a),
                 )[0] ?? 'No maturity recorded',
             latestOutcome:
-              coverage.projects.find(({ project }) => project.outcome)
-                ?.project.outcome ?? '',
+              coverage.projects.find(({ project }) => project.outcome)?.project
+                .outcome ?? '',
             recentLessons: coverage.projects.reduce(
               (count, { project }) => count + project.lessons.length,
               0,
@@ -570,7 +803,9 @@ export async function getPortalData(
             projectRelationship: relationship,
             problem: project.problemLinks[0]?.problem.title ?? 'No Problem',
             contact:
-              request.contactUser?.displayName ?? request.contact ?? 'Unassigned',
+              request.contactUser?.displayName ??
+              request.contact ??
+              'Unassigned',
             createdAt: request.createdAt.toISOString(),
             resolutionSummary: request.resolutionSummary ?? '',
           })),
@@ -597,10 +832,11 @@ export async function getPortalData(
           eventType: activity.eventType,
           timestamp: activity.timestamp.toISOString(),
           actor: activity.actor ?? 'System',
-          category: activity.eventType.startsWith('USER_') ||
+          category:
+            activity.eventType.startsWith('USER_') ||
             activity.eventType.startsWith('UNIT_')
-            ? ('UNIT_ADMINISTRATION' as const)
-            : ('PROJECT_KNOWLEDGE' as const),
+              ? ('UNIT_ADMINISTRATION' as const)
+              : ('PROJECT_KNOWLEDGE' as const),
           projectId:
             projects.find((project) => project.id === activity.projectId)
               ?.trackingId ?? '',
@@ -613,27 +849,41 @@ export async function getPortalData(
           ]),
         ),
         outcomeCounts: Object.fromEntries(
-          ['SUCCESSFUL', 'PARTIALLY_SUCCESSFUL', 'UNSUCCESSFUL', 'INCONCLUSIVE', 'SUPERSEDED', 'CANCELLED'].map(
-            (outcome) => [
-              outcome,
-              associated.filter(({ project }) => project.outcome === outcome)
-                .length,
-            ],
-          ),
+          [
+            'SUCCESSFUL',
+            'PARTIALLY_SUCCESSFUL',
+            'UNSUCCESSFUL',
+            'INCONCLUSIVE',
+            'SUPERSEDED',
+            'CANCELLED',
+          ].map((outcome) => [
+            outcome,
+            associated.filter(({ project }) => project.outcome === outcome)
+              .length,
+          ]),
         ),
         lastMeaningfulActivityAt:
           associated
-            .map(({ project }) => project.lastMeaningfulActivityAt ?? project.createdAt)
+            .map(
+              ({ project }) =>
+                project.lastMeaningfulActivityAt ?? project.createdAt,
+            )
             .sort((a, b) => b.getTime() - a.getTime())[0]
             ?.toISOString() ?? '',
       };
     });
 
   const visibleActivities = activities.filter((activity) => {
-    const administrative = administrativeActivityCategory(activity.eventType) !== 'Project Knowledge';
+    const administrative =
+      administrativeActivityCategory(activity.eventType) !==
+      'Project Knowledge';
     if (!administrative || currentUser?.role === 'SYSTEM_ADMIN') return true;
-    return currentUser?.role === 'UNIT_ADMIN' && Boolean(
-      activity.unitId && currentUser.administeredUnitIds.includes(activity.unitId),
+    return (
+      currentUser?.role === 'UNIT_ADMIN' &&
+      Boolean(
+        activity.unitId &&
+        currentUser.administeredUnitIds.includes(activity.unitId),
+      )
     );
   });
   return {
@@ -663,9 +913,33 @@ export async function getPortalData(
       supersededById: p.supersededBy?.trackingId ?? '',
       supersededByTitle: p.supersededBy?.title ?? '',
       relationships: [
-        ...p.outgoingRelationships.map((item) => ({ direction: 'OUTGOING' as const, type: item.relationship, problemId: item.targetProblem.trackingId, title: item.targetProblem.title })),
-        ...p.incomingRelationships.map((item) => ({ direction: 'INCOMING' as const, type: item.relationship, problemId: item.sourceProblem.trackingId, title: item.sourceProblem.title })),
+        ...p.outgoingRelationships.map((item) => ({
+          direction: 'OUTGOING' as const,
+          type: item.relationship,
+          problemId: item.targetProblem.trackingId,
+          title: item.targetProblem.title,
+        })),
+        ...p.incomingRelationships.map((item) => ({
+          direction: 'INCOMING' as const,
+          type: item.relationship,
+          problemId: item.sourceProblem.trackingId,
+          title: item.sourceProblem.title,
+        })),
       ],
+      governanceHistory: activities
+        .filter(
+          (item) =>
+            item.problemId === p.id &&
+            (item.eventType.startsWith('PROBLEM_') ||
+              item.eventType.startsWith('SUBMISSION_')),
+        )
+        .map((item) => ({
+          id: item.id,
+          eventType: item.eventType,
+          description: item.description,
+          actor: item.actor ?? 'System',
+          timestamp: item.timestamp.toISOString(),
+        })),
     })),
     projects: projects.map((p) => ({
       dbId: p.id,
@@ -756,6 +1030,7 @@ export async function getPortalData(
       keyAdvantage: p.keyAdvantage ?? '',
       keyLimitation: p.keyLimitation ?? '',
       latestResult: p.latestResult ?? '',
+      leadUnitTransferPending: p.leadUnitTransferPending,
       createdByUserId: p.createdByUserId,
       createdByName: p.createdBy?.displayName ?? 'Unknown creator',
       team: p.userMemberships.map((membership) => ({
@@ -816,6 +1091,7 @@ export async function getPortalData(
         maturityEvidenceReference: x.maturityEvidenceReference ?? '',
       })),
       lessons: p.lessons.map((x) => ({
+        dbId: x.id,
         id: x.trackingId,
         title: x.title,
         finding: x.finding,
@@ -829,6 +1105,7 @@ export async function getPortalData(
         phaseName: x.phase?.phaseName ?? '',
         authorName: x.createdBy?.displayName ?? 'Unknown recorder',
         sourceUpdateId: x.sourceUpdateId,
+        knowledgeStatus: x.knowledgeStatus,
       })),
       repositories: p.repositories.map((x) => ({
         id: x.id,
@@ -843,6 +1120,7 @@ export async function getPortalData(
           ],
         includeInAiHandoff: x.includeInAiHandoff,
         phaseName: x.phase?.phaseName ?? '',
+        accessInstructions: x.accessInstructions ?? '',
       })),
       vendor: p.vendorDetail
         ? {
@@ -925,6 +1203,11 @@ export async function getPortalData(
       unitName: a.unit?.name ?? '',
       projectId: a.project?.trackingId ?? '',
       projectName: a.project?.name ?? '',
+      problemId: a.problem?.trackingId ?? '',
+      problemName: a.problem?.title ?? '',
+      entityType: a.entityType ?? '',
+      entityId: a.entityId ?? '',
+      entityHref: a.entityHref ?? '',
     })),
     helpRequests: helpRequests.map((h) => ({
       id: h.id,
@@ -963,8 +1246,10 @@ export async function getPortalData(
     platformIntegrity,
     systemAdminContinuity: {
       active: activeSystemAdmins.length,
-      pending: systemAdmins.filter((person) => person.status === 'PENDING').length,
-      disabled: systemAdmins.filter((person) => person.status === 'DISABLED').length,
+      pending: systemAdmins.filter((person) => person.status === 'PENDING')
+        .length,
+      disabled: systemAdmins.filter((person) => person.status === 'DISABLED')
+        .length,
     },
     unitStewardship,
     directoryUsers: directoryUsers.map((user) => ({
@@ -1090,7 +1375,13 @@ export async function getPortalData(
       unitId: item.unitId,
       createdAt: item.createdAt.toISOString(),
       relatedProblemId: item.relatedProblem?.trackingId ?? '',
-      reviews: item.reviews.map((review) => ({ stage: review.stage, decision: review.decision, note: review.note ?? '', reviewer: review.reviewer.displayName, createdAt: review.createdAt.toISOString() })),
+      reviews: item.reviews.map((review) => ({
+        stage: review.stage,
+        decision: review.decision,
+        note: review.note ?? '',
+        reviewer: review.reviewer.displayName,
+        createdAt: review.createdAt.toISOString(),
+      })),
       matches: findRelatedProblems(
         {
           title: item.title,
@@ -1108,7 +1399,40 @@ export async function getPortalData(
         })),
       ),
     })),
-    tagInventory: tagInventory.map((tag) => ({ id: tag.id, name: tag.name, usageCount: tag._count.problems + tag._count.projects + tag._count.units + tag._count.lessons })),
-    locations: locations.map((location) => ({ id: location.id, name: location.name, region: location.region ?? '' })),
+    tagInventory: tagInventory.map((tag) => ({
+      id: tag.id,
+      name: tag.name,
+      usageCount:
+        tag._count.problems +
+        tag._count.projects +
+        tag._count.units +
+        tag._count.lessons,
+      problems: tag.problems.map(
+        (item) => `${item.problem.trackingId} — ${item.problem.title}`,
+      ),
+      projects: tag.projects.map(
+        (item) => `${item.project.trackingId} — ${item.project.name}`,
+      ),
+      units: tag.units.map(
+        (item) => `${item.unit.trackingId} — ${item.unit.name}`,
+      ),
+      lessons: tag.lessons.map(
+        (item) => `${item.lesson.trackingId} — ${item.lesson.title}`,
+      ),
+    })),
+    locations: locations.map((location) => ({
+      id: location.id,
+      name: location.name,
+      region: location.region ?? '',
+      latitude: location.latitude,
+      longitude: location.longitude,
+      units: location.units.map((item) => `${item.trackingId} — ${item.name}`),
+      projects: location.projects.map(
+        (item) => `${item.project.trackingId} — ${item.project.name}`,
+      ),
+      problems: location.problems.map(
+        (item) => `${item.problem.trackingId} — ${item.problem.title}`,
+      ),
+    })),
   };
 }

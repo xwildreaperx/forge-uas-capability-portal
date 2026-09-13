@@ -887,6 +887,89 @@ function ProblemView({
         <strong>What is happening?</strong>
         <p>{problem.description}</p>
       </div>
+      {problem.status === 'Superseded' && problem.supersededById && (
+        <div className="notice">
+          <GitBranch size={18} />
+          <div>
+            <strong>Historical canonical Problem</strong>
+            <p>
+              This durable PRB record remains searchable and preserves its
+              history. Current canonical reference:{' '}
+              <a href={`/problems/${problem.supersededById}`}>
+                {problem.supersededById} — {problem.supersededByTitle}
+              </a>
+              .
+            </p>
+          </div>
+        </div>
+      )}
+      <div className="detail-grid two">
+        <section className="panel">
+          <h2>Governance</h2>
+          <p>
+            <strong>Status:</strong> {problem.status}
+          </p>
+          {problem.status === 'Addressed — Viable Efforts Exist' && (
+            <p className="muted">
+              Viable efforts exist; this does not mean the capability gap is
+              solved globally.
+            </p>
+          )}
+          <p>
+            <strong>Priority:</strong> {problem.priority} — capability-gap
+            governance, not Project performance.
+          </p>
+          <p>
+            <strong>Steward:</strong>{' '}
+            {problem.steward || 'Not assigned — needs refinement'}
+            {problem.stewardStatus ? ` (${problem.stewardStatus})` : ''}
+          </p>
+          {problem.impact && (
+            <p>
+              <strong>Operational impact:</strong> {problem.impact}
+            </p>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Problem family</h2>
+          {problem.relationships.length ? (
+            problem.relationships.map((item) => (
+              <p key={`${item.direction}-${item.type}-${item.problemId}`}>
+                <span className="maturity">
+                  {item.type.replaceAll('_', ' ')}
+                </span>{' '}
+                <a href={`/problems/${item.problemId}`}>
+                  {item.problemId} — {item.title}
+                </a>
+              </p>
+            ))
+          ) : (
+            <p>No related or variant Problems recorded.</p>
+          )}
+        </section>
+      </div>
+      <section className="panel">
+        <h2>Problem governance history</h2>
+        <p>Canonical decisions only; routine Project Activity is excluded.</p>
+        {problem.governanceHistory.length ? (
+          <div className="stack-list">
+            {problem.governanceHistory.map((event) => (
+              <div key={event.id}>
+                <strong>{event.eventType.replaceAll('_', ' ')}</strong>
+                <p>{event.description}</p>
+                <small>
+                  {event.actor} · {new Date(event.timestamp).toLocaleString()}
+                </small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>
+            No governance changes have been recorded since history tracking was
+            introduced.
+          </p>
+        )}
+      </section>
       <div className="notice">
         <BookOpen size={18} />
         <div>
@@ -1318,7 +1401,7 @@ function ProjectView({
           onRelated={onRelated}
         />
       ) : experience === 'technical' ? (
-        <TechnicalView project={project} />
+        <TechnicalView project={project} canEdit={canEdit} />
       ) : (
         <AiHandoffView project={project} />
       )}
@@ -1512,7 +1595,31 @@ function ExecutiveSplash({
   );
 }
 
-function TechnicalView({ project }: { project: PortalProject }) {
+function TechnicalView({
+  project,
+  canEdit,
+}: {
+  project: PortalProject;
+  canEdit: boolean;
+}) {
+  const saveCorrection = async (
+    event: React.SyntheticEvent<HTMLFormElement>,
+    url: string,
+  ) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const body: Record<string, unknown> = Object.fromEntries(data);
+    body.tags = data.getAll('tags');
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok)
+      window.alert(result.error || 'Unable to save correction.');
+    else window.location.reload();
+  };
   const projectLead = project.team.find(
     (member) => member.role === 'PROJECT_LEAD',
   );
@@ -1731,20 +1838,82 @@ function TechnicalView({ project }: { project: PortalProject }) {
         </p>
         {project.repositories.length ? (
           project.repositories.map((r) => (
-            <Artifact
-              key={r.id}
-              icon={<GitBranch />}
-              title={r.name}
-              meta={`${r.artifactType} · ${r.documentationLabel} · ${r.description}`}
-              href={
-                ['AVAILABLE_IN_FORGE', 'EXTERNAL_REFERENCE'].includes(
-                  r.documentationAvailability,
-                )
-                  ? r.url
-                  : undefined
-              }
-              access={r.phaseName ? `Phase: ${r.phaseName}` : undefined}
-            />
+            <div key={r.id}>
+              <Artifact
+                icon={<GitBranch />}
+                title={r.name}
+                meta={`${r.artifactType} · ${r.documentationLabel} · ${r.description}`}
+                href={
+                  ['AVAILABLE_IN_FORGE', 'EXTERNAL_REFERENCE'].includes(
+                    r.documentationAvailability,
+                  )
+                    ? r.url
+                    : undefined
+                }
+                access={r.phaseName ? `Phase: ${r.phaseName}` : undefined}
+              />
+              {canEdit && (
+                <details>
+                  <summary>Correct artifact metadata</summary>
+                  <form
+                    className="quick-form"
+                    onSubmit={(event) =>
+                      void saveCorrection(
+                        event,
+                        `/api/projects/${project.id}/repositories/${r.id}`,
+                      )
+                    }
+                  >
+                    <input name="name" defaultValue={r.name} required />
+                    <input name="url" defaultValue={r.url} required />
+                    <input name="artifactType" defaultValue={r.artifactType} />
+                    <textarea
+                      name="description"
+                      defaultValue={r.description}
+                      required
+                    />
+                    <select
+                      name="documentationAvailability"
+                      defaultValue={r.documentationAvailability}
+                    >
+                      {[
+                        'AVAILABLE_IN_FORGE',
+                        'EXTERNAL_REFERENCE',
+                        'AVAILABLE_FROM_ORIGINATOR',
+                        'CONTROLLED_ACCESS',
+                        'METADATA_ONLY',
+                        'NOT_YET_DOCUMENTED',
+                      ].map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                    <input
+                      name="accessInstructions"
+                      defaultValue={r.accessInstructions}
+                      placeholder="Safe access/contact instructions"
+                    />
+                    <select
+                      name="phaseId"
+                      defaultValue={
+                        project.phases.find(
+                          (phase) => phase.name === r.phaseName,
+                        )?.id ?? ''
+                      }
+                    >
+                      <option value="">No Phase</option>
+                      {project.phases.map((phase) => (
+                        <option key={phase.id} value={phase.id}>
+                          {phase.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="secondary">
+                      Save artifact correction
+                    </button>
+                  </form>
+                </details>
+              )}
+            </div>
           ))
         ) : (
           <p className="body-copy">No repository links are attached.</p>
@@ -1770,6 +1939,70 @@ function TechnicalView({ project }: { project: PortalProject }) {
                     : ''}
                 </small>
               </div>
+              {canEdit && (
+                <details>
+                  <summary>Correct Lesson</summary>
+                  <form
+                    className="quick-form"
+                    onSubmit={(event) =>
+                      void saveCorrection(
+                        event,
+                        `/api/projects/${project.id}/lessons/${l.dbId}`,
+                      )
+                    }
+                  >
+                    <select name="lessonType" defaultValue={l.lessonType}>
+                      {[
+                        'CONFIRMED_FINDING',
+                        'WORKING_HYPOTHESIS',
+                        'FAILED_APPROACH',
+                        'RECOMMENDATION',
+                        'UNRESOLVED_QUESTION',
+                      ].map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                    <input name="title" defaultValue={l.title} required />
+                    <textarea
+                      name="finding"
+                      defaultValue={l.finding}
+                      required
+                    />
+                    <textarea
+                      name="recommendation"
+                      defaultValue={l.recommendation}
+                    />
+                    <select
+                      name="phaseId"
+                      defaultValue={
+                        project.phases.find(
+                          (phase) => phase.name === l.phaseName,
+                        )?.id ?? ''
+                      }
+                    >
+                      <option value="">No Phase</option>
+                      {project.phases.map((phase) => (
+                        <option key={phase.id} value={phase.id}>
+                          {phase.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      name="knowledgeStatus"
+                      defaultValue={l.knowledgeStatus}
+                    >
+                      {['ACTIVE', 'WITHDRAWN', 'SUPERSEDED', 'ARCHIVED'].map(
+                        (value) => (
+                          <option key={value}>{value}</option>
+                        ),
+                      )}
+                    </select>
+                    <button type="submit" className="secondary">
+                      Save Lesson correction
+                    </button>
+                  </form>
+                </details>
+              )}
             </div>
           ))
         ) : (
@@ -1929,7 +2162,7 @@ function Artifact({
 }
 
 function HelpRequests({ project }: { project: PortalProject }) {
-  const { projectDirectoryUsers } = useData();
+  const { projectDirectoryUsers, session } = useData();
   const [busy, setBusy] = useState<number | null>(null);
   const active = project.helpRequests.filter((request) =>
     ['OPEN', 'IN_PROGRESS'].includes(request.status),
@@ -1957,10 +2190,14 @@ function HelpRequests({ project }: { project: PortalProject }) {
   };
   const changeContact = async (id: number, contactUserId: number) => {
     setBusy(id);
-    const response = await fetch(`/api/projects/${project.id}/help-requests/${id}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ contactUserId }),
-    });
+    const response = await fetch(
+      `/api/projects/${project.id}/help-requests/${id}`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contactUserId }),
+      },
+    );
     if (response.ok) window.location.reload();
     else {
       const result = (await response.json()) as { error?: string };
@@ -1982,22 +2219,101 @@ function HelpRequests({ project }: { project: PortalProject }) {
       <p>{request.description}</p>
       <p>
         <b>Contact:</b> {request.contact || 'Project Lead'}
-        {' · '}{request.followsProjectLead ? 'Follows Project Lead' : 'Explicit contact'}
+        {' · '}
+        {request.followsProjectLead
+          ? 'Follows Project Lead'
+          : 'Explicit contact'}
       </p>
       {request.resolutionSummary && (
         <p>
           <b>Resolution:</b> {request.resolutionSummary}
         </p>
       )}
+      {session.currentUser?.role === 'SYSTEM_ADMIN' && (
+        <details>
+          <summary>Administrative metadata correction</summary>
+          <form
+            className="quick-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void fetch(
+                `/api/projects/${project.id}/help-requests/${request.id}`,
+                {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify(
+                    Object.fromEntries(new FormData(event.currentTarget)),
+                  ),
+                },
+              ).then(async (response) => {
+                const result = (await response.json()) as { error?: string };
+                if (!response.ok)
+                  window.alert(
+                    result.error || 'Unable to correct Help Request.',
+                  );
+                else window.location.reload();
+              });
+            }}
+          >
+            <select name="category" defaultValue={request.category}>
+              {[
+                'TECHNICAL_EXPERTISE',
+                'HARDWARE',
+                'SOFTWARE_SUPPORT',
+                'TESTING_SUPPORT_LOCATION',
+                'FUNDING_RESOURCING',
+                'OPERATOR_FEEDBACK',
+                'DATA',
+                'MANUFACTURING',
+                'INTEGRATION',
+                'DOCUMENTATION',
+                'OTHER',
+              ].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+            <select name="status" defaultValue={request.status}>
+              {['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CANCELLED'].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+            <input
+              name="contact"
+              defaultValue={request.contact}
+              placeholder="Explicit contact"
+            />
+            <input
+              name="resolutionSummary"
+              defaultValue={request.resolutionSummary}
+              placeholder="Resolution metadata"
+            />
+            <button type="submit" className="secondary">
+              Save administrative correction
+            </button>
+          </form>
+        </details>
+      )}
       {['OPEN', 'IN_PROGRESS'].includes(request.status) && (
         <footer>
           {!request.followsProjectLead && (
-            <select aria-label={`Contact for ${request.title}`} defaultValue={request.contactUserId ?? ''}
+            <select
+              aria-label={`Contact for ${request.title}`}
+              defaultValue={request.contactUserId ?? ''}
               disabled={busy === request.id}
-              onChange={(event) => void changeContact(request.id, Number(event.target.value))}>
-              <option value="" disabled>Change explicit contact</option>
-              {projectDirectoryUsers.filter((person) => person.status === 'ACTIVE').map((person) =>
-                <option key={person.id} value={person.id}>{person.displayName}</option>)}
+              onChange={(event) =>
+                void changeContact(request.id, Number(event.target.value))
+              }
+            >
+              <option value="" disabled>
+                Change explicit contact
+              </option>
+              {projectDirectoryUsers
+                .filter((person) => person.status === 'ACTIVE')
+                .map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.displayName}
+                  </option>
+                ))}
             </select>
           )}
           {request.status === 'OPEN' && (
@@ -2333,7 +2649,14 @@ function ProblemsView({ onProblem }: { onProblem: (id: string) => void }) {
   );
 }
 function UnitStewardshipDashboard() {
-  const { unitStewardship, projects, directoryUsers, needsAttention, submissions, helpRequests } = useData();
+  const {
+    unitStewardship,
+    projects,
+    directoryUsers,
+    needsAttention,
+    submissions,
+    helpRequests,
+  } = useData();
   const [unitId, setUnitId] = useState(unitStewardship[0]?.unitId ?? 0);
   const [portfolioScope, setPortfolioScope] = useState('ALL');
   const [status, setStatus] = useState('ALL');
@@ -2345,178 +2668,1489 @@ function UnitStewardshipDashboard() {
   const [userStatus, setUserStatus] = useState('ALL');
   const [lessonType, setLessonType] = useState('ALL');
   const [query, setQuery] = useState('');
-  const selected = unitStewardship.find((item) => item.unitId === unitId) ?? unitStewardship[0];
+  const selected =
+    unitStewardship.find((item) => item.unitId === unitId) ??
+    unitStewardship[0];
   if (!selected) return null;
   const ledIds = new Set(selected.ledProjectIds);
-  const supportedRoles = new globalThis.Map(selected.supportedProjects.map((item) => [item.projectId, item.participationRole]));
+  const supportedRoles = new globalThis.Map(
+    selected.supportedProjects.map((item) => [
+      item.projectId,
+      item.participationRole,
+    ]),
+  );
   const unitProjects = projects
-    .filter((project) => ledIds.has(project.id) || supportedRoles.has(project.id))
-    .filter((project) => portfolioScope === 'ALL' || (portfolioScope === 'LED' ? ledIds.has(project.id) : supportedRoles.has(project.id)))
+    .filter(
+      (project) => ledIds.has(project.id) || supportedRoles.has(project.id),
+    )
+    .filter(
+      (project) =>
+        portfolioScope === 'ALL' ||
+        (portfolioScope === 'LED'
+          ? ledIds.has(project.id)
+          : supportedRoles.has(project.id)),
+    )
     .filter((project) => status === 'ALL' || project.status === status)
     .filter((project) => maturity === 'ALL' || project.maturity === maturity)
-    .filter((project) => lead === 'ALL' || project.team.find((member) => member.role === 'PROJECT_LEAD')?.trackingId === lead)
-    .filter((project) => problem === 'ALL' || project.problems.some((item) => item.id === problem))
-    .filter((project) => helpState === 'ALL' || (helpState === 'OPEN' ? project.openHelpRequestCount > 0 : project.openHelpRequestCount === 0))
-    .filter((project) => `${project.id} ${project.name} ${project.team.map((member) => member.displayName).join(' ')} ${project.problems.map((item) => item.title).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => b.lastMeaningfulActivityAt.localeCompare(a.lastMeaningfulActivityAt));
-  const scopedUsers = directoryUsers.filter((user) => user.unitIds.includes(selected.unitId)).filter((user) => userRole === 'ALL' || user.role === userRole).filter((user) => userStatus === 'ALL' || user.status === userStatus);
-  const scopedAttention = needsAttention.filter((signal) => signal.unitId === selected.unitId);
-  const activeStatuses = new Set(['Planning', 'Active', 'Paused', 'Transitioning']);
-  const filteredLessons = selected.lessons.filter((lesson) => lessonType === 'ALL' || lesson.type === lessonType).filter((lesson) => `${lesson.title} ${lesson.finding} ${lesson.projectName}`.toLowerCase().includes(query.toLowerCase()));
-  const filteredHelp = selected.helpRequests.filter((request) => helpState === 'ALL' || (helpState === 'OPEN' ? ['OPEN', 'IN_PROGRESS'].includes(request.status) : !['OPEN', 'IN_PROGRESS'].includes(request.status)));
+    .filter(
+      (project) =>
+        lead === 'ALL' ||
+        project.team.find((member) => member.role === 'PROJECT_LEAD')
+          ?.trackingId === lead,
+    )
+    .filter(
+      (project) =>
+        problem === 'ALL' ||
+        project.problems.some((item) => item.id === problem),
+    )
+    .filter(
+      (project) =>
+        helpState === 'ALL' ||
+        (helpState === 'OPEN'
+          ? project.openHelpRequestCount > 0
+          : project.openHelpRequestCount === 0),
+    )
+    .filter((project) =>
+      `${project.id} ${project.name} ${project.team.map((member) => member.displayName).join(' ')} ${project.problems.map((item) => item.title).join(' ')}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+    )
+    .sort((a, b) =>
+      b.lastMeaningfulActivityAt.localeCompare(a.lastMeaningfulActivityAt),
+    );
+  const scopedUsers = directoryUsers
+    .filter((user) => user.unitIds.includes(selected.unitId))
+    .filter((user) => userRole === 'ALL' || user.role === userRole)
+    .filter((user) => userStatus === 'ALL' || user.status === userStatus);
+  const scopedAttention = needsAttention.filter(
+    (signal) => signal.unitId === selected.unitId,
+  );
+  const activeStatuses = new Set([
+    'Planning',
+    'Active',
+    'Paused',
+    'Transitioning',
+  ]);
+  const filteredLessons = selected.lessons
+    .filter((lesson) => lessonType === 'ALL' || lesson.type === lessonType)
+    .filter((lesson) =>
+      `${lesson.title} ${lesson.finding} ${lesson.projectName}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+    );
+  const filteredHelp = selected.helpRequests.filter(
+    (request) =>
+      helpState === 'ALL' ||
+      (helpState === 'OPEN'
+        ? ['OPEN', 'IN_PROGRESS'].includes(request.status)
+        : !['OPEN', 'IN_PROGRESS'].includes(request.status)),
+  );
   const card = (project: PortalProject, relationship: 'LED' | 'SUPPORTED') => {
-    const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
-    const attention = scopedAttention.some((signal) => signal.projectId === project.id);
-    return <article className="steward-project" key={project.id}>
-      <div><span className="maturity">{relationship === 'LED' ? 'Led by Unit' : supportedRoles.get(project.id)}</span>{attention && <span className="status warning">Review</span>}</div>
-      <h3><a href={`/projects/${project.id}`}>{project.id} — {project.name}</a></h3>
-      <p>{project.problems.find((item) => item.isPrimary)?.title ?? 'No primary Problem'} · {project.solutionTypeLabel}</p>
-      <small>{projectLead?.displayName ?? 'Lead unassigned'} · {project.status} · {project.maturity} · {project.progress}% complete</small>
-      <small>Last meaningful activity {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()} · {project.openHelpRequestCount} open Help Request{project.openHelpRequestCount === 1 ? '' : 's'}{project.outcomeLabel ? ` · ${project.outcomeLabel}` : ''}</small>
-      <a href={`/projects/${project.id}`}>Open Project</a>
-    </article>;
+    const projectLead = project.team.find(
+      (member) => member.role === 'PROJECT_LEAD',
+    );
+    const attention = scopedAttention.some(
+      (signal) => signal.projectId === project.id,
+    );
+    return (
+      <article className="steward-project" key={project.id}>
+        <div>
+          <span className="maturity">
+            {relationship === 'LED'
+              ? 'Led by Unit'
+              : supportedRoles.get(project.id)}
+          </span>
+          {attention && <span className="status warning">Review</span>}
+        </div>
+        <h3>
+          <a href={`/projects/${project.id}`}>
+            {project.id} — {project.name}
+          </a>
+        </h3>
+        <p>
+          {project.problems.find((item) => item.isPrimary)?.title ??
+            'No primary Problem'}{' '}
+          · {project.solutionTypeLabel}
+        </p>
+        <small>
+          {projectLead?.displayName ?? 'Lead unassigned'} · {project.status} ·{' '}
+          {project.maturity} · {project.progress}% complete
+        </small>
+        <small>
+          Last meaningful activity{' '}
+          {new Date(project.lastMeaningfulActivityAt).toLocaleDateString()} ·{' '}
+          {project.openHelpRequestCount} open Help Request
+          {project.openHelpRequestCount === 1 ? '' : 's'}
+          {project.outcomeLabel ? ` · ${project.outcomeLabel}` : ''}
+        </small>
+        <a href={`/projects/${project.id}`}>Open Project</a>
+      </article>
+    );
   };
-  return <section className="stewardship" aria-label="Unit stewardship dashboard">
-    <div className="steward-head">
-      <div><p className="eyebrow">UNIT STEWARDSHIP</p><h2>{selected.unitName}</h2><p>Derived awareness and exception management. Project teams maintain the work.</p></div>
-      <label>Administering Unit<select value={selected.unitId} onChange={(event) => setUnitId(Number(event.target.value))}>{unitStewardship.map((unit) => <option key={unit.unitId} value={unit.unitId}>{unit.unitName}</option>)}</select></label>
-    </div>
-    <div className="summary-row">
-      <div><strong>{unitProjects.filter((item) => activeStatuses.has(item.status)).length}</strong><span>Active Solution Efforts</span></div>
-      <div><strong>{unitProjects.filter((item) => !activeStatuses.has(item.status)).length}</strong><span>Historical Efforts</span></div>
-      <div><strong>{selected.problemCoverage.length}</strong><span>Problems Addressed</span></div>
-      <div><strong>{selected.helpRequests.filter((item) => ['OPEN', 'IN_PROGRESS'].includes(item.status)).length}</strong><span>Open Help Requests</span></div>
-      <div><strong>{scopedUsers.length}</strong><span>Unit Users</span></div>
-    </div>
-    <section className="panel attention-panel"><div className="section-heading"><div><h2>Needs Attention</h2><p>Factual stewardship conditions—not scores or performance ratings.</p></div><span>{scopedAttention.length} items</span></div>
-      {scopedAttention.length ? <div className="attention-grid">{scopedAttention.map((signal) => <article key={signal.key}><span>{signal.severity === 'critical' ? 'Action Required' : 'Review'}</span><strong>{signal.kind.replaceAll('_', ' ')}</strong><p>{signal.message}</p><a href={signal.projectId ? `/projects/${signal.projectId}` : signal.userId ? '#unit-users' : '#unit-profile'}>{signal.projectId ? 'Open Project / Manage Team' : signal.userId ? 'Review User' : 'Review Unit'}</a></article>)}</div> : <div className="empty-state"><Check/><h3>No current stewardship exceptions.</h3></div>}
+  return (
+    <section className="stewardship" aria-label="Unit stewardship dashboard">
+      <div className="steward-head">
+        <div>
+          <p className="eyebrow">UNIT STEWARDSHIP</p>
+          <h2>{selected.unitName}</h2>
+          <p>
+            Derived awareness and exception management. Project teams maintain
+            the work.
+          </p>
+        </div>
+        <label>
+          Administering Unit
+          <select
+            value={selected.unitId}
+            onChange={(event) => setUnitId(Number(event.target.value))}
+          >
+            {unitStewardship.map((unit) => (
+              <option key={unit.unitId} value={unit.unitId}>
+                {unit.unitName}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="summary-row">
+        <div>
+          <strong>
+            {
+              unitProjects.filter((item) => activeStatuses.has(item.status))
+                .length
+            }
+          </strong>
+          <span>Active Solution Efforts</span>
+        </div>
+        <div>
+          <strong>
+            {
+              unitProjects.filter((item) => !activeStatuses.has(item.status))
+                .length
+            }
+          </strong>
+          <span>Historical Efforts</span>
+        </div>
+        <div>
+          <strong>{selected.problemCoverage.length}</strong>
+          <span>Problems Addressed</span>
+        </div>
+        <div>
+          <strong>
+            {
+              selected.helpRequests.filter((item) =>
+                ['OPEN', 'IN_PROGRESS'].includes(item.status),
+              ).length
+            }
+          </strong>
+          <span>Open Help Requests</span>
+        </div>
+        <div>
+          <strong>{scopedUsers.length}</strong>
+          <span>Unit Users</span>
+        </div>
+      </div>
+      <section className="panel attention-panel">
+        <div className="section-heading">
+          <div>
+            <h2>Needs Attention</h2>
+            <p>
+              Factual stewardship conditions—not scores or performance ratings.
+            </p>
+          </div>
+          <span>{scopedAttention.length} items</span>
+        </div>
+        {scopedAttention.length ? (
+          <div className="attention-grid">
+            {scopedAttention.map((signal) => (
+              <article key={signal.key}>
+                <span>
+                  {signal.severity === 'critical'
+                    ? 'Action Required'
+                    : 'Review'}
+                </span>
+                <strong>{signal.kind.replaceAll('_', ' ')}</strong>
+                <p>{signal.message}</p>
+                <a
+                  href={
+                    signal.projectId
+                      ? `/projects/${signal.projectId}`
+                      : signal.userId
+                        ? '#unit-users'
+                        : '#unit-profile'
+                  }
+                >
+                  {signal.projectId
+                    ? 'Open Project / Manage Team'
+                    : signal.userId
+                      ? 'Review User'
+                      : 'Review Unit'}
+                </a>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <Check />
+            <h3>No current stewardship exceptions.</h3>
+          </div>
+        )}
+      </section>
+      <div className="portfolio-filters" aria-label="Unit portfolio filters">
+        <input
+          aria-label="Search Unit portfolio"
+          placeholder="Search Project, user, Problem, Help Request, or Lesson"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          aria-label="Led or supported"
+          value={portfolioScope}
+          onChange={(event) => setPortfolioScope(event.target.value)}
+        >
+          <option value="ALL">Led and supported</option>
+          <option value="LED">Led by Unit</option>
+          <option value="SUPPORTED">Supported by Unit</option>
+        </select>
+        <select
+          aria-label="Project status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+        >
+          <option value="ALL">All statuses</option>
+          {[...new Set(projects.map((item) => item.status))].map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Project maturity"
+          value={maturity}
+          onChange={(event) => setMaturity(event.target.value)}
+        >
+          <option value="ALL">All maturity levels</option>
+          {['Concept', 'Prototype', 'Field Tested', 'Validated'].map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Project Lead"
+          value={lead}
+          onChange={(event) => setLead(event.target.value)}
+        >
+          <option value="ALL">All Project Leads</option>
+          {directoryUsers.map((item) => (
+            <option key={item.id} value={item.trackingId}>
+              {item.displayName}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Problem"
+          value={problem}
+          onChange={(event) => setProblem(event.target.value)}
+        >
+          <option value="ALL">All Problems</option>
+          {selected.problemCoverage.map((item) => (
+            <option key={item.problemId} value={item.problemId}>
+              {item.problemId} — {item.title}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Help Request state"
+          value={helpState}
+          onChange={(event) => setHelpState(event.target.value)}
+        >
+          <option value="ALL">Any Help Request state</option>
+          <option value="OPEN">Has open request</option>
+          <option value="NONE">No open request</option>
+        </select>
+        <span>Sorted by Last Meaningful Activity</span>
+      </div>
+      <div className="detail-grid two">
+        <section className="panel">
+          <h2>Projects Led by My Unit</h2>
+          <h3>Active / Current</h3>
+          <div className="steward-list">
+            {unitProjects
+              .filter(
+                (item) =>
+                  ledIds.has(item.id) && activeStatuses.has(item.status),
+              )
+              .map((item) => card(item, 'LED'))}
+          </div>
+          <h3>Historical Knowledge</h3>
+          <div className="steward-list">
+            {unitProjects
+              .filter(
+                (item) =>
+                  ledIds.has(item.id) && !activeStatuses.has(item.status),
+              )
+              .map((item) => card(item, 'LED'))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Projects Supported by My Unit</h2>
+          <h3>Active / Current</h3>
+          <div className="steward-list">
+            {unitProjects
+              .filter(
+                (item) =>
+                  supportedRoles.has(item.id) &&
+                  activeStatuses.has(item.status),
+              )
+              .map((item) => card(item, 'SUPPORTED'))}
+          </div>
+          <h3>Historical Knowledge</h3>
+          <div className="steward-list">
+            {unitProjects
+              .filter(
+                (item) =>
+                  supportedRoles.has(item.id) &&
+                  !activeStatuses.has(item.status),
+              )
+              .map((item) => card(item, 'SUPPORTED'))}
+          </div>
+        </section>
+      </div>
+      <div className="detail-grid two">
+        <section className="panel">
+          <h2>Problems Addressed by This Unit</h2>
+          <p>
+            Canonical Problems against which this Unit has recorded Solution
+            Efforts. This does not imply the Problem affects the Unit.
+          </p>
+          <div className="stack-list">
+            {selected.problemCoverage.map((item) => (
+              <div key={item.problemId}>
+                <strong>
+                  <a href={`/problems/${item.problemId}`}>
+                    {item.problemId} — {item.title}
+                  </a>
+                </strong>
+                <small>
+                  {item.activeEfforts} active · {item.historicalEfforts}{' '}
+                  historical · Highest maturity {item.highestMaturity} ·{' '}
+                  {item.recentLessons} Lessons
+                </small>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Portfolio Knowledge</h2>
+          <h3>Maturity distribution</h3>
+          <div className="metric-strip">
+            {Object.entries(selected.maturityCounts).map(([label, count]) => (
+              <span key={label}>
+                <strong>{count}</strong>
+                {label}
+              </span>
+            ))}
+          </div>
+          <h3>Solution Effort Outcomes</h3>
+          <p>
+            Unsuccessful and inconclusive work remains a contribution to
+            institutional knowledge.
+          </p>
+          <div className="metric-strip">
+            {Object.entries(selected.outcomeCounts)
+              .filter(([, count]) => count > 0)
+              .map(([label, count]) => (
+                <span key={label}>
+                  <strong>{count}</strong>
+                  {label.replaceAll('_', ' ')}
+                </span>
+              ))}
+          </div>
+        </section>
+      </div>
+      <div className="detail-grid two">
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <h2>Help Requests from Unit Projects</h2>
+              <p>Led and supported efforts remain visibly distinct.</p>
+            </div>
+            <a href="#organization-help">
+              Organization-wide Requests for Assistance
+            </a>
+          </div>
+          <div className="stack-list">
+            {filteredHelp.map((item) => (
+              <div key={item.id}>
+                <span className="maturity">{item.projectRelationship}</span>
+                <strong>
+                  <a href={`/projects/${item.projectId}`}>{item.title}</a>
+                </strong>
+                <small>
+                  {item.category.replaceAll('_', ' ')} · {item.projectName} ·{' '}
+                  {item.problem} · Contact {item.contact} · {item.status} ·{' '}
+                  {new Date(item.createdAt).toLocaleDateString()}
+                </small>
+                {item.resolutionSummary && <p>{item.resolutionSummary}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <h2>Lessons from Unit Solution Efforts</h2>
+              <p>
+                Recent findings, failed approaches, and recommendations retain
+                provenance.
+              </p>
+            </div>
+            <select
+              aria-label="Lesson type"
+              value={lessonType}
+              onChange={(event) => setLessonType(event.target.value)}
+            >
+              <option value="ALL">All Lesson types</option>
+              {[
+                'CONFIRMED_FINDING',
+                'FAILED_APPROACH',
+                'RECOMMENDATION',
+                'WORKING_HYPOTHESIS',
+                'UNRESOLVED_QUESTION',
+              ].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+          </div>
+          <div className="stack-list">
+            {filteredLessons.slice(0, 8).map((item) => (
+              <div key={item.id}>
+                <span className="maturity">
+                  {item.type.replaceAll('_', ' ')}
+                </span>
+                <strong>
+                  <a href={`/projects/${item.projectId}`}>{item.title}</a>
+                </strong>
+                <p>{item.finding}</p>
+                <small>
+                  {item.projectName} · {item.projectRelationship} ·{' '}
+                  {item.author} · {new Date(item.date).toLocaleDateString()}
+                  {item.phase ? ` · ${item.phase}` : ''}
+                </small>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      <div className="detail-grid two">
+        <section className="panel" id="unit-users">
+          <div className="section-heading">
+            <div>
+              <h2>Unit People & Responsibilities</h2>
+              <p>Continuity visibility, not a ranking.</p>
+            </div>
+            <div>
+              <select
+                aria-label="User role"
+                value={userRole}
+                onChange={(event) => setUserRole(event.target.value)}
+              >
+                <option value="ALL">All roles</option>
+                {[
+                  'CONTRIBUTOR',
+                  'PROJECT_USER',
+                  'UNIT_ADMIN',
+                  'SYSTEM_ADMIN',
+                ].map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+              <select
+                aria-label="User status"
+                value={userStatus}
+                onChange={(event) => setUserStatus(event.target.value)}
+              >
+                <option value="ALL">All account states</option>
+                {['PENDING', 'ACTIVE', 'DISABLED'].map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="stack-list">
+            {scopedUsers.map((item) => (
+              <div key={item.id}>
+                <strong>{item.displayName}</strong>
+                <small>
+                  {item.role.replaceAll('_', ' ')} · {item.status} ·{' '}
+                  {item.projectsLed.length} led ·{' '}
+                  {item.projectsContributed.length} contributed ·{' '}
+                  {item.openHelpRequests.length} Help contacts
+                </small>
+                <a href="#responsibility-directory">View Responsibilities</a>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <h2>Recent Unit Activity</h2>
+          <p>Meaningful Project knowledge and administrative stewardship.</p>
+          <div className="stack-list">
+            {selected.activities.slice(0, 12).map((item) => (
+              <div key={item.id}>
+                <span className="maturity">
+                  {item.category === 'UNIT_ADMINISTRATION'
+                    ? 'Unit Administration'
+                    : 'Project Knowledge'}
+                </span>
+                <strong>{item.description}</strong>
+                <small>
+                  {item.actor} · {new Date(item.timestamp).toLocaleString()}
+                </small>
+                {item.projectId && (
+                  <a href={`/projects/${item.projectId}`}>Open Project</a>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      <section className="panel" id="unit-submissions">
+        <h2>Problem Submissions from My Unit</h2>
+        <p>
+          Unit Administrators provide Unit context and recommend canonical
+          relationships. System/global governance controls new canonical
+          Problems and material edits.
+        </p>
+        <div className="stack-list">
+          {submissions
+            .filter((item) => item.unitId === selected.unitId)
+            .map((item) => (
+              <div key={item.id}>
+                <strong>
+                  {item.trackingId} — {item.title}
+                </strong>
+                <small>
+                  {item.submitter} ·{' '}
+                  {new Date(item.createdAt).toLocaleDateString()} ·{' '}
+                  {item.status.replaceAll('_', ' ')}
+                </small>
+                <p>
+                  {item.matches
+                    .slice(0, 2)
+                    .map(
+                      (match) =>
+                        `${match.classification.replaceAll('_', ' ')}: ${match.id}`,
+                    )
+                    .join(' · ') || 'No likely canonical relationship found.'}
+                </p>
+                <a href="#submission-review">Review Unit context</a>
+              </div>
+            ))}
+        </div>
+      </section>
+      <section className="panel" id="organization-help">
+        <h2>Organization-wide Requests for Assistance</h2>
+        <p>
+          Broad discovery does not imply that this Unit has claimed or accepted
+          the work.
+        </p>
+        <div className="stack-list">
+          {helpRequests
+            .filter(
+              (item) =>
+                !selected.ledProjectIds.includes(item.projectId) &&
+                !supportedRoles.has(item.projectId),
+            )
+            .slice(0, 6)
+            .map((item) => (
+              <div key={item.id}>
+                <strong>
+                  <a href={`/projects/${item.projectId}`}>{item.title}</a>
+                </strong>
+                <small>
+                  {item.projectName} · {item.unitName} · {item.categoryLabel} ·{' '}
+                  {item.status}
+                </small>
+              </div>
+            ))}
+        </div>
+      </section>
     </section>
-    <div className="portfolio-filters" aria-label="Unit portfolio filters">
-      <input aria-label="Search Unit portfolio" placeholder="Search Project, user, Problem, Help Request, or Lesson" value={query} onChange={(event) => setQuery(event.target.value)}/>
-      <select aria-label="Led or supported" value={portfolioScope} onChange={(event) => setPortfolioScope(event.target.value)}><option value="ALL">Led and supported</option><option value="LED">Led by Unit</option><option value="SUPPORTED">Supported by Unit</option></select>
-      <select aria-label="Project status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">All statuses</option>{[...new Set(projects.map((item) => item.status))].map((item) => <option key={item}>{item}</option>)}</select>
-      <select aria-label="Project maturity" value={maturity} onChange={(event) => setMaturity(event.target.value)}><option value="ALL">All maturity levels</option>{['Concept','Prototype','Field Tested','Validated'].map((item) => <option key={item}>{item}</option>)}</select>
-      <select aria-label="Project Lead" value={lead} onChange={(event) => setLead(event.target.value)}><option value="ALL">All Project Leads</option>{directoryUsers.map((item) => <option key={item.id} value={item.trackingId}>{item.displayName}</option>)}</select>
-      <select aria-label="Problem" value={problem} onChange={(event) => setProblem(event.target.value)}><option value="ALL">All Problems</option>{selected.problemCoverage.map((item) => <option key={item.problemId} value={item.problemId}>{item.problemId} — {item.title}</option>)}</select>
-      <select aria-label="Help Request state" value={helpState} onChange={(event) => setHelpState(event.target.value)}><option value="ALL">Any Help Request state</option><option value="OPEN">Has open request</option><option value="NONE">No open request</option></select>
-      <span>Sorted by Last Meaningful Activity</span>
-    </div>
-    <div className="detail-grid two">
-      <section className="panel"><h2>Projects Led by My Unit</h2><h3>Active / Current</h3><div className="steward-list">{unitProjects.filter((item) => ledIds.has(item.id) && activeStatuses.has(item.status)).map((item) => card(item, 'LED'))}</div><h3>Historical Knowledge</h3><div className="steward-list">{unitProjects.filter((item) => ledIds.has(item.id) && !activeStatuses.has(item.status)).map((item) => card(item, 'LED'))}</div></section>
-      <section className="panel"><h2>Projects Supported by My Unit</h2><h3>Active / Current</h3><div className="steward-list">{unitProjects.filter((item) => supportedRoles.has(item.id) && activeStatuses.has(item.status)).map((item) => card(item, 'SUPPORTED'))}</div><h3>Historical Knowledge</h3><div className="steward-list">{unitProjects.filter((item) => supportedRoles.has(item.id) && !activeStatuses.has(item.status)).map((item) => card(item, 'SUPPORTED'))}</div></section>
-    </div>
-    <div className="detail-grid two">
-      <section className="panel"><h2>Problems Addressed by This Unit</h2><p>Canonical Problems against which this Unit has recorded Solution Efforts. This does not imply the Problem affects the Unit.</p><div className="stack-list">{selected.problemCoverage.map((item) => <div key={item.problemId}><strong><a href={`/problems/${item.problemId}`}>{item.problemId} — {item.title}</a></strong><small>{item.activeEfforts} active · {item.historicalEfforts} historical · Highest maturity {item.highestMaturity} · {item.recentLessons} Lessons</small></div>)}</div></section>
-      <section className="panel"><h2>Portfolio Knowledge</h2><h3>Maturity distribution</h3><div className="metric-strip">{Object.entries(selected.maturityCounts).map(([label,count]) => <span key={label}><strong>{count}</strong>{label}</span>)}</div><h3>Solution Effort Outcomes</h3><p>Unsuccessful and inconclusive work remains a contribution to institutional knowledge.</p><div className="metric-strip">{Object.entries(selected.outcomeCounts).filter(([,count]) => count > 0).map(([label,count]) => <span key={label}><strong>{count}</strong>{label.replaceAll('_',' ')}</span>)}</div></section>
-    </div>
-    <div className="detail-grid two">
-      <section className="panel"><div className="section-heading"><div><h2>Help Requests from Unit Projects</h2><p>Led and supported efforts remain visibly distinct.</p></div><a href="#organization-help">Organization-wide Requests for Assistance</a></div><div className="stack-list">{filteredHelp.map((item) => <div key={item.id}><span className="maturity">{item.projectRelationship}</span><strong><a href={`/projects/${item.projectId}`}>{item.title}</a></strong><small>{item.category.replaceAll('_',' ')} · {item.projectName} · {item.problem} · Contact {item.contact} · {item.status} · {new Date(item.createdAt).toLocaleDateString()}</small>{item.resolutionSummary && <p>{item.resolutionSummary}</p>}</div>)}</div></section>
-      <section className="panel"><div className="section-heading"><div><h2>Lessons from Unit Solution Efforts</h2><p>Recent findings, failed approaches, and recommendations retain provenance.</p></div><select aria-label="Lesson type" value={lessonType} onChange={(event) => setLessonType(event.target.value)}><option value="ALL">All Lesson types</option>{['CONFIRMED_FINDING','FAILED_APPROACH','RECOMMENDATION','WORKING_HYPOTHESIS','UNRESOLVED_QUESTION'].map((item) => <option key={item}>{item}</option>)}</select></div><div className="stack-list">{filteredLessons.slice(0,8).map((item) => <div key={item.id}><span className="maturity">{item.type.replaceAll('_',' ')}</span><strong><a href={`/projects/${item.projectId}`}>{item.title}</a></strong><p>{item.finding}</p><small>{item.projectName} · {item.projectRelationship} · {item.author} · {new Date(item.date).toLocaleDateString()}{item.phase ? ` · ${item.phase}` : ''}</small></div>)}</div></section>
-    </div>
-    <div className="detail-grid two">
-      <section className="panel" id="unit-users"><div className="section-heading"><div><h2>Unit People & Responsibilities</h2><p>Continuity visibility, not a ranking.</p></div><div><select aria-label="User role" value={userRole} onChange={(event) => setUserRole(event.target.value)}><option value="ALL">All roles</option>{['CONTRIBUTOR','PROJECT_USER','UNIT_ADMIN','SYSTEM_ADMIN'].map((item) => <option key={item}>{item}</option>)}</select><select aria-label="User status" value={userStatus} onChange={(event) => setUserStatus(event.target.value)}><option value="ALL">All account states</option>{['PENDING','ACTIVE','DISABLED'].map((item) => <option key={item}>{item}</option>)}</select></div></div><div className="stack-list">{scopedUsers.map((item) => <div key={item.id}><strong>{item.displayName}</strong><small>{item.role.replaceAll('_',' ')} · {item.status} · {item.projectsLed.length} led · {item.projectsContributed.length} contributed · {item.openHelpRequests.length} Help contacts</small><a href="#responsibility-directory">View Responsibilities</a></div>)}</div></section>
-      <section className="panel"><h2>Recent Unit Activity</h2><p>Meaningful Project knowledge and administrative stewardship.</p><div className="stack-list">{selected.activities.slice(0,12).map((item) => <div key={item.id}><span className="maturity">{item.category === 'UNIT_ADMINISTRATION' ? 'Unit Administration' : 'Project Knowledge'}</span><strong>{item.description}</strong><small>{item.actor} · {new Date(item.timestamp).toLocaleString()}</small>{item.projectId && <a href={`/projects/${item.projectId}`}>Open Project</a>}</div>)}</div></section>
-    </div>
-    <section className="panel" id="unit-submissions"><h2>Problem Submissions from My Unit</h2><p>Unit Administrators provide Unit context and recommend canonical relationships. System/global governance controls new canonical Problems and material edits.</p><div className="stack-list">{submissions.filter((item) => item.unitId === selected.unitId).map((item) => <div key={item.id}><strong>{item.trackingId} — {item.title}</strong><small>{item.submitter} · {new Date(item.createdAt).toLocaleDateString()} · {item.status.replaceAll('_',' ')}</small><p>{item.matches.slice(0,2).map((match) => `${match.classification.replaceAll('_',' ')}: ${match.id}`).join(' · ') || 'No likely canonical relationship found.'}</p><a href="#submission-review">Review Unit context</a></div>)}</div></section>
-    <section className="panel" id="organization-help"><h2>Organization-wide Requests for Assistance</h2><p>Broad discovery does not imply that this Unit has claimed or accepted the work.</p><div className="stack-list">{helpRequests.filter((item) => !selected.ledProjectIds.includes(item.projectId) && !supportedRoles.has(item.projectId)).slice(0,6).map((item) => <div key={item.id}><strong><a href={`/projects/${item.projectId}`}>{item.title}</a></strong><small>{item.projectName} · {item.unitName} · {item.categoryLabel} · {item.status}</small></div>)}</div></section>
-  </section>;
+  );
 }
 
 function SystemAdminOverview() {
-  const { systemAdminContinuity, platformIntegrity, directoryUsers, activities } = useData();
+  const {
+    systemAdminContinuity,
+    platformIntegrity,
+    directoryUsers,
+    activities,
+  } = useData();
   const [activityCategory, setActivityCategory] = useState('ALL');
   const [activityActor, setActivityActor] = useState('ALL');
   const [activityUnit, setActivityUnit] = useState('ALL');
   const [activitySubject, setActivitySubject] = useState('ALL');
   const [activityProject, setActivityProject] = useState('ALL');
+  const [activityProblem, setActivityProblem] = useState('ALL');
+  const [activityType, setActivityType] = useState('ALL');
+  const [activitySearch, setActivitySearch] = useState('');
   const [activitySince, setActivitySince] = useState('');
   const [activityLimit, setActivityLimit] = useState(20);
-  const elevated = directoryUsers.filter((person) => ['SYSTEM_ADMIN','UNIT_ADMIN'].includes(person.role));
-  const adminActivities = activities.filter((event) => event.category !== 'Project Knowledge');
-  const filteredActivities = adminActivities.filter((event) =>
-    (activityCategory === 'ALL' || event.category === activityCategory) &&
-    (activityActor === 'ALL' || event.actor === activityActor) &&
-    (activityUnit === 'ALL' || event.unitId === activityUnit) &&
-    (activitySubject === 'ALL' || String(event.subjectUserId) === activitySubject) &&
-    (activityProject === 'ALL' || event.projectId === activityProject) &&
-    (!activitySince || event.timestamp >= new Date(`${activitySince}T00:00:00`).toISOString()),
+  const elevated = directoryUsers.filter((person) =>
+    ['SYSTEM_ADMIN', 'UNIT_ADMIN'].includes(person.role),
+  );
+  const adminActivities = activities.filter(
+    (event) => event.category !== 'Project Knowledge',
+  );
+  const filteredActivities = adminActivities.filter(
+    (event) =>
+      (activityCategory === 'ALL' || event.category === activityCategory) &&
+      (activityActor === 'ALL' || event.actor === activityActor) &&
+      (activityUnit === 'ALL' || event.unitId === activityUnit) &&
+      (activitySubject === 'ALL' ||
+        String(event.subjectUserId) === activitySubject) &&
+      (activityProject === 'ALL' || event.projectId === activityProject) &&
+      (activityProblem === 'ALL' || event.problemId === activityProblem) &&
+      (activityType === 'ALL' || event.eventType === activityType) &&
+      (!activitySearch ||
+        `${event.actor} ${event.entityId} ${event.description}`
+          .toLowerCase()
+          .includes(activitySearch.toLowerCase())) &&
+      (!activitySince ||
+        event.timestamp >= new Date(`${activitySince}T00:00:00`).toISOString()),
   );
   return (
     <div className="detail-grid two system-admin-overview">
       <section className="panel span-2">
-        <div className="section-heading"><div><h2>Platform continuity</h2><p>Administrative coverage, not a performance measure. Active profile status does not verify external authentication.</p></div></div>
-        <div className="metrics-grid">
-          <div><strong>{systemAdminContinuity.active}</strong><span>Active System Administrators</span></div>
-          <div><strong>{systemAdminContinuity.pending}</strong><span>Pending System Administrators</span></div>
-          <div><strong>{systemAdminContinuity.disabled}</strong><span>Disabled former System Administrators</span></div>
+        <div className="section-heading">
+          <div>
+            <h2>Platform continuity</h2>
+            <p>
+              Administrative coverage, not a performance measure. Active profile
+              status does not verify external authentication.
+            </p>
+          </div>
         </div>
-        <p className="muted">Handover: create and map a replacement profile, activate it, verify access outside FORGE, confirm this count, then retire the departing administrator.</p>
+        <div className="metrics-grid">
+          <div>
+            <strong>{systemAdminContinuity.active}</strong>
+            <span>Active System Administrators</span>
+          </div>
+          <div>
+            <strong>{systemAdminContinuity.pending}</strong>
+            <span>Pending System Administrators</span>
+          </div>
+          <div>
+            <strong>{systemAdminContinuity.disabled}</strong>
+            <span>Disabled former System Administrators</span>
+          </div>
+        </div>
+        <p className="muted">
+          Handover: create and map a replacement profile, activate it, verify
+          access outside FORGE, confirm this count, then retire the departing
+          administrator.
+        </p>
+        <button
+          className="secondary"
+          onClick={() => {
+            window.location.href = '/api/admin/operational-export';
+          }}
+        >
+          Download UNCLASSIFIED metadata export
+        </button>
       </section>
       <section className="panel" id="platform-integrity">
-        <h2>Platform Integrity</h2><p>Deterministic relationship and recoverability checks. Findings clear when their source data is corrected.</p>
-        {platformIntegrity.length ? <div className="stack-list">{platformIntegrity.map((finding) => <div key={finding.key}>
-          <span className="maturity">{finding.severity === 'action' ? 'Action Required' : 'Review'}</span>
-          <strong>{finding.kind.replaceAll('_',' ')}</strong><p>{finding.message}</p><small>{finding.remediation}</small><a href={finding.href}>Open remediation</a>
-        </div>)}</div> : <div className="empty-state"><Check/><h3>No actionable integrity failures detected.</h3><p>Core Project, Unit, user, and responsibility relationships passed.</p></div>}
+        <h2>Platform Integrity</h2>
+        <p>
+          Deterministic relationship and recoverability checks. Findings clear
+          when their source data is corrected.
+        </p>
+        {platformIntegrity.length ? (
+          <div className="stack-list">
+            {platformIntegrity.map((finding) => (
+              <div key={finding.key}>
+                <span className="maturity">
+                  {finding.severity === 'action' ? 'Action Required' : 'Review'}
+                </span>
+                <strong>{finding.kind.replaceAll('_', ' ')}</strong>
+                <p>{finding.message}</p>
+                <small>{finding.remediation}</small>
+                <a href={finding.href}>Open remediation</a>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <Check />
+            <h3>No actionable integrity failures detected.</h3>
+            <p>
+              Core Project, Unit, user, and responsibility relationships passed.
+            </p>
+          </div>
+        )}
       </section>
       <section className="panel" id="elevated-roles">
-        <h2>Elevated roles</h2><p>Global continuity and explicitly administered Unit scopes.</p>
-        <div className="stack-list">{elevated.map((person) => <div key={person.id}><strong>{person.displayName}</strong><small>{person.role.replaceAll('_',' ')} · {person.status} · Primary: {person.primaryUnit}</small><p>{person.role === 'UNIT_ADMIN' ? `Administered Units: ${person.memberships.filter((item) => item.isAdmin).map((item) => item.unitName).join(', ') || 'None'}` : 'Global platform scope'}</p><a href="#responsibility-directory">View responsibilities</a></div>)}</div>
+        <h2>Elevated roles</h2>
+        <p>Global continuity and explicitly administered Unit scopes.</p>
+        <div className="stack-list">
+          {elevated.map((person) => (
+            <div key={person.id}>
+              <strong>{person.displayName}</strong>
+              <small>
+                {person.role.replaceAll('_', ' ')} · {person.status} · Primary:{' '}
+                {person.primaryUnit}
+              </small>
+              <p>
+                {person.role === 'UNIT_ADMIN'
+                  ? `Administered Units: ${
+                      person.memberships
+                        .filter((item) => item.isAdmin)
+                        .map((item) => item.unitName)
+                        .join(', ') || 'None'
+                    }`
+                  : 'Global platform scope'}
+              </p>
+              <a href="#responsibility-directory">View responsibilities</a>
+            </div>
+          ))}
+        </div>
       </section>
       <section className="panel span-2" id="administrative-activity">
-        <h2>Recent administrative Activity</h2><p>Up to 200 recent events remain available for bounded, practical review.</p>
+        <h2>Recent administrative Activity</h2>
+        <p>
+          Up to 200 recent events remain available for bounded, practical
+          review.
+        </p>
         <div className="quick-form">
-          <select aria-label="Activity category" value={activityCategory} onChange={(event) => setActivityCategory(event.target.value)}><option value="ALL">All categories</option>{[...new Set(adminActivities.map((event) => event.category))].map((value) => <option key={value}>{value}</option>)}</select>
-          <select aria-label="Activity actor" value={activityActor} onChange={(event) => setActivityActor(event.target.value)}><option value="ALL">All actors</option>{[...new Set(adminActivities.map((event) => event.actor))].map((value) => <option key={value}>{value}</option>)}</select>
-          <select aria-label="Activity Unit" value={activityUnit} onChange={(event) => setActivityUnit(event.target.value)}><option value="ALL">All Units</option>{[...new globalThis.Map(adminActivities.filter((event) => event.unitId).map((event) => [event.unitId,event.unitName])).entries()].map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
-          <select aria-label="Affected user" value={activitySubject} onChange={(event) => setActivitySubject(event.target.value)}><option value="ALL">All affected users</option>{[...new globalThis.Map(adminActivities.filter((event) => event.subjectUserId).map((event) => [String(event.subjectUserId),event.subjectUserName])).entries()].map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select>
-          <select aria-label="Affected Project" value={activityProject} onChange={(event) => setActivityProject(event.target.value)}><option value="ALL">All Projects</option>{[...new globalThis.Map(adminActivities.filter((event) => event.projectId).map((event) => [event.projectId,event.projectName])).entries()].map(([id,name]) => <option key={id} value={id}>{id} — {name}</option>)}</select>
-          <label>Since <input aria-label="Activity since date" type="date" value={activitySince} onChange={(event) => setActivitySince(event.target.value)}/></label>
+          <select
+            aria-label="Activity category"
+            value={activityCategory}
+            onChange={(event) => setActivityCategory(event.target.value)}
+          >
+            <option value="ALL">All categories</option>
+            {[...new Set(adminActivities.map((event) => event.category))].map(
+              (value) => (
+                <option key={value}>{value}</option>
+              ),
+            )}
+          </select>
+          <select
+            aria-label="Activity actor"
+            value={activityActor}
+            onChange={(event) => setActivityActor(event.target.value)}
+          >
+            <option value="ALL">All actors</option>
+            {[...new Set(adminActivities.map((event) => event.actor))].map(
+              (value) => (
+                <option key={value}>{value}</option>
+              ),
+            )}
+          </select>
+          <select
+            aria-label="Activity Unit"
+            value={activityUnit}
+            onChange={(event) => setActivityUnit(event.target.value)}
+          >
+            <option value="ALL">All Units</option>
+            {[
+              ...new globalThis.Map(
+                adminActivities
+                  .filter((event) => event.unitId)
+                  .map((event) => [event.unitId, event.unitName]),
+              ).entries(),
+            ].map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Affected user"
+            value={activitySubject}
+            onChange={(event) => setActivitySubject(event.target.value)}
+          >
+            <option value="ALL">All affected users</option>
+            {[
+              ...new globalThis.Map(
+                adminActivities
+                  .filter((event) => event.subjectUserId)
+                  .map((event) => [
+                    String(event.subjectUserId),
+                    event.subjectUserName,
+                  ]),
+              ).entries(),
+            ].map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Affected Project"
+            value={activityProject}
+            onChange={(event) => setActivityProject(event.target.value)}
+          >
+            <option value="ALL">All Projects</option>
+            {[
+              ...new globalThis.Map(
+                adminActivities
+                  .filter((event) => event.projectId)
+                  .map((event) => [event.projectId, event.projectName]),
+              ).entries(),
+            ].map(([id, name]) => (
+              <option key={id} value={id}>
+                {id} — {name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Affected Problem"
+            value={activityProblem}
+            onChange={(event) => setActivityProblem(event.target.value)}
+          >
+            <option value="ALL">All Problems</option>
+            {[
+              ...new globalThis.Map(
+                adminActivities
+                  .filter((event) => event.problemId)
+                  .map((event) => [event.problemId, event.problemName]),
+              ).entries(),
+            ].map(([id, name]) => (
+              <option key={id} value={id}>
+                {id} — {name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Action type"
+            value={activityType}
+            onChange={(event) => setActivityType(event.target.value)}
+          >
+            <option value="ALL">All action types</option>
+            {[...new Set(adminActivities.map((event) => event.eventType))].map(
+              (value) => (
+                <option key={value}>{value.replaceAll('_', ' ')}</option>
+              ),
+            )}
+          </select>
+          <input
+            aria-label="Search administrative Activity"
+            value={activitySearch}
+            onChange={(event) => setActivitySearch(event.target.value)}
+            placeholder="Search actor, ID, or description"
+          />
+          <label>
+            Since{' '}
+            <input
+              aria-label="Activity since date"
+              type="date"
+              value={activitySince}
+              onChange={(event) => setActivitySince(event.target.value)}
+            />
+          </label>
         </div>
-        <div className="stack-list">{filteredActivities.slice(0,activityLimit).map((event) => <div key={event.id}><span className="maturity">{event.category}</span><strong>{event.description}</strong><small>{event.actor} · {new Date(event.timestamp).toLocaleString()}</small>{event.projectId ? <a href={`/projects/${event.projectId}`}>Open Project</a> : event.unitId ? <a href={`/units/${event.unitId}`}>Open Unit</a> : event.subjectUserId ? <a href="#responsibility-directory">Open user administration</a> : null}</div>)}</div>
-        {activityLimit < filteredActivities.length && <button className="secondary" onClick={() => setActivityLimit((value) => value + 20)}>Load more Activity</button>}
+        <div className="stack-list">
+          {filteredActivities.slice(0, activityLimit).map((event) => (
+            <div key={event.id}>
+              <span className="maturity">{event.category}</span>
+              <strong>{event.description}</strong>
+              <small>
+                {event.actor} · {new Date(event.timestamp).toLocaleString()}
+              </small>
+              {event.entityHref ? (
+                <a href={event.entityHref}>Open affected record</a>
+              ) : event.problemId ? (
+                <a href={`/problems/${event.problemId}`}>Open Problem</a>
+              ) : event.projectId ? (
+                <a href={`/projects/${event.projectId}`}>Open Project</a>
+              ) : event.unitId ? (
+                <a href={`/units/${event.unitId}`}>Open Unit</a>
+              ) : event.subjectUserId ? (
+                <a href="#responsibility-directory">Open user administration</a>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        {activityLimit < filteredActivities.length && (
+          <button
+            className="secondary"
+            onClick={() => setActivityLimit((value) => value + 20)}
+          >
+            Load more Activity
+          </button>
+        )}
       </section>
     </div>
   );
 }
 
 function CanonicalGovernance() {
-  const { units, problems, projectDirectoryUsers, tagInventory, locations } = useData();
-  const send = async (event: React.SyntheticEvent<HTMLFormElement>, url: string, method = 'POST') => {
+  const { units, problems, projectDirectoryUsers, tagInventory, locations } =
+    useData();
+  const send = async (
+    event: React.SyntheticEvent<HTMLFormElement>,
+    url: string,
+    method = 'POST',
+  ) => {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     const body: Record<string, unknown> = Object.fromEntries(data);
     body.tags = data.getAll('tags');
     if (body.duplicateReviewed === 'true') body.duplicateReviewed = true;
-    const options: RequestInit = { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
+    for (const key of ['confirmed', 'associateProjects'])
+      if (body[key] === 'true') body[key] = true;
+    const options: RequestInit = {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    };
     const response = await fetch(url, options);
-    const result = await response.json() as { error?: string };
-    if (!response.ok) window.alert(result.error || 'Unable to save governed record.'); else window.location.reload();
+    const result = (await response.json()) as { error?: string };
+    if (!response.ok)
+      window.alert(result.error || 'Unable to save governed record.');
+    else window.location.reload();
   };
-  const activeUsers = projectDirectoryUsers.filter((person) => person.status === 'ACTIVE');
-  return <section className="canonical-governance">
-    <div className="detail-grid two">
-      <section className="panel"><h2>Create canonical Unit</h2><p>System-governed identity. The permanent FORGE Unit ID is assigned transactionally.</p>
-        <form className="quick-form" onSubmit={(event) => void send(event, '/api/admin/units')}>
-          <input name="name" required placeholder="Canonical Unit name"/><input name="abbreviation" required placeholder="Abbreviation"/><input name="unitType" required placeholder="Controlled Unit type"/>
-          <input name="parentOrganization" placeholder="Parent organization (optional)"/><select name="locationId"><option value="">Location unavailable</option>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}{item.region ? `, ${item.region}` : ''}</option>)}</select>
-          <input name="forgePointOfContact" placeholder="FORGE point of contact"/><textarea name="description" placeholder="Plain-language Unit description"/>
-          <select name="tags" multiple aria-label="Unit capabilities">{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><button type="submit">Create Unit</button>
+  const activeUsers = projectDirectoryUsers.filter(
+    (person) => person.status === 'ACTIVE',
+  );
+  return (
+    <section className="canonical-governance">
+      <div className="detail-grid two">
+        <section className="panel">
+          <h2>Create canonical Unit</h2>
+          <p>
+            System-governed identity. The permanent FORGE Unit ID is assigned
+            transactionally.
+          </p>
+          <form
+            className="quick-form"
+            onSubmit={(event) => void send(event, '/api/admin/units')}
+          >
+            <input name="name" required placeholder="Canonical Unit name" />
+            <input name="abbreviation" required placeholder="Abbreviation" />
+            <input
+              name="unitType"
+              required
+              placeholder="Controlled Unit type"
+            />
+            <input
+              name="parentOrganization"
+              placeholder="Parent organization (optional)"
+            />
+            <select name="locationId">
+              <option value="">Location unavailable</option>
+              {locations.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.region ? `, ${item.region}` : ''}
+                </option>
+              ))}
+            </select>
+            <input
+              name="forgePointOfContact"
+              placeholder="FORGE point of contact"
+            />
+            <textarea
+              name="description"
+              placeholder="Plain-language Unit description"
+            />
+            <select name="tags" multiple aria-label="Unit capabilities">
+              {tagInventory.map((tag) => (
+                <option key={tag.id}>{tag.name}</option>
+              ))}
+            </select>
+            <button type="submit">Create Unit</button>
+          </form>
+        </section>
+        <section className="panel">
+          <h2>Create canonical Problem</h2>
+          <p>
+            Direct System Administrator creation with duplicate review and
+            controlled lifecycle fields.
+          </p>
+          <form
+            className="quick-form"
+            onSubmit={(event) => void send(event, '/api/admin/problems')}
+          >
+            <input name="title" required placeholder="Progressive title" />
+            <textarea
+              name="description"
+              required
+              placeholder="Executive summary"
+            />
+            <textarea
+              name="detailedDescription"
+              required
+              placeholder="Detailed description"
+            />
+            <textarea
+              name="problemStatement"
+              required
+              placeholder="Problem statement"
+            />
+            <textarea name="impact" placeholder="Operational impact" />
+            <select name="category" defaultValue="Uncategorized">
+              {[
+                'Navigation',
+                'Autonomy / Control',
+                'RF / Communications',
+                'Identification / Sensing',
+                'Guidance',
+                'RF / Signature Management',
+                'Uncategorized',
+              ].map((item) => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+            <select name="priority" defaultValue="Unprioritized">
+              {['Unprioritized', 'Low', 'Medium', 'High', 'Critical'].map(
+                (item) => (
+                  <option key={item}>{item}</option>
+                ),
+              )}
+            </select>
+            <select name="stewardUserId">
+              <option value="">No steward yet</option>
+              {activeUsers.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+            <select name="tags" multiple aria-label="Problem tags">
+              {tagInventory.map((tag) => (
+                <option key={tag.id}>{tag.name}</option>
+              ))}
+            </select>
+            <label>
+              <input name="duplicateReviewed" type="checkbox" value="true" /> I
+              reviewed existing canonical Problems
+            </label>
+            <button type="submit">Create Problem</button>
+          </form>
+        </section>
+      </div>
+      <section className="panel">
+        <h2>Canonical Unit profiles</h2>
+        <p>
+          Tracking IDs remain immutable. Unit Administrators may maintain only
+          their scoped POC profile; canonical identity changes remain
+          System-only.
+        </p>
+        <div className="stack-list">
+          {units.map((unit) => (
+            <details key={unit.id}>
+              <summary>
+                <strong>
+                  {unit.id} — {unit.name}
+                </strong>
+                <small>
+                  {unit.abbreviation} · {unit.type} ·{' '}
+                  {unit.isActive ? 'ACTIVE' : 'INACTIVE'}
+                </small>
+              </summary>
+              <form
+                className="quick-form"
+                onSubmit={(event) =>
+                  void send(event, `/api/admin/units/${unit.dbId}`, 'PATCH')
+                }
+              >
+                <input name="name" defaultValue={unit.name} required />
+                <input
+                  name="abbreviation"
+                  defaultValue={unit.abbreviation}
+                  required
+                />
+                <input name="unitType" defaultValue={unit.type} required />
+                <input
+                  name="parentOrganization"
+                  defaultValue={unit.parentOrganization}
+                />
+                <textarea name="description" defaultValue={unit.description} />
+                <select name="locationId" defaultValue={unit.locationId ?? ''}>
+                  <option value="">Location unavailable</option>
+                  {locations.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <select name="tags" multiple defaultValue={unit.capabilities}>
+                  {tagInventory.map((tag) => (
+                    <option key={tag.id}>{tag.name}</option>
+                  ))}
+                </select>
+                <button type="submit" className="secondary">
+                  Save canonical profile
+                </button>
+              </form>
+            </details>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Canonical Problem registry</h2>
+        <p>
+          Lifecycle, priority, stewardship, supersession, relationships, and
+          refinement remain explicit.
+        </p>
+        <div className="stack-list">
+          {problems.map((problem) => (
+            <details key={problem.id}>
+              <summary>
+                <strong>
+                  {problem.id} — {problem.title}
+                </strong>
+                <small>
+                  {problem.status} · {problem.priority} · Steward:{' '}
+                  {problem.steward || 'Needs refinement'}
+                </small>
+              </summary>
+              <form
+                className="quick-form"
+                onSubmit={(event) =>
+                  void send(event, `/api/admin/problems/${problem.id}`, 'PATCH')
+                }
+              >
+                <input name="title" defaultValue={problem.title} required />
+                <textarea
+                  name="description"
+                  defaultValue={problem.description}
+                  required
+                />
+                <textarea
+                  name="detailedDescription"
+                  defaultValue={problem.detailedDescription}
+                  required
+                />
+                <textarea
+                  name="problemStatement"
+                  defaultValue={problem.problemStatement}
+                  required
+                />
+                <textarea name="impact" defaultValue={problem.impact} />
+                <select name="category" defaultValue={problem.category}>
+                  {[
+                    'Navigation',
+                    'Autonomy / Control',
+                    'RF / Communications',
+                    'Identification / Sensing',
+                    'Guidance',
+                    'RF / Signature Management',
+                    'Uncategorized',
+                  ].map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+                <select name="priority" defaultValue={problem.priority}>
+                  {['Unprioritized', 'Low', 'Medium', 'High', 'Critical'].map(
+                    (item) => (
+                      <option key={item}>{item}</option>
+                    ),
+                  )}
+                </select>
+                <select name="status" defaultValue={problem.status}>
+                  {[
+                    'Open',
+                    'Under Review',
+                    'Addressed — Viable Efforts Exist',
+                    'Closed',
+                    'Superseded',
+                  ].map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+                <select
+                  name="stewardUserId"
+                  defaultValue={problem.stewardUserId ?? ''}
+                >
+                  <option value="">No steward yet</option>
+                  {activeUsers.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.displayName}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  name="supersededById"
+                  defaultValue={
+                    problems.find((item) => item.id === problem.supersededById)
+                      ?.dbId ?? ''
+                  }
+                >
+                  <option value="">No successor</option>
+                  {problems
+                    .filter((item) => item.id !== problem.id)
+                    .map((item) => (
+                      <option key={item.id} value={item.dbId}>
+                        {item.id} — {item.title}
+                      </option>
+                    ))}
+                </select>
+                <select name="tags" multiple defaultValue={problem.tags}>
+                  {tagInventory.map((tag) => (
+                    <option key={tag.id}>{tag.name}</option>
+                  ))}
+                </select>
+                <button type="submit" className="secondary">
+                  Save Problem governance
+                </button>
+              </form>
+              <form
+                className="quick-form"
+                onSubmit={(event) =>
+                  void send(
+                    event,
+                    `/api/admin/problems/${problem.id}/relationships`,
+                    'PATCH',
+                  )
+                }
+              >
+                <select name="relationship">
+                  <option value="RELATED_TO">Related to</option>
+                  <option value="VARIANT_OF">Variant of</option>
+                </select>
+                <select name="targetProblemId" required>
+                  <option value="">Select canonical Problem</option>
+                  {problems
+                    .filter((item) => item.id !== problem.id)
+                    .map((item) => (
+                      <option key={item.id} value={item.dbId}>
+                        {item.id} — {item.title}
+                      </option>
+                    ))}
+                </select>
+                <button type="submit" className="secondary">
+                  Add relationship
+                </button>
+              </form>
+              {problem.relationships.map((item) => (
+                <p key={`${item.direction}-${item.type}-${item.problemId}`}>
+                  {item.direction === 'INCOMING'
+                    ? 'Referenced by'
+                    : item.type.replaceAll('_', ' ')}{' '}
+                  <a href={`/problems/${item.problemId}`}>
+                    {item.problemId} — {item.title}
+                  </a>
+                </p>
+              ))}
+            </details>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Problem consolidation</h2>
+        <p>
+          Review both Problems and their linked records above. Consolidation
+          preserves the source PRB as a searchable historical alias and requires
+          explicit confirmation.
+        </p>
+        <form
+          className="quick-form"
+          onSubmit={(event) => {
+            const source = new FormData(event.currentTarget).get(
+              'sourceProblemId',
+            );
+            if (typeof source === 'string')
+              void send(event, `/api/admin/problems/${source}/consolidate`);
+          }}
+        >
+          <select name="sourceProblemId" required>
+            <option value="">Source Problem</option>
+            {problems.map((item) => (
+              <option key={item.id}>{item.id}</option>
+            ))}
+          </select>
+          <select name="targetProblemId" required>
+            <option value="">Destination canonical Problem</option>
+            {problems.map((item) => (
+              <option key={item.id} value={item.dbId}>
+                {item.id} — {item.title}
+              </option>
+            ))}
+          </select>
+          <label>
+            <input name="associateProjects" type="checkbox" value="true" /> Also
+            associate non-duplicate Project links with destination
+          </label>
+          <label>
+            <input name="confirmed" type="checkbox" value="true" required /> I
+            reviewed source/destination context and confirm consolidation
+          </label>
+          <button type="submit">Consolidate into existing Problem</button>
         </form>
       </section>
-      <section className="panel"><h2>Create canonical Problem</h2><p>Direct System Administrator creation with duplicate review and controlled lifecycle fields.</p>
-        <form className="quick-form" onSubmit={(event) => void send(event, '/api/admin/problems')}>
-          <input name="title" required placeholder="Progressive title"/><textarea name="description" required placeholder="Executive summary"/><textarea name="detailedDescription" required placeholder="Detailed description"/><textarea name="problemStatement" required placeholder="Problem statement"/><textarea name="impact" placeholder="Operational impact"/>
-          <select name="category" defaultValue="Uncategorized">{['Navigation','Autonomy / Control','RF / Communications','Identification / Sensing','Guidance','RF / Signature Management','Uncategorized'].map((item) => <option key={item}>{item}</option>)}</select><select name="priority" defaultValue="Unprioritized">{['Unprioritized','Low','Medium','High','Critical'].map((item) => <option key={item}>{item}</option>)}</select>
-          <select name="stewardUserId"><option value="">No steward yet</option>{activeUsers.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select><select name="tags" multiple aria-label="Problem tags">{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><label><input name="duplicateReviewed" type="checkbox" value="true"/> I reviewed existing canonical Problems</label><button type="submit">Create Problem</button>
+      <section className="panel" id="tag-governance">
+        <h2>Governed tag inventory</h2>
+        <form
+          className="quick-form"
+          onSubmit={(event) => void send(event, '/api/admin/tags')}
+        >
+          <input name="name" required placeholder="New governed tag" />
+          <button type="submit">Create tag</button>
         </form>
+        <div className="stack-list">
+          {tagInventory.map((tag) => (
+            <details key={tag.id}>
+              <summary>
+                <strong>{tag.name}</strong>
+                <small>
+                  {tag.usageCount} linked records · {tag.problems.length}{' '}
+                  Problems · {tag.projects.length} Projects · {tag.units.length}{' '}
+                  Units · {tag.lessons.length} Lessons
+                </small>
+              </summary>
+              <p>
+                {[
+                  ...tag.problems,
+                  ...tag.projects,
+                  ...tag.units,
+                  ...tag.lessons,
+                ].join(' · ') || 'Unused'}
+              </p>
+              <form
+                className="quick-form"
+                onSubmit={(event) =>
+                  void send(event, `/api/admin/tags/${tag.id}`, 'PATCH')
+                }
+              >
+                <input name="name" defaultValue={tag.name} required />
+                <button type="submit" className="secondary">
+                  Rename
+                </button>
+              </form>
+              <form
+                className="quick-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = event.currentTarget;
+                  const data = new FormData(form);
+                  const body = {
+                    targetTagId: Number(data.get('targetTagId')),
+                    confirmed: data.get('confirmed') === 'true',
+                  };
+                  void fetch(`/api/admin/tags/${tag.id}/merge`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(body),
+                  }).then(async (response) => {
+                    const result = (await response.json()) as {
+                      error?: string;
+                    };
+                    if (!response.ok)
+                      window.alert(result.error || 'Unable to merge Tag.');
+                    else window.location.reload();
+                  });
+                }}
+              >
+                <select name="targetTagId" required>
+                  <option value="">Merge into…</option>
+                  {tagInventory
+                    .filter((item) => item.id !== tag.id)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} ({item.usageCount})
+                      </option>
+                    ))}
+                </select>
+                <label>
+                  <input
+                    name="confirmed"
+                    type="checkbox"
+                    value="true"
+                    required
+                  />{' '}
+                  Confirm affected entity types and merge
+                </label>
+                <button type="submit" className="secondary">
+                  Merge Tag
+                </button>
+              </form>
+            </details>
+          ))}
+        </div>
       </section>
-    </div>
-    <section className="panel"><h2>Canonical Unit profiles</h2><p>Tracking IDs remain immutable. Unit Administrators may maintain only their scoped POC profile; canonical identity changes remain System-only.</p><div className="stack-list">{units.map((unit) => <details key={unit.id}><summary><strong>{unit.id} — {unit.name}</strong><small>{unit.abbreviation} · {unit.type} · {unit.isActive ? 'ACTIVE' : 'INACTIVE'}</small></summary><form className="quick-form" onSubmit={(event) => void send(event, `/api/admin/units/${unit.dbId}`, 'PATCH')}><input name="name" defaultValue={unit.name} required/><input name="abbreviation" defaultValue={unit.abbreviation} required/><input name="unitType" defaultValue={unit.type} required/><input name="parentOrganization" defaultValue={unit.parentOrganization}/><textarea name="description" defaultValue={unit.description}/><select name="locationId" defaultValue={unit.locationId ?? ''}><option value="">Location unavailable</option>{locations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select name="tags" multiple defaultValue={unit.capabilities}>{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><button type="submit" className="secondary">Save canonical profile</button></form></details>)}</div></section>
-      <section className="panel"><h2>Canonical Problem registry</h2><p>Lifecycle, priority, stewardship, supersession, relationships, and refinement remain explicit.</p><div className="stack-list">{problems.map((problem) => <details key={problem.id}><summary><strong>{problem.id} — {problem.title}</strong><small>{problem.status} · {problem.priority} · Steward: {problem.steward || 'Needs refinement'}</small></summary><form className="quick-form" onSubmit={(event) => void send(event, `/api/admin/problems/${problem.id}`, 'PATCH')}><input name="title" defaultValue={problem.title} required/><textarea name="description" defaultValue={problem.description} required/><textarea name="detailedDescription" defaultValue={problem.detailedDescription} required/><textarea name="problemStatement" defaultValue={problem.problemStatement} required/><textarea name="impact" defaultValue={problem.impact}/><select name="category" defaultValue={problem.category}>{['Navigation','Autonomy / Control','RF / Communications','Identification / Sensing','Guidance','RF / Signature Management','Uncategorized'].map((item) => <option key={item}>{item}</option>)}</select><select name="priority" defaultValue={problem.priority}>{['Unprioritized','Low','Medium','High','Critical'].map((item) => <option key={item}>{item}</option>)}</select><select name="status" defaultValue={problem.status}>{['Open','Under Review','Addressed — Viable Efforts Exist','Closed','Superseded'].map((item) => <option key={item}>{item}</option>)}</select><select name="stewardUserId" defaultValue={problem.stewardUserId ?? ''}><option value="">No steward yet</option>{activeUsers.map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select><select name="supersededById" defaultValue={problems.find((item) => item.id === problem.supersededById)?.dbId ?? ''}><option value="">No successor</option>{problems.filter((item) => item.id !== problem.id).map((item) => <option key={item.id} value={item.dbId}>{item.id} — {item.title}</option>)}</select><select name="tags" multiple defaultValue={problem.tags}>{tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><button type="submit" className="secondary">Save Problem governance</button></form><form className="quick-form" onSubmit={(event) => void send(event, `/api/admin/problems/${problem.id}/relationships`, 'PATCH')}><select name="relationship"><option value="RELATED_TO">Related to</option><option value="VARIANT_OF">Variant of</option></select><select name="targetProblemId" required><option value="">Select canonical Problem</option>{problems.filter((item) => item.id !== problem.id).map((item) => <option key={item.id} value={item.dbId}>{item.id} — {item.title}</option>)}</select><button type="submit" className="secondary">Add relationship</button></form>{problem.relationships.map((item) => <p key={`${item.direction}-${item.type}-${item.problemId}`}>{item.direction === 'INCOMING' ? 'Referenced by' : item.type.replaceAll('_',' ')} <a href={`/problems/${item.problemId}`}>{item.problemId} — {item.title}</a></p>)}</details>)}</div></section>
-    <section className="panel"><h2>Governed tag inventory</h2><form className="quick-form" onSubmit={(event) => void send(event, '/api/admin/tags')}><input name="name" required placeholder="New governed tag"/><button type="submit">Create tag</button></form><div className="stack-list">{tagInventory.map((tag) => <form key={tag.id} className="quick-form" onSubmit={(event) => void send(event, `/api/admin/tags/${tag.id}`, 'PATCH')}><input name="name" defaultValue={tag.name} required/><small>{tag.usageCount} linked records</small><button type="submit" className="secondary">Rename</button></form>)}</div></section>
-  </section>;
+      <section className="panel" id="location-governance">
+        <h2>Approved general Locations</h2>
+        <p>
+          Use only approved, appropriately generalized information. Precision is
+          not required merely because coordinates are supported.
+        </p>
+        <form
+          className="quick-form"
+          onSubmit={(event) => void send(event, '/api/admin/locations')}
+        >
+          <input name="name" required placeholder="Location name" />
+          <input name="region" placeholder="General region" />
+          <input
+            name="latitude"
+            type="number"
+            step="any"
+            required
+            placeholder="Approved latitude"
+          />
+          <input
+            name="longitude"
+            type="number"
+            step="any"
+            required
+            placeholder="Approved longitude"
+          />
+          <button type="submit">Create Location</button>
+        </form>
+        <div className="stack-list">
+          {locations.map((location) => (
+            <details key={location.id}>
+              <summary>
+                <strong>{location.name}</strong>
+                <small>
+                  {location.region || 'No region'} · {location.units.length}{' '}
+                  Units · {location.projects.length} Projects ·{' '}
+                  {location.problems.length} Problems
+                </small>
+              </summary>
+              <p>
+                {[
+                  ...location.units,
+                  ...location.projects,
+                  ...location.problems,
+                ].join(' · ') || 'Unused'}
+              </p>
+              <form
+                className="quick-form"
+                onSubmit={(event) =>
+                  void send(
+                    event,
+                    `/api/admin/locations/${location.id}`,
+                    'PATCH',
+                  )
+                }
+              >
+                <input name="name" defaultValue={location.name} required />
+                <input name="region" defaultValue={location.region} />
+                <input
+                  name="latitude"
+                  type="number"
+                  step="any"
+                  defaultValue={location.latitude}
+                  required
+                />
+                <input
+                  name="longitude"
+                  type="number"
+                  step="any"
+                  defaultValue={location.longitude}
+                  required
+                />
+                <button type="submit" className="secondary">
+                  Correct Location
+                </button>
+              </form>
+            </details>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
 }
 
 function AdministrationView() {
@@ -2541,11 +4175,14 @@ function AdministrationView() {
       : units.filter((unit) =>
           current?.administeredUnitIds.includes(unit.dbId),
         );
-  const filteredDirectoryUsers = directoryUsers.filter((person) =>
-    (userRoleFilter === 'ALL' || person.role === userRoleFilter) &&
-    (userStatusFilter === 'ALL' || person.status === userStatusFilter) &&
-    (userUnitFilter === 'ALL' || person.unitIds.includes(Number(userUnitFilter))) &&
-    (!attentionOnly || needsAttention.some((signal) => signal.userId === person.id)),
+  const filteredDirectoryUsers = directoryUsers.filter(
+    (person) =>
+      (userRoleFilter === 'ALL' || person.role === userRoleFilter) &&
+      (userStatusFilter === 'ALL' || person.status === userStatusFilter) &&
+      (userUnitFilter === 'ALL' ||
+        person.unitIds.includes(Number(userUnitFilter))) &&
+      (!attentionOnly ||
+        needsAttention.some((signal) => signal.userId === person.id)),
   );
   const patch = async (url: string, body: Record<string, unknown>) => {
     const response = await fetch(url, {
@@ -2605,6 +4242,30 @@ function AdministrationView() {
                   {signal.projectId && (
                     <a href={`/projects/${signal.projectId}`}>Open Project</a>
                   )}
+                  {signal.kind === 'RECEIVING_UNIT_TRANSFER_REVIEW' &&
+                    signal.projectId && (
+                      <button
+                        className="secondary"
+                        onClick={() =>
+                          void fetch(
+                            `/api/projects/${signal.projectId}/lead-unit-acknowledgment`,
+                            { method: 'POST' },
+                          ).then(async (response) => {
+                            const result = (await response.json()) as {
+                              error?: string;
+                            };
+                            if (!response.ok)
+                              window.alert(
+                                result.error ||
+                                  'Unable to acknowledge transfer.',
+                              );
+                            else window.location.reload();
+                          })
+                        }
+                      >
+                        Acknowledge receiving-Unit review
+                      </button>
+                    )}
                 </div>
               ))}
             </div>
@@ -2618,19 +4279,51 @@ function AdministrationView() {
         <section className="panel" id="responsibility-directory">
           <h2>User directory</h2>
           <div className="quick-form">
-            <select aria-label="Filter users by role" value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)}>
+            <select
+              aria-label="Filter users by role"
+              value={userRoleFilter}
+              onChange={(event) => setUserRoleFilter(event.target.value)}
+            >
               <option value="ALL">All roles</option>
-              {['CONTRIBUTOR','PROJECT_USER','UNIT_ADMIN','SYSTEM_ADMIN'].map((role) => <option key={role}>{role}</option>)}
+              {[
+                'CONTRIBUTOR',
+                'PROJECT_USER',
+                'UNIT_ADMIN',
+                'SYSTEM_ADMIN',
+              ].map((role) => (
+                <option key={role}>{role}</option>
+              ))}
             </select>
-            <select aria-label="Filter users by status" value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value)}>
+            <select
+              aria-label="Filter users by status"
+              value={userStatusFilter}
+              onChange={(event) => setUserStatusFilter(event.target.value)}
+            >
               <option value="ALL">All statuses</option>
-              {['PENDING','ACTIVE','DISABLED'].map((status) => <option key={status}>{status}</option>)}
+              {['PENDING', 'ACTIVE', 'DISABLED'].map((status) => (
+                <option key={status}>{status}</option>
+              ))}
             </select>
-            <select aria-label="Filter users by Unit" value={userUnitFilter} onChange={(event) => setUserUnitFilter(event.target.value)}>
+            <select
+              aria-label="Filter users by Unit"
+              value={userUnitFilter}
+              onChange={(event) => setUserUnitFilter(event.target.value)}
+            >
               <option value="ALL">All Units</option>
-              {scopedUnits.map((unit) => <option key={unit.id} value={unit.dbId}>{unit.name}</option>)}
+              {scopedUnits.map((unit) => (
+                <option key={unit.id} value={unit.dbId}>
+                  {unit.name}
+                </option>
+              ))}
             </select>
-            <label><input type="checkbox" checked={attentionOnly} onChange={(event) => setAttentionOnly(event.target.checked)}/> Has attention condition</label>
+            <label>
+              <input
+                type="checkbox"
+                checked={attentionOnly}
+                onChange={(event) => setAttentionOnly(event.target.checked)}
+              />{' '}
+              Has attention condition
+            </label>
           </div>
           {directoryUsers.length ? (
             <div className="stack-list">
@@ -2751,36 +4444,40 @@ function AdministrationView() {
                       Update membership
                     </button>
                   </form>
-                  {current?.role === 'SYSTEM_ADMIN' && item.role !== 'SYSTEM_ADMIN' && (
-                    <form
-                      className="quick-form"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        const body = Object.fromEntries(
-                          new FormData(event.currentTarget),
-                        );
-                        void patch(`/api/admin/users/${item.id}/admin-scopes`, {
-                          ...body,
-                          assigned: body.assigned === 'true',
-                        });
-                      }}
-                    >
-                      <select name="assigned">
-                        <option value="true">Assign Unit Admin scope</option>
-                        <option value="false">Remove Unit Admin scope</option>
-                      </select>
-                      <select name="unitId">
-                        {units.map((unit) => (
-                          <option key={unit.id} value={unit.dbId}>
-                            {unit.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button className="secondary" type="submit">
-                        Update admin scope
-                      </button>
-                    </form>
-                  )}
+                  {current?.role === 'SYSTEM_ADMIN' &&
+                    item.role !== 'SYSTEM_ADMIN' && (
+                      <form
+                        className="quick-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const body = Object.fromEntries(
+                            new FormData(event.currentTarget),
+                          );
+                          void patch(
+                            `/api/admin/users/${item.id}/admin-scopes`,
+                            {
+                              ...body,
+                              assigned: body.assigned === 'true',
+                            },
+                          );
+                        }}
+                      >
+                        <select name="assigned">
+                          <option value="true">Assign Unit Admin scope</option>
+                          <option value="false">Remove Unit Admin scope</option>
+                        </select>
+                        <select name="unitId">
+                          {units.map((unit) => (
+                            <option key={unit.id} value={unit.dbId}>
+                              {unit.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button className="secondary" type="submit">
+                          Update admin scope
+                        </button>
+                      </form>
+                    )}
                 </details>
               ))}
             </div>
@@ -2842,7 +4539,9 @@ function AdministrationView() {
                   >
                     <select name="status" defaultValue={item.status}>
                       <option value="UNDER_REVIEW">Under review</option>
-                      <option value="ACCEPTED">Recommend existing Problem</option>
+                      <option value="ACCEPTED">
+                        Recommend existing Problem
+                      </option>
                       <option value="DUPLICATE_LINKED">
                         Mark likely duplicate / link existing
                       </option>
@@ -2871,27 +4570,132 @@ function AdministrationView() {
                       Save review
                     </button>
                   </form>
-                  {current?.role === 'SYSTEM_ADMIN' && item.status !== 'APPROVED_NEW' && (
-                    <form className="quick-form" onSubmit={(event) => {
-                      event.preventDefault();
-                      const form = event.currentTarget;
-                      const data = new FormData(form);
-                      const body: Record<string, unknown> = Object.fromEntries(data);
-                      body.tags = data.getAll('tags');
-                      body.duplicateReviewed = data.get('duplicateReviewed') === 'true';
-                      void fetch(`/api/problem-submissions/${item.trackingId}/convert`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async (response) => {
-                        const result = await response.json() as { error?: string };
-                        if (!response.ok) window.alert(result.error || 'Unable to approve as a new canonical Problem.'); else window.location.reload();
-                      });
-                    }}>
-                      <strong>System final review — approve as new canonical Problem</strong>
-                      <input name="title" defaultValue={item.title} required/><textarea name="description" defaultValue={item.description} required/><textarea name="detailedDescription" defaultValue={item.description} required/><textarea name="problemStatement" defaultValue={item.description} required/>
-                      <select name="category" defaultValue={item.category}>{['Navigation','Autonomy / Control','RF / Communications','Identification / Sensing','Guidance','RF / Signature Management','Uncategorized'].map((value) => <option key={value}>{value}</option>)}</select><select name="priority" defaultValue="Unprioritized">{['Unprioritized','Low','Medium','High','Critical'].map((value) => <option key={value}>{value}</option>)}</select>
-                      <select name="stewardUserId"><option value="">No steward yet</option>{projectDirectoryUsers.filter((person) => person.status === 'ACTIVE').map((person) => <option key={person.id} value={person.id}>{person.displayName}</option>)}</select>
-                      <select name="tags" multiple>{data.tagInventory.map((tag) => <option key={tag.id}>{tag.name}</option>)}</select><input name="reviewNote" placeholder="Final governance note"/><label><input type="checkbox" name="duplicateReviewed" value="true"/> Final duplicate check completed</label><button type="submit">Approve as new canonical Problem</button>
-                    </form>
+                  {current?.role === 'SYSTEM_ADMIN' &&
+                    item.status !== 'APPROVED_NEW' && (
+                      <form
+                        className="quick-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const form = event.currentTarget;
+                          const data = new FormData(form);
+                          const body: Record<string, unknown> =
+                            Object.fromEntries(data);
+                          body.tags = data.getAll('tags');
+                          body.duplicateReviewed =
+                            data.get('duplicateReviewed') === 'true';
+                          void fetch(
+                            `/api/problem-submissions/${item.trackingId}/convert`,
+                            {
+                              method: 'POST',
+                              headers: { 'content-type': 'application/json' },
+                              body: JSON.stringify(body),
+                            },
+                          ).then(async (response) => {
+                            const result = (await response.json()) as {
+                              error?: string;
+                            };
+                            if (!response.ok)
+                              window.alert(
+                                result.error ||
+                                  'Unable to approve as a new canonical Problem.',
+                              );
+                            else window.location.reload();
+                          });
+                        }}
+                      >
+                        <strong>
+                          System final review — approve as new canonical Problem
+                        </strong>
+                        <input
+                          name="title"
+                          defaultValue={item.title}
+                          required
+                        />
+                        <textarea
+                          name="description"
+                          defaultValue={item.description}
+                          required
+                        />
+                        <textarea
+                          name="detailedDescription"
+                          defaultValue={item.description}
+                          required
+                        />
+                        <textarea
+                          name="problemStatement"
+                          defaultValue={item.description}
+                          required
+                        />
+                        <select name="category" defaultValue={item.category}>
+                          {[
+                            'Navigation',
+                            'Autonomy / Control',
+                            'RF / Communications',
+                            'Identification / Sensing',
+                            'Guidance',
+                            'RF / Signature Management',
+                            'Uncategorized',
+                          ].map((value) => (
+                            <option key={value}>{value}</option>
+                          ))}
+                        </select>
+                        <select name="priority" defaultValue="Unprioritized">
+                          {[
+                            'Unprioritized',
+                            'Low',
+                            'Medium',
+                            'High',
+                            'Critical',
+                          ].map((value) => (
+                            <option key={value}>{value}</option>
+                          ))}
+                        </select>
+                        <select name="stewardUserId">
+                          <option value="">No steward yet</option>
+                          {projectDirectoryUsers
+                            .filter((person) => person.status === 'ACTIVE')
+                            .map((person) => (
+                              <option key={person.id} value={person.id}>
+                                {person.displayName}
+                              </option>
+                            ))}
+                        </select>
+                        <select name="tags" multiple>
+                          {data.tagInventory.map((tag) => (
+                            <option key={tag.id}>{tag.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          name="reviewNote"
+                          placeholder="Final governance note"
+                        />
+                        <label>
+                          <input
+                            type="checkbox"
+                            name="duplicateReviewed"
+                            value="true"
+                          />{' '}
+                          Final duplicate check completed
+                        </label>
+                        <button type="submit">
+                          Approve as new canonical Problem
+                        </button>
+                      </form>
+                    )}
+                  {item.reviews.length > 0 && (
+                    <details>
+                      <summary>Review history ({item.reviews.length})</summary>
+                      {item.reviews.map((review) => (
+                        <p key={`${review.createdAt}-${review.stage}`}>
+                          <strong>{review.stage.replaceAll('_', ' ')}</strong> ·{' '}
+                          {review.decision.replaceAll('_', ' ')} ·{' '}
+                          {review.reviewer} ·{' '}
+                          {new Date(review.createdAt).toLocaleString()}
+                          {review.note ? ` — ${review.note}` : ''}
+                        </p>
+                      ))}
+                    </details>
                   )}
-                  {item.reviews.length > 0 && <details><summary>Review history ({item.reviews.length})</summary>{item.reviews.map((review) => <p key={`${review.createdAt}-${review.stage}`}><strong>{review.stage.replaceAll('_',' ')}</strong> · {review.decision.replaceAll('_',' ')} · {review.reviewer} · {new Date(review.createdAt).toLocaleString()}{review.note ? ` — ${review.note}` : ''}</p>)}</details>}
                 </div>
               ))}
             </div>
@@ -2905,8 +4709,16 @@ function AdministrationView() {
       </div>
       <section className="panel" id="unit-administration">
         <h2>Unit administration</h2>
-        {current?.role === 'SYSTEM_ADMIN' && !projectDirectoryUsers.some((person) => person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN') &&
-          <p className="form-warning">Create and activate an eligible Unit Administrator before assigning recovery scope.</p>}
+        {current?.role === 'SYSTEM_ADMIN' &&
+          !projectDirectoryUsers.some(
+            (person) =>
+              person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN',
+          ) && (
+            <p className="form-warning">
+              Create and activate an eligible Unit Administrator before
+              assigning recovery scope.
+            </p>
+          )}
         {scopedUnits.length ? (
           <div className="stack-list">
             {scopedUnits.map((unit) => (
@@ -2921,16 +4733,47 @@ function AdministrationView() {
                     className="secondary"
                     onClick={() => {
                       if (unit.isActive) {
-                        const activeStatuses = ['Planning','Active','Paused','Transitioning'];
-                        const led = data.projects.filter((project) => project.unitId === unit.id && activeStatuses.includes(project.status));
-                        const supported = data.projects.filter((project) => project.unitId !== unit.id && project.units.some((link) => link.id === unit.id) && activeStatuses.includes(project.status));
-                        const activeUsers = directoryUsers.filter((person) => person.status === 'ACTIVE' && person.primaryUnit === unit.name);
-                        const admins = directoryUsers.filter((person) => person.status === 'ACTIVE' && person.administeredUnitIds.includes(unit.dbId));
-                        const openHelp = data.helpRequests.filter((request) => request.unitName === unit.name).length;
+                        const activeStatuses = [
+                          'Planning',
+                          'Active',
+                          'Paused',
+                          'Transitioning',
+                        ];
+                        const led = data.projects.filter(
+                          (project) =>
+                            project.unitId === unit.id &&
+                            activeStatuses.includes(project.status),
+                        );
+                        const supported = data.projects.filter(
+                          (project) =>
+                            project.unitId !== unit.id &&
+                            project.units.some((link) => link.id === unit.id) &&
+                            activeStatuses.includes(project.status),
+                        );
+                        const activeUsers = directoryUsers.filter(
+                          (person) =>
+                            person.status === 'ACTIVE' &&
+                            person.primaryUnit === unit.name,
+                        );
+                        const admins = directoryUsers.filter(
+                          (person) =>
+                            person.status === 'ACTIVE' &&
+                            person.administeredUnitIds.includes(unit.dbId),
+                        );
+                        const openHelp = data.helpRequests.filter(
+                          (request) => request.unitName === unit.name,
+                        ).length;
                         const impact = `${led.length} active led Projects; ${supported.length} active supported Projects; ${activeUsers.length} active primary users; ${admins.length} active Unit Administrators; ${openHelp} open Help Requests.`;
-                        if (!window.confirm(`Deactivate ${unit.name}?\n\n${impact}\n\nLed nonterminal Projects will block this action. Historical relationships will remain.`)) return;
+                        if (
+                          !window.confirm(
+                            `Deactivate ${unit.name}?\n\n${impact}\n\nLed nonterminal Projects will block this action. Historical relationships will remain.`,
+                          )
+                        )
+                          return;
                       }
-                      void patch(`/api/admin/units/${unit.dbId}`, { isActive: !unit.isActive });
+                      void patch(`/api/admin/units/${unit.dbId}`, {
+                        isActive: !unit.isActive,
+                      });
                     }}
                   >
                     {unit.isActive ? 'Mark inactive' : 'Mark active'}
@@ -2960,8 +4803,13 @@ function AdministrationView() {
                     (signal) =>
                       signal.kind === 'NO_ACTIVE_UNIT_ADMIN' &&
                       signal.unitId === unit.dbId,
-                  ) && (
-                    projectDirectoryUsers.some((person) => person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN') ? <form
+                  ) &&
+                  (projectDirectoryUsers.some(
+                    (person) =>
+                      person.status === 'ACTIVE' &&
+                      person.role !== 'SYSTEM_ADMIN',
+                  ) ? (
+                    <form
                       className="quick-form"
                       onSubmit={(event) => {
                         event.preventDefault();
@@ -2977,7 +4825,11 @@ function AdministrationView() {
                     >
                       <select name="userId">
                         {projectDirectoryUsers
-                          .filter((person) => person.status === 'ACTIVE' && person.role !== 'SYSTEM_ADMIN')
+                          .filter(
+                            (person) =>
+                              person.status === 'ACTIVE' &&
+                              person.role !== 'SYSTEM_ADMIN',
+                          )
                           .map((person) => (
                             <option key={person.id} value={person.id}>
                               {person.displayName}
@@ -2987,8 +4839,8 @@ function AdministrationView() {
                       <button className="secondary" type="submit">
                         Assign recovery administrator
                       </button>
-                    </form> : null
-                  )}
+                    </form>
+                  ) : null)}
               </div>
             ))}
           </div>

@@ -67,6 +67,7 @@ export type PortalProject = {
   keyAdvantage: string;
   keyLimitation: string;
   latestResult: string;
+  leadUnitTransferPending: boolean;
   createdByUserId: number | null;
   createdByName: string;
   team: {
@@ -117,6 +118,7 @@ export type PortalProject = {
     maturityEvidenceReference: string;
   }[];
   lessons: {
+    dbId: number;
     id: string;
     title: string;
     finding: string;
@@ -127,6 +129,7 @@ export type PortalProject = {
     phaseName: string;
     authorName: string;
     sourceUpdateId: number | null;
+    knowledgeStatus: string;
   }[];
   repositories: {
     id: number;
@@ -138,6 +141,7 @@ export type PortalProject = {
     documentationLabel: string;
     includeInAiHandoff: boolean;
     phaseName: string;
+    accessInstructions: string;
   }[];
   vendor: null | {
     vendorName: string;
@@ -200,7 +204,19 @@ export type PortalProblem = {
   stewardStatus: string;
   supersededById: string;
   supersededByTitle: string;
-  relationships: { direction: 'OUTGOING' | 'INCOMING'; type: string; problemId: string; title: string }[];
+  relationships: {
+    direction: 'OUTGOING' | 'INCOMING';
+    type: string;
+    problemId: string;
+    title: string;
+  }[];
+  governanceHistory: {
+    id: number;
+    eventType: string;
+    description: string;
+    actor: string;
+    timestamp: string;
+  }[];
 };
 
 export type PortalUnit = {
@@ -241,6 +257,11 @@ export type PortalData = {
     unitName: string;
     projectId: string;
     projectName: string;
+    problemId: string;
+    problemName: string;
+    entityType: string;
+    entityId: string;
+    entityHref: string;
   }[];
   helpRequests: {
     id: number;
@@ -413,7 +434,13 @@ export type PortalData = {
     unitId: number | null;
     createdAt: string;
     relatedProblemId: string;
-    reviews: { stage: string; decision: string; note: string; reviewer: string; createdAt: string }[];
+    reviews: {
+      stage: string;
+      decision: string;
+      note: string;
+      reviewer: string;
+      createdAt: string;
+    }[];
     matches: {
       dbId?: number;
       id: string;
@@ -426,6 +453,23 @@ export type PortalData = {
       reasons: string[];
     }[];
   }[];
-  tagInventory: { id: number; name: string; usageCount: number }[];
-  locations: { id: number; name: string; region: string }[];
+  tagInventory: {
+    id: number;
+    name: string;
+    usageCount: number;
+    problems: string[];
+    projects: string[];
+    units: string[];
+    lessons: string[];
+  }[];
+  locations: {
+    id: number;
+    name: string;
+    region: string;
+    latitude: number;
+    longitude: number;
+    units: string[];
+    projects: string[];
+    problems: string[];
+  }[];
 };

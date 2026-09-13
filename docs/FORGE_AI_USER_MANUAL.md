@@ -45,6 +45,14 @@ Problem priorities are Unprioritized, Low, Medium, High, and Critical. Lifecycle
 
 Final approval of a submission as a new canonical Problem is atomic. FORGE performs a final duplicate check, creates the new Problem, links the unchanged source submission, records the System final decision, and adds Activity provenance together. Earlier Unit review is retained as a separate review-history stage. Linking to an existing Problem and duplicate disposition remain available when new canonical creation is not appropriate.
 
+System Administrators may consolidate one canonical Problem into another without deleting the source PRB. The source becomes a searchable historical record pointing to the current canonical Problem; its submissions, prior Project links, relationships, and governance Activity remain attributable. Optional destination Project association adds only missing non-primary links. Self-reference and supersession cycles are rejected.
+
+Tag governance shows usage by Problems, Projects, Units, and Lessons. Rename retains relationships; confirmed merge moves each source relationship to the destination without duplicate junctions, records affected usage, then retires the source Tag. Approved general Locations show their referencing records and support duplicate-aware correction. Lesson and artifact corrections preserve original creator attribution and information-access boundaries; Lessons may be Withdrawn, Superseded, or Archived rather than deleted.
+
+A Lead Unit change takes effect immediately and generates a receiving-Unit review advisory. The receiving Unit Administrator acknowledges the transfer after reviewing the Project; the Project remains usable throughout. Administrative Activity supports actor, category, Unit, Project, Problem, action-type, date, and text filters with affected-record navigation.
+
+See `docs/DEPLOYMENT_RUNBOOK.md` for trusted identity mapping, System Administrator succession, bootstrap retirement, local SQLite backup/restore, seed warnings, PostgreSQL/file-storage handoff, and the deployment checklist.
+
 Parent-command inheritance, receiving-Unit transfer acknowledgment, Unit-level AI handoff, external notifications, advanced analytics, reminders, and portfolio export remain future enhancements for consideration after the controlled pilot.
 
 Contributors submit potential Problems into a review queue rather than directly editing canonical Problems. Reviewers may accept and link a submission, associate it with existing work as a duplicate, or reject it. Project Users can create solution efforts and edit only created/assigned work. System Administrators have global scope. UI controls reflect these rules, but server mutations are the enforcement boundary.

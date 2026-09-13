@@ -258,75 +258,77 @@ model ProblemRelationship {
 }
 
 model Project {
-  id                            Int                       @id @default(autoincrement())
-  trackingId                    String                    @unique
-  name                          String
-  executiveSummary              String
-  detailedDescription           String
-  solutionApproach              String
-  solutionType                  SolutionType              @default(ORGANIC_DEVELOPMENT)
-  documentationAvailability     DocumentationAvailability @default(AVAILABLE_IN_FORGE)
-  executiveSummaryPlainLanguage String?
-  problemPlainLanguage          String?
-  solutionPlainLanguage         String?
-  impactPlainLanguage           String?
-  aiContextNotes                String?
-  scope                         String?
-  outOfScope                    String?
-  intendedUsers                 String?
-  successCriteria               String?
-  constraints                   String?
-  assumptions                   String?
-  architectureSummary           String?
-  methodologySummary            String?
-  decisionsSummary              String?
-  openIssues                    String?
-  nextStep                      String?
-  keyRisk                       String?
-  leadershipAction              String?
-  originatorContact             String?
-  accessInstructions            String?
-  status                        String
-  maturity                      String
-  completion                    Int
-  outcome                       String?
-  outcomeDisposition            ProjectOutcome?
-  finalResult                   String?
-  whatWorked                    String?
-  whatDidNotWork                String?
-  recommendedNextAction         String?
-  closedAt                      DateTime?
-  closedByUserId                Int?
-  closedBy                      User?                     @relation("ProjectCloser", fields: [closedByUserId], references: [id])
-  successorProjectId            Int?
-  successorProject              Project?                  @relation("ProjectSuccessor", fields: [successorProjectId], references: [id])
-  supersededProjects            Project[]                 @relation("ProjectSuccessor")
-  keyAdvantage                  String?
-  keyLimitation                 String?
-  latestResult                  String?
-  startDate                     DateTime
-  expectedCompletionDate        DateTime?
-  createdAt                     DateTime                  @default(now())
-  updatedAt                     DateTime                  @updatedAt
-  lastMeaningfulActivityAt      DateTime?
-  leadUnitId                    Int
-  leadUnit                      Unit                      @relation("LeadUnit", fields: [leadUnitId], references: [id])
-  problemLinks                  ProblemProject[]
-  unitLinks                     ProjectUnit[]
-  tags                          ProjectTag[]
-  locations                     ProjectLocation[]
-  phases                        ProjectPhase[]
-  lessons                       LessonLearned[]
-  repositories                  RepositoryLink[]
-  activities                    ActivityEvent[]
-  helpRequests                  HelpRequest[]
-  vendorDetail                  VendorDetail?
-  tacticDetail                  TacticDetail?
-  trainingDetail                TrainingDetail?
-  createdByUserId               Int?
-  createdBy                     User?                     @relation("ProjectCreator", fields: [createdByUserId], references: [id])
-  userMemberships               ProjectMembership[]
-  updates                       ProjectUpdate[]
+  id                             Int                       @id @default(autoincrement())
+  trackingId                     String                    @unique
+  name                           String
+  executiveSummary               String
+  detailedDescription            String
+  solutionApproach               String
+  solutionType                   SolutionType              @default(ORGANIC_DEVELOPMENT)
+  documentationAvailability      DocumentationAvailability @default(AVAILABLE_IN_FORGE)
+  executiveSummaryPlainLanguage  String?
+  problemPlainLanguage           String?
+  solutionPlainLanguage          String?
+  impactPlainLanguage            String?
+  aiContextNotes                 String?
+  scope                          String?
+  outOfScope                     String?
+  intendedUsers                  String?
+  successCriteria                String?
+  constraints                    String?
+  assumptions                    String?
+  architectureSummary            String?
+  methodologySummary             String?
+  decisionsSummary               String?
+  openIssues                     String?
+  nextStep                       String?
+  keyRisk                        String?
+  leadershipAction               String?
+  originatorContact              String?
+  accessInstructions             String?
+  status                         String
+  maturity                       String
+  completion                     Int
+  outcome                        String?
+  outcomeDisposition             ProjectOutcome?
+  finalResult                    String?
+  whatWorked                     String?
+  whatDidNotWork                 String?
+  recommendedNextAction          String?
+  closedAt                       DateTime?
+  closedByUserId                 Int?
+  closedBy                       User?                     @relation("ProjectCloser", fields: [closedByUserId], references: [id])
+  successorProjectId             Int?
+  successorProject               Project?                  @relation("ProjectSuccessor", fields: [successorProjectId], references: [id])
+  supersededProjects             Project[]                 @relation("ProjectSuccessor")
+  keyAdvantage                   String?
+  keyLimitation                  String?
+  latestResult                   String?
+  startDate                      DateTime
+  expectedCompletionDate         DateTime?
+  createdAt                      DateTime                  @default(now())
+  updatedAt                      DateTime                  @updatedAt
+  lastMeaningfulActivityAt       DateTime?
+  leadUnitTransferPending        Boolean                   @default(false)
+  leadUnitTransferAcknowledgedAt DateTime?
+  leadUnitId                     Int
+  leadUnit                       Unit                      @relation("LeadUnit", fields: [leadUnitId], references: [id])
+  problemLinks                   ProblemProject[]
+  unitLinks                      ProjectUnit[]
+  tags                           ProjectTag[]
+  locations                      ProjectLocation[]
+  phases                         ProjectPhase[]
+  lessons                        LessonLearned[]
+  repositories                   RepositoryLink[]
+  activities                     ActivityEvent[]
+  helpRequests                   HelpRequest[]
+  vendorDetail                   VendorDetail?
+  tacticDetail                   TacticDetail?
+  trainingDetail                 TrainingDetail?
+  createdByUserId                Int?
+  createdBy                      User?                     @relation("ProjectCreator", fields: [createdByUserId], references: [id])
+  userMemberships                ProjectMembership[]
+  updates                        ProjectUpdate[]
 }
 
 model ProjectMembership {
@@ -552,6 +554,7 @@ model LessonLearned {
   createdBy       User?          @relation("LessonAuthor", fields: [createdByUserId], references: [id])
   sourceUpdateId  Int?
   sourceUpdate    ProjectUpdate? @relation(fields: [sourceUpdateId], references: [id])
+  knowledgeStatus String         @default("ACTIVE")
 }
 
 model RepositoryLink {
@@ -567,6 +570,7 @@ model RepositoryLink {
   createdByUserId           Int?
   phaseId                   Int?
   phase                     ProjectPhase?             @relation(fields: [phaseId], references: [id])
+  accessInstructions        String?
 }
 
 model ActivityEvent {
@@ -587,6 +591,9 @@ model ActivityEvent {
   subjectUser     User?          @relation("ActivitySubject", fields: [subjectUserId], references: [id])
   projectUpdateId Int?           @unique
   projectUpdate   ProjectUpdate? @relation(fields: [projectUpdateId], references: [id], onDelete: SetNull)
+  entityType      String?
+  entityId        String?
+  entityHref      String?
 }
 
 model HelpRequest {

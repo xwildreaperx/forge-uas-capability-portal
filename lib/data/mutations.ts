@@ -99,11 +99,19 @@ export const PROBLEM_STATUSES = [
   'Superseded',
 ] as const;
 export const PROBLEM_PRIORITIES = [
-  'Unprioritized', 'Low', 'Medium', 'High', 'Critical',
+  'Unprioritized',
+  'Low',
+  'Medium',
+  'High',
+  'Critical',
 ] as const;
 export const PROBLEM_CATEGORIES = [
-  'Navigation', 'Autonomy / Control', 'RF / Communications',
-  'Identification / Sensing', 'Guidance', 'RF / Signature Management',
+  'Navigation',
+  'Autonomy / Control',
+  'RF / Communications',
+  'Identification / Sensing',
+  'Guidance',
+  'RF / Signature Management',
   'Uncategorized',
 ] as const;
 const controlled = <T extends readonly string[]>(
@@ -155,10 +163,23 @@ export async function createProblem(
   const actor = requirePermission(user, 'platform:admin');
   const title = requiredString(input.title, 'Title');
   const description = requiredString(input.description, 'Executive summary');
-  const detailedDescription = requiredString(input.detailedDescription, 'Detailed description');
-  const problemStatement = requiredString(input.problemStatement, 'Problem statement');
-  const matches = await detectRelatedProblems({ title, description, category: typeof input.category === 'string' ? input.category : '' });
-  if (matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') && input.duplicateReviewed !== true)
+  const detailedDescription = requiredString(
+    input.detailedDescription,
+    'Detailed description',
+  );
+  const problemStatement = requiredString(
+    input.problemStatement,
+    'Problem statement',
+  );
+  const matches = await detectRelatedProblems({
+    title,
+    description,
+    category: typeof input.category === 'string' ? input.category : '',
+  });
+  if (
+    matches.some((match) => match.classification === 'POSSIBLE_DUPLICATE') &&
+    input.duplicateReviewed !== true
+  )
     throw new ProblemMatchReviewRequired(matches);
   return db.$transaction(async (tx) => {
     const trackingId = await nextTrackingId(tx, 'Problem');
@@ -170,15 +191,31 @@ export async function createProblem(
         detailedDescription,
         problemStatement,
         impact: optional(input.impact),
-        category: controlled(input.category || 'Uncategorized', PROBLEM_CATEGORIES, 'Category'),
-        priority: controlled(input.priority || 'Unprioritized', PROBLEM_PRIORITIES, 'Priority'),
+        category: controlled(
+          input.category || 'Uncategorized',
+          PROBLEM_CATEGORIES,
+          'Category',
+        ),
+        priority: controlled(
+          input.priority || 'Unprioritized',
+          PROBLEM_PRIORITIES,
+          'Priority',
+        ),
         status: controlled(input.status || 'Open', PROBLEM_STATUSES, 'Status'),
         stewardUserId: optionalNumber(input.stewardUserId),
         dateIdentified: new Date(),
         tags: { create: await governedTagConnections(tx, input.tags) },
       },
     });
-    await tx.activityEvent.create({ data: { eventType: 'PROBLEM_CREATED', description: `${trackingId} canonical Problem created: ${title}.`, actor: actor.displayName, userId: actor.id, problemId: problem.id } });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'PROBLEM_CREATED',
+        description: `${trackingId} canonical Problem created: ${title}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        problemId: problem.id,
+      },
+    });
     return problem;
   });
 }
@@ -189,32 +226,145 @@ export async function updateProblem(
   input: Record<string, unknown>,
 ) {
   const actor = requirePermission(user, 'platform:admin');
-  const existing = await db.problem.findUniqueOrThrow({ where: { trackingId: id } });
-  const status = input.status === undefined ? existing.status : controlled(input.status, PROBLEM_STATUSES, 'Status');
-  const supersededById = input.supersededById === undefined ? existing.supersededById : optionalNumber(input.supersededById);
-  if (status === 'Superseded' && !supersededById) throw new Error('A superseded Problem must identify its canonical successor.');
-  if (supersededById === existing.id) throw new Error('A Problem cannot supersede itself.');
+  const existing = await db.problem.findUniqueOrThrow({
+    where: { trackingId: id },
+  });
+  const status =
+    input.status === undefined
+      ? existing.status
+      : controlled(input.status, PROBLEM_STATUSES, 'Status');
+  const supersededById =
+    input.supersededById === undefined
+      ? existing.supersededById
+      : optionalNumber(input.supersededById);
+  if (status === 'Superseded' && !supersededById)
+    throw new Error(
+      'A superseded Problem must identify its canonical successor.',
+    );
+  if (supersededById === existing.id)
+    throw new Error('A Problem cannot supersede itself.');
+  if (supersededById) {
+    let cursor: number | null = supersededById;
+    const visited = new Set<number>();
+    while (cursor) {
+      if (cursor === existing.id)
+        throw new Error('Problem supersession cannot create a cycle.');
+      if (visited.has(cursor))
+        throw new Error(
+          'The selected successor already belongs to an invalid supersession cycle.',
+        );
+      visited.add(cursor);
+      cursor =
+        (
+          await db.problem.findUnique({
+            where: { id: cursor },
+            select: { supersededById: true },
+          })
+        )?.supersededById ?? null;
+    }
+  }
+  const changes = [
+    typeof input.title === 'string' && input.title !== existing.title
+      ? `Title: ${existing.title} → ${input.title}`
+      : '',
+    typeof input.priority === 'string' && input.priority !== existing.priority
+      ? `Priority: ${existing.priority} → ${input.priority}`
+      : '',
+    status !== existing.status ? `Status: ${existing.status} → ${status}` : '',
+    typeof input.category === 'string' && input.category !== existing.category
+      ? `Category: ${existing.category} → ${input.category}`
+      : '',
+    input.stewardUserId !== undefined &&
+    optionalNumber(input.stewardUserId) !== existing.stewardUserId
+      ? 'Steward changed'
+      : '',
+    input.problemStatement !== undefined &&
+    input.problemStatement !== existing.problemStatement
+      ? 'Problem statement refined'
+      : '',
+    input.tags !== undefined ? 'Tags updated' : '',
+  ].filter(Boolean);
   return db.$transaction(async (tx) => {
-    const updated = await tx.problem.update({ where: { trackingId: id }, data: {
-      title: input.title === undefined ? undefined : requiredString(input.title, 'Title'),
-      shortDescription: input.description === undefined ? undefined : requiredString(input.description, 'Executive summary'),
-      detailedDescription: input.detailedDescription === undefined ? undefined : requiredString(input.detailedDescription, 'Detailed description'),
-      problemStatement: input.problemStatement === undefined ? undefined : requiredString(input.problemStatement, 'Problem statement'),
-      impact: input.impact === undefined ? undefined : optional(input.impact),
-      category: input.category === undefined ? undefined : controlled(input.category, PROBLEM_CATEGORIES, 'Category'),
-      priority: input.priority === undefined ? undefined : controlled(input.priority, PROBLEM_PRIORITIES, 'Priority'),
-      status, stewardUserId: input.stewardUserId === undefined ? undefined : optionalNumber(input.stewardUserId), supersededById,
-      tags: input.tags === undefined ? undefined : { deleteMany: {}, create: await governedTagConnections(tx, input.tags) },
-    }});
-    await tx.activityEvent.create({ data: { eventType: 'PROBLEM_UPDATED', description: `${id} canonical Problem governance fields updated.`, actor: actor.displayName, userId: actor.id, problemId: existing.id } });
+    const updated = await tx.problem.update({
+      where: { trackingId: id },
+      data: {
+        title:
+          input.title === undefined
+            ? undefined
+            : requiredString(input.title, 'Title'),
+        shortDescription:
+          input.description === undefined
+            ? undefined
+            : requiredString(input.description, 'Executive summary'),
+        detailedDescription:
+          input.detailedDescription === undefined
+            ? undefined
+            : requiredString(input.detailedDescription, 'Detailed description'),
+        problemStatement:
+          input.problemStatement === undefined
+            ? undefined
+            : requiredString(input.problemStatement, 'Problem statement'),
+        impact: input.impact === undefined ? undefined : optional(input.impact),
+        category:
+          input.category === undefined
+            ? undefined
+            : controlled(input.category, PROBLEM_CATEGORIES, 'Category'),
+        priority:
+          input.priority === undefined
+            ? undefined
+            : controlled(input.priority, PROBLEM_PRIORITIES, 'Priority'),
+        status,
+        stewardUserId:
+          input.stewardUserId === undefined
+            ? undefined
+            : optionalNumber(input.stewardUserId),
+        supersededById,
+        tags:
+          input.tags === undefined
+            ? undefined
+            : {
+                deleteMany: {},
+                create: await governedTagConnections(tx, input.tags),
+              },
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType:
+          status === 'Closed'
+            ? 'PROBLEM_CLOSED'
+            : existing.status === 'Closed' && status === 'Open'
+              ? 'PROBLEM_REOPENED'
+              : 'PROBLEM_UPDATED',
+        description: `${id}: ${changes.join('; ') || 'canonical governance metadata updated'}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        problemId: existing.id,
+        entityType: 'PROBLEM',
+        entityId: id,
+        entityHref: `/problems/${id}`,
+      },
+    });
     return updated;
   });
 }
 
-async function governedTagConnections(tx: Prisma.TransactionClient, value: unknown) {
-  const names = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean) : [];
-  const tags = await tx.tag.findMany({ where: { name: { in: names } }, select: { id: true, name: true } });
-  if (tags.length !== new Set(names).size) throw new Error('Select only tags from the governed tag inventory.');
+async function governedTagConnections(
+  tx: Prisma.TransactionClient,
+  value: unknown,
+) {
+  const names = Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+  const tags = await tx.tag.findMany({
+    where: { name: { in: names } },
+    select: { id: true, name: true },
+  });
+  if (tags.length !== new Set(names).size)
+    throw new Error('Select only tags from the governed tag inventory.');
   return tags.map((tag) => ({ tagId: tag.id }));
 }
 
@@ -959,17 +1109,29 @@ export async function updateProjectRelationships(
     }
     await tx.project.update({
       where: { id: projectId },
-      data: { leadUnitId, lastMeaningfulActivityAt: occurredAt },
+      data: {
+        leadUnitId,
+        lastMeaningfulActivityAt: occurredAt,
+        leadUnitTransferPending:
+          project.leadUnitId !== leadUnitId ? true : undefined,
+        leadUnitTransferAcknowledgedAt:
+          project.leadUnitId !== leadUnitId ? null : undefined,
+      },
     });
     await tx.activityEvent.createMany({
       data: descriptions.map((description) => ({
         timestamp: occurredAt,
-        eventType: 'PROJECT_RELATIONSHIP_CHANGED',
+        eventType: description.startsWith('Lead Unit changed')
+          ? 'LEAD_UNIT_TRANSFERRED'
+          : 'PROJECT_RELATIONSHIP_CHANGED',
         description,
         actor: actor.displayName,
         projectId,
         unitId: leadUnitId,
         userId: actor.id,
+        entityType: 'PROJECT',
+        entityId: project.trackingId,
+        entityHref: `/projects/${project.trackingId}`,
       })),
     });
     return tx.project.findUniqueOrThrow({ where: { id: projectId } });
@@ -1304,6 +1466,7 @@ export async function addRepository(
             : true,
         createdByUserId: actor.id,
         phaseId,
+        accessInstructions: optional(input.accessInstructions),
       },
     });
     await tx.project.update({
@@ -1388,11 +1551,71 @@ export async function updateHelpRequest(
   const request = await db.helpRequest.findFirstOrThrow({
     where: { id: helpRequestId, projectId },
   });
+  if (
+    actor.role === 'SYSTEM_ADMIN' &&
+    ['category', 'contact', 'resolutionSummary'].some(
+      (key) => input[key] !== undefined,
+    )
+  ) {
+    const status =
+      input.status === undefined
+        ? request.status
+        : controlled(input.status, HELP_STATUSES, 'Help Request status');
+    const occurredAt = new Date();
+    return db.$transaction(async (tx) => {
+      const updated = await tx.helpRequest.update({
+        where: { id: helpRequestId },
+        data: {
+          category:
+            input.category === undefined
+              ? undefined
+              : controlled(
+                  input.category,
+                  HELP_CATEGORIES,
+                  'Help Request category',
+                ),
+          status,
+          contact:
+            input.contact === undefined ? undefined : optional(input.contact),
+          contactUserId: input.contact !== undefined ? null : undefined,
+          followsProjectLead: input.contact !== undefined ? false : undefined,
+          resolutionSummary:
+            input.resolutionSummary === undefined
+              ? undefined
+              : optional(input.resolutionSummary),
+          resolvedAt: ['RESOLVED', 'CANCELLED'].includes(status)
+            ? (request.resolvedAt ?? occurredAt)
+            : null,
+          resolvedByUserId: ['RESOLVED', 'CANCELLED'].includes(status)
+            ? actor.id
+            : null,
+        },
+      });
+      await tx.activityEvent.create({
+        data: {
+          eventType: 'HELP_REQUEST_ADMIN_CORRECTED',
+          description: `Administrative metadata correction recorded for Help Request: ${request.title}. Original request content retained.`,
+          actor: actor.displayName,
+          userId: actor.id,
+          projectId,
+          unitId: project.leadUnitId,
+          entityType: 'HELP_REQUEST',
+          entityId: String(request.id),
+          entityHref: `/projects/${project.trackingId}`,
+        },
+      });
+      return updated;
+    });
+  }
   if (input.contactUserId !== undefined) {
     if (request.followsProjectLead)
-      throw new Error('Lead-following contacts change through Project Lead reassignment.');
+      throw new Error(
+        'Lead-following contacts change through Project Lead reassignment.',
+      );
     const contactUserId = Number(input.contactUserId);
-    const nextContact = await db.user.findUniqueOrThrow({ where: { id: contactUserId } });
+    const nextContact = await db.user.findUniqueOrThrow({
+      where: { id: contactUserId },
+    });
     if (nextContact.status !== 'ACTIVE')
       throw new Error('Select an active Help Request contact.');
     if (request.contactUserId === nextContact.id)
@@ -1404,15 +1627,28 @@ export async function updateHelpRequest(
     return db.$transaction(async (tx) => {
       const updated = await tx.helpRequest.update({
         where: { id: helpRequestId },
-        data: { contactUserId: nextContact.id, contact: nextContact.identifier, followsProjectLead: false },
+        data: {
+          contactUserId: nextContact.id,
+          contact: nextContact.identifier,
+          followsProjectLead: false,
+        },
       });
-      await tx.project.update({ where: { id: projectId }, data: { lastMeaningfulActivityAt: occurredAt } });
-      await tx.activityEvent.create({ data: {
-        timestamp: occurredAt, eventType: 'HELP_REQUEST_CONTACT_CHANGED',
-        description: `Help Request contact changed from ${previous?.displayName ?? request.contact ?? 'unassigned'} to ${nextContact.displayName}: ${request.title}.`,
-        actor: actor.displayName, projectId, unitId: project.leadUnitId, userId: actor.id,
-        subjectUserId: nextContact.id,
-      } });
+      await tx.project.update({
+        where: { id: projectId },
+        data: { lastMeaningfulActivityAt: occurredAt },
+      });
+      await tx.activityEvent.create({
+        data: {
+          timestamp: occurredAt,
+          eventType: 'HELP_REQUEST_CONTACT_CHANGED',
+          description: `Help Request contact changed from ${previous?.displayName ?? request.contact ?? 'unassigned'} to ${nextContact.displayName}: ${request.title}.`,
+          actor: actor.displayName,
+          projectId,
+          unitId: project.leadUnitId,
+          userId: actor.id,
+          subjectUserId: nextContact.id,
+        },
+      });
       return updated;
     });
   }
@@ -1535,16 +1771,34 @@ export async function reviewProblemSubmission(
       'Accepted or duplicate submissions must link to a canonical Problem.',
     );
   return db.$transaction(async (tx) => {
-    const updated = await tx.problemSubmission.update({ where: { trackingId }, data: {
-      status: status as never, relatedProblemId, reviewerId: actor.id,
-      reviewNote: optional(input.reviewNote), reviewedAt: new Date(),
-    }});
-    await tx.submissionReview.create({ data: {
-      submissionId: submission.id, reviewerId: actor.id,
-      stage: actor.role === 'SYSTEM_ADMIN' ? 'SYSTEM_FINAL' : 'UNIT_REVIEW',
-      decision: status, note: optional(input.reviewNote),
-    }});
-    await tx.activityEvent.create({ data: { eventType: 'SUBMISSION_REVIEWED', description: `${trackingId} review recorded as ${status}.`, actor: actor.displayName, userId: actor.id, unitId: submission.unitId } });
+    const updated = await tx.problemSubmission.update({
+      where: { trackingId },
+      data: {
+        status: status as never,
+        relatedProblemId,
+        reviewerId: actor.id,
+        reviewNote: optional(input.reviewNote),
+        reviewedAt: new Date(),
+      },
+    });
+    await tx.submissionReview.create({
+      data: {
+        submissionId: submission.id,
+        reviewerId: actor.id,
+        stage: actor.role === 'SYSTEM_ADMIN' ? 'SYSTEM_FINAL' : 'UNIT_REVIEW',
+        decision: status,
+        note: optional(input.reviewNote),
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'SUBMISSION_REVIEWED',
+        description: `${trackingId} review recorded as ${status}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        unitId: submission.unitId,
+      },
+    });
     return updated;
   });
 }
@@ -1555,68 +1809,365 @@ export async function convertSubmissionToCanonicalProblem(
   input: Record<string, unknown>,
 ) {
   const actor = requirePermission(user, 'platform:admin');
-  const submission = await db.problemSubmission.findUniqueOrThrow({ where: { trackingId } });
-  if (submission.status === 'APPROVED_NEW') throw new Error('This submission has already been converted.');
+  const submission = await db.problemSubmission.findUniqueOrThrow({
+    where: { trackingId },
+  });
+  if (submission.status === 'APPROVED_NEW')
+    throw new Error('This submission has already been converted.');
   const title = requiredString(input.title ?? submission.title, 'Title');
-  const description = requiredString(input.description ?? submission.description, 'Executive summary');
-  const matches = (await detectRelatedProblems({ title, description, category: typeof input.category === 'string' ? input.category : submission.category }))
-    .filter((match) => match.classification === 'POSSIBLE_DUPLICATE');
-  if (matches.length && input.duplicateReviewed !== true) throw new ProblemMatchReviewRequired(matches);
+  const description = requiredString(
+    input.description ?? submission.description,
+    'Executive summary',
+  );
+  const matches = (
+    await detectRelatedProblems({
+      title,
+      description,
+      category:
+        typeof input.category === 'string'
+          ? input.category
+          : submission.category,
+    })
+  ).filter((match) => match.classification === 'POSSIBLE_DUPLICATE');
+  if (matches.length && input.duplicateReviewed !== true)
+    throw new ProblemMatchReviewRequired(matches);
   return db.$transaction(async (tx) => {
-    const problem = await tx.problem.create({ data: {
-      trackingId: await nextTrackingId(tx, 'Problem'), title, shortDescription: description,
-      detailedDescription: requiredString(input.detailedDescription ?? submission.supportingContext ?? description, 'Detailed description'),
-      problemStatement: requiredString(input.problemStatement ?? description, 'Problem statement'),
-      impact: optional(input.impact ?? submission.operationalImpact),
-      category: controlled(input.category ?? submission.category, PROBLEM_CATEGORIES, 'Category'),
-      priority: controlled(input.priority || 'Unprioritized', PROBLEM_PRIORITIES, 'Priority'),
-      status: controlled(input.status || 'Open', PROBLEM_STATUSES, 'Status'),
-      stewardUserId: optionalNumber(input.stewardUserId), dateIdentified: new Date(),
-      tags: { create: await governedTagConnections(tx, input.tags) },
-    }});
-    await tx.problemSubmission.update({ where: { id: submission.id }, data: { status: 'APPROVED_NEW', relatedProblemId: problem.id, reviewerId: actor.id, reviewNote: optional(input.reviewNote), reviewedAt: new Date() } });
-    await tx.submissionReview.create({ data: { submissionId: submission.id, reviewerId: actor.id, stage: 'SYSTEM_FINAL', decision: 'APPROVED_NEW', note: optional(input.reviewNote) } });
-    await tx.activityEvent.create({ data: { eventType: 'SUBMISSION_CONVERTED', description: `${trackingId} approved as new canonical Problem ${problem.trackingId}; original submission retained.`, actor: actor.displayName, userId: actor.id, problemId: problem.id, unitId: submission.unitId } });
+    const problem = await tx.problem.create({
+      data: {
+        trackingId: await nextTrackingId(tx, 'Problem'),
+        title,
+        shortDescription: description,
+        detailedDescription: requiredString(
+          input.detailedDescription ??
+            submission.supportingContext ??
+            description,
+          'Detailed description',
+        ),
+        problemStatement: requiredString(
+          input.problemStatement ?? description,
+          'Problem statement',
+        ),
+        impact: optional(input.impact ?? submission.operationalImpact),
+        category: controlled(
+          input.category ?? submission.category,
+          PROBLEM_CATEGORIES,
+          'Category',
+        ),
+        priority: controlled(
+          input.priority || 'Unprioritized',
+          PROBLEM_PRIORITIES,
+          'Priority',
+        ),
+        status: controlled(input.status || 'Open', PROBLEM_STATUSES, 'Status'),
+        stewardUserId: optionalNumber(input.stewardUserId),
+        dateIdentified: new Date(),
+        tags: { create: await governedTagConnections(tx, input.tags) },
+      },
+    });
+    await tx.problemSubmission.update({
+      where: { id: submission.id },
+      data: {
+        status: 'APPROVED_NEW',
+        relatedProblemId: problem.id,
+        reviewerId: actor.id,
+        reviewNote: optional(input.reviewNote),
+        reviewedAt: new Date(),
+      },
+    });
+    await tx.submissionReview.create({
+      data: {
+        submissionId: submission.id,
+        reviewerId: actor.id,
+        stage: 'SYSTEM_FINAL',
+        decision: 'APPROVED_NEW',
+        note: optional(input.reviewNote),
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'SUBMISSION_CONVERTED',
+        description: `${trackingId} approved as new canonical Problem ${problem.trackingId}; original submission retained.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        problemId: problem.id,
+        unitId: submission.unitId,
+      },
+    });
     return problem;
   });
 }
 
-export async function setProblemRelationship(user: CurrentUserContext | null, trackingId: string, input: Record<string, unknown>) {
+export async function setProblemRelationship(
+  user: CurrentUserContext | null,
+  trackingId: string,
+  input: Record<string, unknown>,
+) {
   const actor = requirePermission(user, 'platform:admin');
-  const relationship = controlled(input.relationship, ['RELATED_TO', 'VARIANT_OF'] as const, 'Relationship');
+  const relationship = controlled(
+    input.relationship,
+    ['RELATED_TO', 'VARIANT_OF'] as const,
+    'Relationship',
+  );
   const targetId = Number(input.targetProblemId);
   const source = await db.problem.findUniqueOrThrow({ where: { trackingId } });
-  if (source.id === targetId) throw new Error('A Problem cannot relate to itself.');
+  if (source.id === targetId)
+    throw new Error('A Problem cannot relate to itself.');
   await db.problem.findUniqueOrThrow({ where: { id: targetId } });
   return db.$transaction(async (tx) => {
-    const result = input.remove === true
-      ? await tx.problemRelationship.delete({ where: { sourceProblemId_targetProblemId_relationship: { sourceProblemId: source.id, targetProblemId: targetId, relationship } } })
-      : await tx.problemRelationship.upsert({ where: { sourceProblemId_targetProblemId_relationship: { sourceProblemId: source.id, targetProblemId: targetId, relationship } }, update: {}, create: { sourceProblemId: source.id, targetProblemId: targetId, relationship } });
-    await tx.activityEvent.create({ data: { eventType: 'PROBLEM_RELATIONSHIP_UPDATED', description: `${trackingId}: ${relationship} relationship ${input.remove === true ? 'removed' : 'recorded'}.`, actor: actor.displayName, userId: actor.id, problemId: source.id } });
+    const result =
+      input.remove === true
+        ? await tx.problemRelationship.delete({
+            where: {
+              sourceProblemId_targetProblemId_relationship: {
+                sourceProblemId: source.id,
+                targetProblemId: targetId,
+                relationship,
+              },
+            },
+          })
+        : await tx.problemRelationship.upsert({
+            where: {
+              sourceProblemId_targetProblemId_relationship: {
+                sourceProblemId: source.id,
+                targetProblemId: targetId,
+                relationship,
+              },
+            },
+            update: {},
+            create: {
+              sourceProblemId: source.id,
+              targetProblemId: targetId,
+              relationship,
+            },
+          });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'PROBLEM_RELATIONSHIP_UPDATED',
+        description: `${trackingId}: ${relationship} relationship ${input.remove === true ? 'removed' : 'recorded'}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        problemId: source.id,
+      },
+    });
     return result;
   });
 }
 
-export async function createTag(user: CurrentUserContext | null, input: Record<string, unknown>) {
+export async function createTag(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
   const actor = requirePermission(user, 'platform:admin');
   const name = requiredString(input.name, 'Tag name');
-  if (await db.tag.findFirst({ where: { name: { equals: name } } })) throw new Error('That governed tag already exists.');
+  if (await db.tag.findFirst({ where: { name: { equals: name } } }))
+    throw new Error('That governed tag already exists.');
   return db.$transaction(async (tx) => {
     const tag = await tx.tag.create({ data: { name } });
-    await tx.activityEvent.create({ data: { eventType: 'TAG_CREATED', description: `Governed tag created: ${name}.`, actor: actor.displayName, userId: actor.id } });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'TAG_CREATED',
+        description: `Governed tag created: ${name}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+      },
+    });
     return tag;
   });
 }
 
-export async function renameTag(user: CurrentUserContext | null, tagId: number, input: Record<string, unknown>) {
+export async function renameTag(
+  user: CurrentUserContext | null,
+  tagId: number,
+  input: Record<string, unknown>,
+) {
   const actor = requirePermission(user, 'platform:admin');
   const name = requiredString(input.name, 'Tag name');
   const prior = await db.tag.findUniqueOrThrow({ where: { id: tagId } });
-  if (await db.tag.findFirst({ where: { name: { equals: name }, id: { not: tagId } } })) throw new Error('That governed tag already exists.');
+  if (
+    await db.tag.findFirst({
+      where: { name: { equals: name }, id: { not: tagId } },
+    })
+  )
+    throw new Error('That governed tag already exists.');
   return db.$transaction(async (tx) => {
     const tag = await tx.tag.update({ where: { id: tagId }, data: { name } });
-    await tx.activityEvent.create({ data: { eventType: 'TAG_RENAMED', description: `Governed tag renamed from ${prior.name} to ${name}; linked records retained.`, actor: actor.displayName, userId: actor.id } });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'TAG_RENAMED',
+        description: `Governed tag renamed from ${prior.name} to ${name}; linked records retained.`,
+        actor: actor.displayName,
+        userId: actor.id,
+      },
+    });
     return tag;
+  });
+}
+
+export async function consolidateProblem(
+  user: CurrentUserContext | null,
+  sourceTrackingId: string,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'platform:admin');
+  const targetProblemId = Number(input.targetProblemId);
+  const source = await db.problem.findUniqueOrThrow({
+    where: { trackingId: sourceTrackingId },
+    include: { projectLinks: true },
+  });
+  if (source.id === targetProblemId)
+    throw new Error('A Problem cannot be consolidated into itself.');
+  const target = await db.problem.findUniqueOrThrow({
+    where: { id: targetProblemId },
+  });
+  let cursor: number | null = target.id;
+  const visited = new Set<number>();
+  while (cursor) {
+    if (cursor === source.id)
+      throw new Error('Problem consolidation cannot create a cycle.');
+    if (visited.has(cursor))
+      throw new Error(
+        'The destination belongs to an invalid supersession cycle.',
+      );
+    visited.add(cursor);
+    cursor =
+      (
+        await db.problem.findUnique({
+          where: { id: cursor },
+          select: { supersededById: true },
+        })
+      )?.supersededById ?? null;
+  }
+  if (input.confirmed !== true)
+    throw new Error('Explicit consolidation confirmation is required.');
+  return db.$transaction(async (tx) => {
+    await tx.problem.update({
+      where: { id: source.id },
+      data: { status: 'Superseded', supersededById: target.id },
+    });
+    let copied = 0;
+    if (input.associateProjects === true)
+      for (const link of source.projectLinks) {
+        const exists = await tx.problemProject.findUnique({
+          where: {
+            problemId_projectId: {
+              problemId: target.id,
+              projectId: link.projectId,
+            },
+          },
+        });
+        if (!exists) {
+          await tx.problemProject.create({
+            data: {
+              problemId: target.id,
+              projectId: link.projectId,
+              isPrimary: false,
+            },
+          });
+          copied += 1;
+        }
+      }
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'PROBLEM_CONSOLIDATED',
+        description: `${source.trackingId} consolidated into ${target.trackingId}; historical source retained${copied ? `; ${copied} Project relationship${copied === 1 ? '' : 's'} also associated with the destination` : ''}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        problemId: source.id,
+        entityType: 'PROBLEM',
+        entityId: source.trackingId,
+        entityHref: `/problems/${source.trackingId}`,
+      },
+    });
+    return {
+      sourceTrackingId,
+      targetTrackingId: target.trackingId,
+      copiedProjectRelationships: copied,
+    };
+  });
+}
+
+export async function mergeTag(
+  user: CurrentUserContext | null,
+  sourceTagId: number,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'platform:admin');
+  const targetTagId = Number(input.targetTagId);
+  if (sourceTagId === targetTagId)
+    throw new Error('A Tag cannot be merged into itself.');
+  if (input.confirmed !== true)
+    throw new Error('Explicit Tag merge confirmation is required.');
+  const [source, target] = await Promise.all([
+    db.tag.findUniqueOrThrow({ where: { id: sourceTagId } }),
+    db.tag.findUniqueOrThrow({ where: { id: targetTagId } }),
+  ]);
+  return db.$transaction(async (tx) => {
+    let affected = 0;
+    for (const link of await tx.problemTag.findMany({
+      where: { tagId: sourceTagId },
+    })) {
+      await tx.problemTag.upsert({
+        where: {
+          problemId_tagId: { problemId: link.problemId, tagId: targetTagId },
+        },
+        update: {},
+        create: { problemId: link.problemId, tagId: targetTagId },
+      });
+      affected += 1;
+    }
+    for (const link of await tx.projectTag.findMany({
+      where: { tagId: sourceTagId },
+    })) {
+      await tx.projectTag.upsert({
+        where: {
+          projectId_tagId: { projectId: link.projectId, tagId: targetTagId },
+        },
+        update: {},
+        create: { projectId: link.projectId, tagId: targetTagId },
+      });
+      affected += 1;
+    }
+    for (const link of await tx.unitTag.findMany({
+      where: { tagId: sourceTagId },
+    })) {
+      await tx.unitTag.upsert({
+        where: { unitId_tagId: { unitId: link.unitId, tagId: targetTagId } },
+        update: {},
+        create: { unitId: link.unitId, tagId: targetTagId },
+      });
+      affected += 1;
+    }
+    for (const link of await tx.lessonTag.findMany({
+      where: { tagId: sourceTagId },
+    })) {
+      await tx.lessonTag.upsert({
+        where: {
+          lessonId_tagId: { lessonId: link.lessonId, tagId: targetTagId },
+        },
+        update: {},
+        create: { lessonId: link.lessonId, tagId: targetTagId },
+      });
+      affected += 1;
+    }
+    await Promise.all([
+      tx.problemTag.deleteMany({ where: { tagId: sourceTagId } }),
+      tx.projectTag.deleteMany({ where: { tagId: sourceTagId } }),
+      tx.unitTag.deleteMany({ where: { tagId: sourceTagId } }),
+      tx.lessonTag.deleteMany({ where: { tagId: sourceTagId } }),
+    ]);
+    await tx.tag.delete({ where: { id: sourceTagId } });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'TAG_MERGED',
+        description: `Governed tag ${source.name} merged into ${target.name}; ${affected} source relationship${affected === 1 ? '' : 's'} preserved without duplicate junctions.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        entityType: 'TAG',
+        entityId: target.name,
+        entityHref: '/#tag-governance',
+      },
+    });
+    return { affected };
   });
 }
 
@@ -1658,9 +2209,12 @@ export async function updateUserAccount(
   if (requestedStatus !== target.status)
     changes.push(`status changed from ${target.status} to ${requestedStatus}`);
   return db.$transaction(async (tx) => {
-    const persistedTarget = await tx.user.findUniqueOrThrow({ where: { id: targetId } });
+    const persistedTarget = await tx.user.findUniqueOrThrow({
+      where: { id: targetId },
+    });
     const leavesActiveSystemAdmin =
-      persistedTarget.role === 'SYSTEM_ADMIN' && persistedTarget.status === 'ACTIVE' &&
+      persistedTarget.role === 'SYSTEM_ADMIN' &&
+      persistedTarget.status === 'ACTIVE' &&
       (requestedRole !== 'SYSTEM_ADMIN' || requestedStatus !== 'ACTIVE');
     if (leavesActiveSystemAdmin) {
       const activeSystemAdmins = await tx.user.count({
@@ -1680,12 +2234,16 @@ export async function updateUserAccount(
           'A Unit Administrator must have at least one active administered Unit. Assign a Unit Admin scope first.',
         );
     }
-    const removedScopes = requestedRole !== 'UNIT_ADMIN'
-      ? await tx.unitMembership.count({ where: { userId: targetId, isAdmin: true } })
-      : 0;
+    const removedScopes =
+      requestedRole !== 'UNIT_ADMIN'
+        ? await tx.unitMembership.count({
+            where: { userId: targetId, isAdmin: true },
+          })
+        : 0;
     if (removedScopes)
       await tx.unitMembership.updateMany({
-        where: { userId: targetId, isAdmin: true }, data: { isAdmin: false },
+        where: { userId: targetId, isAdmin: true },
+        data: { isAdmin: false },
       });
     const updated = await tx.user.update({
       where: { id: targetId },
@@ -1700,7 +2258,9 @@ export async function updateUserAccount(
       },
     });
     if (removedScopes)
-      changes.push(`${removedScopes} Unit Administrator scope${removedScopes === 1 ? '' : 's'} removed automatically`);
+      changes.push(
+        `${removedScopes} Unit Administrator scope${removedScopes === 1 ? '' : 's'} removed automatically`,
+      );
     if (changes.length)
       await tx.activityEvent.create({
         data: {
@@ -1728,7 +2288,9 @@ export async function createUserAccount(
   if (!Number.isInteger(unitId) || !canAccessUnit(actor, unitId))
     throw new Error('Select a Unit within your administrative scope.');
   const role = controlled(input.role || 'CONTRIBUTOR', USER_ROLES, 'Role');
-  const selectedUnit = await db.unit.findUniqueOrThrow({ where: { id: unitId } });
+  const selectedUnit = await db.unit.findUniqueOrThrow({
+    where: { id: unitId },
+  });
   if (role === 'UNIT_ADMIN' && !selectedUnit.isActive)
     throw new Error('A Unit Administrator must be assigned to an active Unit.');
   if (
@@ -1881,7 +2443,12 @@ export async function setUnitAdminAssignment(
   return db.$transaction(async (tx) => {
     if (!assigned && target.role === 'UNIT_ADMIN') {
       const remainingScopes = await tx.unitMembership.count({
-        where: { userId: targetId, isAdmin: true, unitId: { not: unitId }, unit: { isActive: true } },
+        where: {
+          userId: targetId,
+          isAdmin: true,
+          unitId: { not: unitId },
+          unit: { isActive: true },
+        },
       });
       if (!remainingScopes)
         throw new Error(
@@ -1894,7 +2461,10 @@ export async function setUnitAdminAssignment(
       create: { userId: targetId, unitId, isAdmin: assigned },
     });
     if (assigned && target.role !== 'UNIT_ADMIN')
-      await tx.user.update({ where: { id: targetId }, data: { role: 'UNIT_ADMIN' } });
+      await tx.user.update({
+        where: { id: targetId },
+        data: { role: 'UNIT_ADMIN' },
+      });
     await tx.activityEvent.create({
       data: {
         eventType: assigned ? 'UNIT_ADMIN_ASSIGNED' : 'UNIT_ADMIN_REMOVED',
@@ -1924,20 +2494,53 @@ export async function updateUnitRecord(
   const unit = await db.unit.findUniqueOrThrow({
     where: { id: unitId },
     include: {
-      leadProjects: { where: { status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] } }, select: { trackingId: true, name: true } },
+      leadProjects: {
+        where: {
+          status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] },
+        },
+        select: { trackingId: true, name: true },
+      },
     },
   });
-  if (actor.role === 'SYSTEM_ADMIN' && (input.name !== undefined || input.abbreviation !== undefined)) {
-    const proposedName = input.name === undefined ? unit.name : requiredString(input.name, 'Unit name');
-    const proposedAbbreviation = input.abbreviation === undefined ? unit.abbreviation : requiredString(input.abbreviation, 'Abbreviation');
-    const peers = await db.unit.findMany({ where: { id: { not: unitId } }, select: { name: true, abbreviation: true } });
-    if (peers.some((item) => item.name.toLocaleLowerCase() === proposedName.toLocaleLowerCase())) throw new Error('A Unit with that canonical name already exists.');
-    if (peers.some((item) => item.abbreviation.toLocaleLowerCase() === proposedAbbreviation.toLocaleLowerCase())) throw new Error('A Unit with that abbreviation already exists.');
+  if (
+    actor.role === 'SYSTEM_ADMIN' &&
+    (input.name !== undefined || input.abbreviation !== undefined)
+  ) {
+    const proposedName =
+      input.name === undefined
+        ? unit.name
+        : requiredString(input.name, 'Unit name');
+    const proposedAbbreviation =
+      input.abbreviation === undefined
+        ? unit.abbreviation
+        : requiredString(input.abbreviation, 'Abbreviation');
+    const peers = await db.unit.findMany({
+      where: { id: { not: unitId } },
+      select: { name: true, abbreviation: true },
+    });
+    if (
+      peers.some(
+        (item) =>
+          item.name.toLocaleLowerCase() === proposedName.toLocaleLowerCase(),
+      )
+    )
+      throw new Error('A Unit with that canonical name already exists.');
+    if (
+      peers.some(
+        (item) =>
+          item.abbreviation.toLocaleLowerCase() ===
+          proposedAbbreviation.toLocaleLowerCase(),
+      )
+    )
+      throw new Error('A Unit with that abbreviation already exists.');
   }
   return db.$transaction(async (tx) => {
     if (input.isActive === false && unit.isActive) {
       const activeLedProjects = await tx.project.findMany({
-        where: { leadUnitId: unitId, status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] } },
+        where: {
+          leadUnitId: unitId,
+          status: { in: ['Planning', 'Active', 'Paused', 'Transitioning'] },
+        },
         select: { trackingId: true, name: true },
       });
       if (activeLedProjects.length)
@@ -1951,13 +2554,38 @@ export async function updateUnitRecord(
         isActive:
           typeof input.isActive === 'boolean' ? input.isActive : undefined,
         forgePointOfContact: optional(input.forgePointOfContact) ?? undefined,
-        name: actor.role === 'SYSTEM_ADMIN' && input.name !== undefined ? requiredString(input.name, 'Unit name') : undefined,
-        abbreviation: actor.role === 'SYSTEM_ADMIN' && input.abbreviation !== undefined ? requiredString(input.abbreviation, 'Abbreviation') : undefined,
-        unitType: actor.role === 'SYSTEM_ADMIN' && input.unitType !== undefined ? requiredString(input.unitType, 'Unit type') : undefined,
-        parentOrganization: actor.role === 'SYSTEM_ADMIN' && input.parentOrganization !== undefined ? optional(input.parentOrganization) : undefined,
-        description: actor.role === 'SYSTEM_ADMIN' && input.description !== undefined ? optional(input.description) : undefined,
-        locationId: actor.role === 'SYSTEM_ADMIN' && input.locationId !== undefined ? optionalNumber(input.locationId) : undefined,
-        capabilities: actor.role === 'SYSTEM_ADMIN' && input.tags !== undefined ? { deleteMany: {}, create: await governedTagConnections(tx, input.tags) } : undefined,
+        name:
+          actor.role === 'SYSTEM_ADMIN' && input.name !== undefined
+            ? requiredString(input.name, 'Unit name')
+            : undefined,
+        abbreviation:
+          actor.role === 'SYSTEM_ADMIN' && input.abbreviation !== undefined
+            ? requiredString(input.abbreviation, 'Abbreviation')
+            : undefined,
+        unitType:
+          actor.role === 'SYSTEM_ADMIN' && input.unitType !== undefined
+            ? requiredString(input.unitType, 'Unit type')
+            : undefined,
+        parentOrganization:
+          actor.role === 'SYSTEM_ADMIN' &&
+          input.parentOrganization !== undefined
+            ? optional(input.parentOrganization)
+            : undefined,
+        description:
+          actor.role === 'SYSTEM_ADMIN' && input.description !== undefined
+            ? optional(input.description)
+            : undefined,
+        locationId:
+          actor.role === 'SYSTEM_ADMIN' && input.locationId !== undefined
+            ? optionalNumber(input.locationId)
+            : undefined,
+        capabilities:
+          actor.role === 'SYSTEM_ADMIN' && input.tags !== undefined
+            ? {
+                deleteMany: {},
+                create: await governedTagConnections(tx, input.tags),
+              }
+            : undefined,
       },
     });
     const changes = [
@@ -1967,8 +2595,18 @@ export async function updateUnitRecord(
       input.forgePointOfContact !== undefined
         ? 'FORGE point of contact updated'
         : '',
-      actor.role === 'SYSTEM_ADMIN' && ['name', 'abbreviation', 'unitType', 'parentOrganization', 'description', 'locationId', 'tags'].some((key) => input[key] !== undefined)
-        ? 'canonical Unit profile updated' : '',
+      actor.role === 'SYSTEM_ADMIN' &&
+      [
+        'name',
+        'abbreviation',
+        'unitType',
+        'parentOrganization',
+        'description',
+        'locationId',
+        'tags',
+      ].some((key) => input[key] !== undefined)
+        ? 'canonical Unit profile updated'
+        : '',
     ].filter(Boolean);
     if (changes.length)
       await tx.activityEvent.create({
@@ -1984,24 +2622,374 @@ export async function updateUnitRecord(
   });
 }
 
-export async function createUnitRecord(user: CurrentUserContext | null, input: Record<string, unknown>) {
+export async function createUnitRecord(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
   const actor = requirePermission(user, 'platform:admin');
   const name = requiredString(input.name, 'Unit name');
   const abbreviation = requiredString(input.abbreviation, 'Abbreviation');
   const unitType = requiredString(input.unitType, 'Unit type');
-  const existing = await db.unit.findMany({ select: { name: true, abbreviation: true } });
-  if (existing.some((unit) => unit.name.toLocaleLowerCase() === name.toLocaleLowerCase())) throw new Error('A Unit with that canonical name already exists.');
-  if (existing.some((unit) => unit.abbreviation.toLocaleLowerCase() === abbreviation.toLocaleLowerCase())) throw new Error('A Unit with that abbreviation already exists.');
+  const existing = await db.unit.findMany({
+    select: { name: true, abbreviation: true },
+  });
+  if (
+    existing.some(
+      (unit) => unit.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    )
+  )
+    throw new Error('A Unit with that canonical name already exists.');
+  if (
+    existing.some(
+      (unit) =>
+        unit.abbreviation.toLocaleLowerCase() ===
+        abbreviation.toLocaleLowerCase(),
+    )
+  )
+    throw new Error('A Unit with that abbreviation already exists.');
   return db.$transaction(async (tx) => {
     const trackingId = await nextTrackingId(tx, 'Unit');
-    const unit = await tx.unit.create({ data: {
-      trackingId, name, abbreviation, unitType,
-      parentOrganization: optional(input.parentOrganization), description: optional(input.description),
-      forgePointOfContact: optional(input.forgePointOfContact), locationId: optionalNumber(input.locationId),
-      isActive: input.isActive !== false,
-      capabilities: { create: await governedTagConnections(tx, input.tags) },
-    }});
-    await tx.activityEvent.create({ data: { eventType: 'UNIT_CREATED', description: `${trackingId} canonical Unit created: ${name}.`, actor: actor.displayName, userId: actor.id, unitId: unit.id } });
+    const unit = await tx.unit.create({
+      data: {
+        trackingId,
+        name,
+        abbreviation,
+        unitType,
+        parentOrganization: optional(input.parentOrganization),
+        description: optional(input.description),
+        forgePointOfContact: optional(input.forgePointOfContact),
+        locationId: optionalNumber(input.locationId),
+        isActive: input.isActive !== false,
+        capabilities: { create: await governedTagConnections(tx, input.tags) },
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'UNIT_CREATED',
+        description: `${trackingId} canonical Unit created: ${name}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        unitId: unit.id,
+      },
+    });
     return unit;
+  });
+}
+
+const normalizedPlace = (value: string) =>
+  value
+    .toLocaleLowerCase()
+    .replace(/\bfort\b/g, 'ft')
+    .replace(/[^a-z0-9]/g, '');
+
+export async function createLocation(
+  user: CurrentUserContext | null,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'platform:admin');
+  const name = requiredString(input.name, 'Location name');
+  const latitude = Number(input.latitude);
+  const longitude = Number(input.longitude);
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  )
+    throw new Error('Approved general coordinates are invalid.');
+  const locations = await db.location.findMany({ select: { name: true } });
+  if (
+    locations.some(
+      (item) => normalizedPlace(item.name) === normalizedPlace(name),
+    )
+  )
+    throw new Error('An exact or near-exact Location already exists.');
+  return db.$transaction(async (tx) => {
+    const location = await tx.location.create({
+      data: { name, region: optional(input.region), latitude, longitude },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'LOCATION_CREATED',
+        description: `Approved general Location created: ${name}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        entityType: 'LOCATION',
+        entityId: String(location.id),
+        entityHref: '/#location-governance',
+      },
+    });
+    return location;
+  });
+}
+
+export async function updateLocation(
+  user: CurrentUserContext | null,
+  locationId: number,
+  input: Record<string, unknown>,
+) {
+  const actor = requirePermission(user, 'platform:admin');
+  const current = await db.location.findUniqueOrThrow({
+    where: { id: locationId },
+  });
+  const name =
+    input.name === undefined
+      ? current.name
+      : requiredString(input.name, 'Location name');
+  const latitude =
+    input.latitude === undefined ? current.latitude : Number(input.latitude);
+  const longitude =
+    input.longitude === undefined ? current.longitude : Number(input.longitude);
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  )
+    throw new Error('Approved general coordinates are invalid.');
+  const peers = await db.location.findMany({
+    where: { id: { not: locationId } },
+    select: { name: true },
+  });
+  if (
+    peers.some((item) => normalizedPlace(item.name) === normalizedPlace(name))
+  )
+    throw new Error('An exact or near-exact Location already exists.');
+  return db.$transaction(async (tx) => {
+    const location = await tx.location.update({
+      where: { id: locationId },
+      data: {
+        name,
+        region: input.region === undefined ? undefined : optional(input.region),
+        latitude,
+        longitude,
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'LOCATION_UPDATED',
+        description: `Location corrected: ${current.name} → ${name}; approved general metadata retained.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        entityType: 'LOCATION',
+        entityId: String(locationId),
+        entityHref: '/#location-governance',
+      },
+    });
+    return location;
+  });
+}
+
+export async function correctLesson(
+  user: CurrentUserContext | null,
+  lessonId: number,
+  input: Record<string, unknown>,
+) {
+  const lesson = await db.lessonLearned.findUniqueOrThrow({
+    where: { id: lessonId },
+    include: { project: true },
+  });
+  const actor =
+    user?.role === 'SYSTEM_ADMIN'
+      ? requirePermission(user, 'platform:admin')
+      : assertProjectEdit(user, lesson.project);
+  const phaseId =
+    input.phaseId === undefined
+      ? lesson.phaseId
+      : optionalNumber(input.phaseId);
+  if (
+    phaseId &&
+    !(await db.projectPhase.findFirst({
+      where: { id: phaseId, projectId: lesson.projectId },
+    }))
+  )
+    throw new Error('Associated Phase must belong to this Project.');
+  const status =
+    input.knowledgeStatus === undefined
+      ? lesson.knowledgeStatus
+      : controlled(
+          input.knowledgeStatus,
+          ['ACTIVE', 'WITHDRAWN', 'SUPERSEDED', 'ARCHIVED'] as const,
+          'Lesson knowledge status',
+        );
+  const changes = [
+    'lessonType',
+    'title',
+    'finding',
+    'recommendation',
+    'phaseId',
+    'unitId',
+    'tags',
+    'knowledgeStatus',
+  ].filter((key) => input[key] !== undefined);
+  return db.$transaction(async (tx) => {
+    const updated = await tx.lessonLearned.update({
+      where: { id: lessonId },
+      data: {
+        lessonType:
+          input.lessonType === undefined
+            ? undefined
+            : controlled(input.lessonType, LESSON_TYPES, 'Lesson Type'),
+        title:
+          input.title === undefined
+            ? undefined
+            : requiredString(input.title, 'Lesson title'),
+        finding:
+          input.finding === undefined
+            ? undefined
+            : requiredString(input.finding, 'Finding'),
+        recommendation:
+          input.recommendation === undefined
+            ? undefined
+            : (optional(input.recommendation) ?? ''),
+        phaseId,
+        unitId:
+          input.unitId === undefined ? undefined : optionalNumber(input.unitId),
+        knowledgeStatus: status,
+        tags:
+          input.tags === undefined
+            ? undefined
+            : {
+                deleteMany: {},
+                create: await governedTagConnections(tx, input.tags),
+              },
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'LESSON_CORRECTED',
+        description: `${lesson.trackingId} corrected (${changes.join(', ')}); original author attribution preserved.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        projectId: lesson.projectId,
+        unitId: lesson.project.leadUnitId,
+        entityType: 'LESSON',
+        entityId: lesson.trackingId,
+        entityHref: `/projects/${lesson.project.trackingId}`,
+      },
+    });
+    return updated;
+  });
+}
+
+export async function correctRepository(
+  user: CurrentUserContext | null,
+  repositoryId: number,
+  input: Record<string, unknown>,
+) {
+  const repository = await db.repositoryLink.findUniqueOrThrow({
+    where: { id: repositoryId },
+    include: { project: true },
+  });
+  const actor =
+    user?.role === 'SYSTEM_ADMIN'
+      ? requirePermission(user, 'platform:admin')
+      : assertProjectEdit(user, repository.project);
+  const phaseId =
+    input.phaseId === undefined
+      ? repository.phaseId
+      : optionalNumber(input.phaseId);
+  if (
+    phaseId &&
+    !(await db.projectPhase.findFirst({
+      where: { id: phaseId, projectId: repository.projectId },
+    }))
+  )
+    throw new Error('Associated Phase must belong to this Project.');
+  const updated = await db.$transaction(async (tx) => {
+    const result = await tx.repositoryLink.update({
+      where: { id: repositoryId },
+      data: {
+        name:
+          input.name === undefined
+            ? undefined
+            : requiredString(input.name, 'Name'),
+        url: input.url === undefined ? undefined : validUrl(input.url),
+        description:
+          input.description === undefined
+            ? undefined
+            : requiredString(input.description, 'Description'),
+        artifactType:
+          input.artifactType === undefined
+            ? undefined
+            : optional(input.artifactType),
+        documentationAvailability:
+          input.documentationAvailability === undefined
+            ? undefined
+            : documentationValue(input.documentationAvailability),
+        includeInAiHandoff:
+          input.includeInAiHandoff === undefined
+            ? undefined
+            : input.includeInAiHandoff === true ||
+              input.includeInAiHandoff === 'true',
+        accessInstructions:
+          input.accessInstructions === undefined
+            ? undefined
+            : optional(input.accessInstructions),
+        phaseId,
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'ARTIFACT_CORRECTED',
+        description: `Artifact metadata corrected: ${repository.name}; creator attribution and access boundary preserved.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        projectId: repository.projectId,
+        unitId: repository.project.leadUnitId,
+        entityType: 'ARTIFACT',
+        entityId: String(repository.id),
+        entityHref: `/projects/${repository.project.trackingId}`,
+      },
+    });
+    return result;
+  });
+  return updated;
+}
+
+export async function acknowledgeLeadUnitTransfer(
+  user: CurrentUserContext | null,
+  projectId: number,
+) {
+  const actor = requirePermission(user, 'unit:manage');
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    include: { leadUnit: true },
+  });
+  if (
+    actor.role !== 'SYSTEM_ADMIN' &&
+    !actor.administeredUnitIds.includes(project.leadUnitId)
+  )
+    throw new Error(
+      'Only the receiving Unit Administrator may acknowledge this transfer.',
+    );
+  if (!project.leadUnitTransferPending)
+    throw new Error('This Project has no pending receiving-Unit review.');
+  return db.$transaction(async (tx) => {
+    const updated = await tx.project.update({
+      where: { id: projectId },
+      data: {
+        leadUnitTransferPending: false,
+        leadUnitTransferAcknowledgedAt: new Date(),
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'LEAD_UNIT_TRANSFER_ACKNOWLEDGED',
+        description: `${project.trackingId} Lead Unit transfer acknowledged by ${project.leadUnit.name}.`,
+        actor: actor.displayName,
+        userId: actor.id,
+        projectId,
+        unitId: project.leadUnitId,
+        entityType: 'PROJECT',
+        entityId: project.trackingId,
+        entityHref: `/projects/${project.trackingId}`,
+      },
+    });
+    return updated;
   });
 }

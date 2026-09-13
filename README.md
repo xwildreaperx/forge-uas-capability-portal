@@ -10,6 +10,8 @@ Unit Administration Part 2 adds a scoped stewardship workspace that derives led 
 
 System Administration Part 2 adds governed canonical Unit and Problem registries. System Administrators can create and maintain immutable-ID Unit profiles, controlled Problem lifecycle/priority/category records, named Problem stewardship, supersession and lightweight relationships, and a reusable tag inventory. Submission approval as a new canonical Problem is atomic: FORGE reruns duplicate discovery, creates the Problem, links and retains the original submission, records the final review stage, and writes Activity provenance. Unit review remains distinct from final System governance.
 
+System Administration Part 3 completes pilot governance with non-destructive Problem consolidation, cycle-safe supersession, readable Problem governance history/diffs, Tag usage and merge, approved general Location correction, Help/Lesson/artifact correction, receiving-Unit transfer acknowledgment, richer global administrative Activity, and a System-only JSON metadata export. Deployment and recovery boundaries are documented in [`docs/DEPLOYMENT_RUNBOOK.md`](docs/DEPLOYMENT_RUNBOOK.md); the final assessment is [`docs/SYSTEM_ADMIN_PILOT_AUDIT.md`](docs/SYSTEM_ADMIN_PILOT_AUDIT.md).
+
 ## Product philosophy
 
 Problems are enduring capability gaps. Projects are broad Solution Efforts: organic development, vendor evaluation, tactics/techniques, training, integration/configuration, process/policy, or hybrid work. Multiple efforts can address the same Problem, one effort can address multiple Problems, and unsuccessful or alternative work remains valuable institutional knowledge.

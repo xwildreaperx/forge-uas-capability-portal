@@ -1,0 +1,3 @@
+import { getRequestUser } from '@/lib/auth/current-user';
+import { operationalExport } from '@/lib/data/operational-export';
+export async function GET(request: Request) { try { const data = await operationalExport(await getRequestUser(request)); return new Response(JSON.stringify(data, null, 2), { headers: { 'content-type': 'application/json', 'content-disposition': `attachment; filename="forge-operational-metadata-${new Date().toISOString().slice(0,10)}.json"` } }); } catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'Unable to export.' }, { status: 403 }); } }

@@ -10,6 +10,10 @@ Unit Administration Part 2 provides a per-administered-Unit stewardship projecti
 
 System Administration Part 2 establishes the canonical-governance boundary. `Unit` and `Problem` creation and material edits require `platform:admin`; Unit Administrators retain only scoped operational profile maintenance. `TrackingCounter` allocates immutable Unit and Problem IDs inside the same transaction as creation. Problems now support relational stewardship, self-referential supersession, RELATED_TO and VARIANT_OF relationships, controlled lifecycle/priority/category fields, and governed tag selection. Submission review history is append-only by stage, and final conversion creates and links a canonical Problem atomically while preserving the source submission and recording Activity provenance.
 
+System Administration Part 3 completes the pilot repair surface: cycle-safe, non-destructive Problem consolidation; Tag usage/rename/merge with junction deduplication; approved general Location correction; conservative Help Request, Lesson, and artifact metadata correction; receiving-Unit Project-transfer acknowledgment; richer navigable administrative Activity; and a System-only UNCLASSIFIED metadata export. Problem detail preserves old PRB discovery, current replacement, family relationships, stewardship, controlled-status explanation, and governance-only history with concise material diffs. Original authorship and external information-access boundaries remain intact.
+
+Deployment responsibilities and explicit deferred infrastructure are documented in `docs/DEPLOYMENT_RUNBOOK.md`. The final System Administrator assessment and feature scorecard are in `docs/SYSTEM_ADMIN_PILOT_AUDIT.md`.
+
 Routine maintenance still centers on one Project Update, with deliberate secondary actions only for saving a Lesson, requesting Help, or closeout. Authentication, notifications, internal messaging, production file storage, hosting, semantic similarity, and external AI transmission remain outside this local prototype pass.
 
 Repository: `xwildreaperx/forge-uas-capability-portal`  
