@@ -70,7 +70,7 @@ Has Project User capabilities and administers only explicitly scoped Units. Mana
 
 Has global recovery/governance scope. Manages roles/scopes, canonical Units/Problems, Problem conversion and consolidation, Tags, Locations, corrections, integrity, and metadata export. The role does not grant access to controlled external documents.
 
-Authentication is deployment-specific and not production-implemented. Authorization is server-side. **The development user switcher is not authentication** and is forced off in production.
+Authentication is deployment-specific and not production-implemented. For the controlled pilot, first-time users establish an active local profile by entering their name, work email or username, duty position, primary Unit, and one of three self-service levels: Contributor, Project User, or Unit Administrator. A durable HTTP-only browser cookie reconnects that browser to the profile. System Administrator is not self-service. This cookie is a convenience identity pointer, not authentication, so the flow is appropriate only behind the deployment organization's password-protected perimeter. The development user switcher is also not authentication and is forced off in production.
 
 ## 5. Problem lifecycle
 

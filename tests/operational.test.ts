@@ -13,6 +13,7 @@ import {
   createLocation,
   createProblem,
   createProject,
+  registerUserProfile,
   createTag,
   createUnitRecord,
   convertSubmissionToCanonicalProblem,
@@ -1473,5 +1474,39 @@ test('final governance correction and consolidation workflows preserve relations
     (await db.project.findUniqueOrThrow({ where: { id: project.id } }))
       .leadUnitTransferPending,
     false,
+  );
+});
+
+test('first-use registration creates an active scoped profile without granting System Administrator', async () => {
+  const unit = await db.unit.findFirstOrThrow({ where: { isActive: true } });
+  await db.trackingCounter.update({
+    where: { entity: 'User' },
+    data: { value: 900000 },
+  });
+  const profile = await registerUserProfile({
+    displayName: 'Onboarding Verification User',
+    identifier: 'onboarding.verification@example.test',
+    title: 'UAS Program Manager',
+    role: 'UNIT_ADMIN',
+    unitId: unit.id,
+  });
+  const persisted = await db.user.findUniqueOrThrow({
+    where: { id: profile.id },
+    include: { unitMemberships: true },
+  });
+  assert.equal(persisted.status, 'ACTIVE');
+  assert.equal(persisted.role, 'UNIT_ADMIN');
+  assert.equal(persisted.title, 'UAS Program Manager');
+  assert.equal(persisted.primaryUnitId, unit.id);
+  assert.equal(persisted.unitMemberships[0]?.isAdmin, true);
+  await assert.rejects(
+    registerUserProfile({
+      displayName: 'Invalid Administrator',
+      identifier: 'invalid.administrator@example.test',
+      title: 'Administrator',
+      role: 'SYSTEM_ADMIN',
+      unitId: unit.id,
+    }),
+    /FORGE user level is invalid/,
   );
 });

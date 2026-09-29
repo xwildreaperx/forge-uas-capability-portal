@@ -4,7 +4,9 @@ FORGE is currently a local SQLite prototype for **UNCLASSIFIED INFORMATION ONLY*
 
 ## Identity and authorization handoff
 
-A future identity provider must supply a stable, server-trusted identifier. The server maps that identifier to an active FORGE `User` profile and builds current-user context from the stored role and relational Unit/Project scopes. Never accept a client-provided role as authority. Pending or Disabled profiles must not receive action permissions. The development identity switcher is demonstration tooling and must remain disabled in production.
+The controlled pilot may use lightweight first-time setup only when the hosting boundary already requires password-protected access. Users enter their name, work email or username, duty position, primary Unit, and local user level; FORGE creates an active profile and stores an HTTP-only browser cookie. This cookie is not authentication, does not prove identity, and does not travel to another browser. Unit Administrator is self-service for this trusted pilot; System Administrator is not. The development identity switcher remains test tooling and must stay disabled in production.
+
+A future identity provider must supply a stable, server-trusted identifier. The server should map that identifier to an existing FORGE `User` profile and build current-user context from the stored role and relational Unit/Project scopes. Replace the pilot cookie flow before extending access beyond the protected perimeter.
 
 System Administrator succession:
 

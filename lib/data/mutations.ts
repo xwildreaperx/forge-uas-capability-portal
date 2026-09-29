@@ -2352,6 +2352,59 @@ export async function createUserAccount(
   });
 }
 
+export async function registerUserProfile(input: Record<string, unknown>) {
+  const displayName = requiredString(input.displayName, 'Name');
+  const identifier = requiredString(input.identifier, 'Work email or username')
+    .trim()
+    .toLowerCase();
+  const title = requiredString(input.title, 'Position or duty title');
+  const role = controlled(
+    input.role || 'CONTRIBUTOR',
+    ['CONTRIBUTOR', 'PROJECT_USER', 'UNIT_ADMIN'] as const,
+    'FORGE user level',
+  );
+  const unitId = Number(input.unitId);
+  if (!Number.isInteger(unitId)) throw new Error('Select your primary Unit.');
+  const unit = await db.unit.findUniqueOrThrow({ where: { id: unitId } });
+  if (!unit.isActive) throw new Error('Select an active Unit.');
+  if (await db.user.findUnique({ where: { identifier } }))
+    throw new Error(
+      'A profile already uses that email or username. Ask a FORGE administrator to restore access.',
+    );
+
+  return db.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        trackingId: await nextTrackingId(tx, 'User'),
+        displayName,
+        identifier,
+        title,
+        role,
+        status: 'ACTIVE',
+        primaryUnitId: unitId,
+        unitMemberships: {
+          create: {
+            unitId,
+            isPrimary: true,
+            isAdmin: role === 'UNIT_ADMIN',
+          },
+        },
+      },
+    });
+    await tx.activityEvent.create({
+      data: {
+        eventType: 'USER_SELF_REGISTERED',
+        description: `${created.displayName} established an active ${role.replaceAll('_', ' ').toLowerCase()} profile for ${unit.name}.`,
+        actor: created.displayName,
+        userId: created.id,
+        subjectUserId: created.id,
+        unitId,
+      },
+    });
+    return created;
+  });
+}
+
 export async function manageUserUnitMembership(
   user: CurrentUserContext | null,
   targetId: number,

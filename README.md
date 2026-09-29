@@ -29,7 +29,7 @@ Persistent operations are server-side:
 - `lib/domain/` contains pure matching, search, validation, and tracking-ID logic.
 - `app/api/` exposes mutations and duplicate-work lookup. `app/page.tsx` loads the initial server projection.
 
-`lib/auth/` is the future-authentication adapter and centralized authorization boundary. The local prototype resolves a development identity only when the switcher is enabled and `NODE_ENV` is not production. This is a role-testing aid, not login or authentication.
+`lib/auth/` is the future-authentication adapter and centralized authorization boundary. For a controlled, perimeter-protected pilot, a first-time visitor creates an active local profile and receives a browser cookie that reconnects that browser to the profile. This convenience cookie is not authentication and must not be treated as an identity proof outside the protected environment. The development identity switcher remains non-production role-testing aid.
 
 ## Roles and account lifecycle
 
@@ -41,6 +41,12 @@ Persistent operations are server-side:
 Accounts are Pending, Active, or Disabled. Unit membership, Unit-administrator scope, and Project membership are separate relational concepts. Disabled users retain attribution but cannot exercise permissions. Server mutations enforce permissions even when a UI control is hidden. Candidate Problem submissions remain separate from canonical Problem records until review.
 
 System administration prevents supported role or status changes from leaving FORGE with zero active System Administrators and advises when only one remains. Maintain at least one active System Administrator and preferably two verified trusted administrators. A `UNIT_ADMIN` must retain an active administered-Unit scope; downgrades remove administrative scopes transactionally. Platform Integrity presents derived, automatically clearing responsibility checks without scoring Units, users, or Projects.
+
+### First-time setup
+
+On first access from a browser without an existing FORGE profile cookie, the application asks for the user's name, work email or username, position or duty title, primary Unit, and FORGE user level. Contributor, Project User, and Unit Administrator profiles become active immediately. Selecting Unit Administrator creates the corresponding administrative scope for the selected Unit. System Administrator is never available through self-setup and remains a separately governed recovery/platform role. Duplicate identifiers are rejected so an existing profile is not silently replaced.
+
+The browser cookie lasts for one year and is HTTP-only, `SameSite=Lax`, and `Secure` in production. Clearing browser data or moving to another browser does not transfer the profile; an administrator must restore access or reconcile the existing identifier. This lightweight flow is intended only when the deployment boundary already provides the password-protected access control requested for the pilot.
 
 Unit deactivation preserves the Unit, tracking ID, Activity, and historical relationships. A Unit cannot be deactivated while it leads a Planning, Active, Paused, or Transitioning Project; transfer or close that responsibility first. The confirmation also reports supported active work, active primary users, Unit Administrators, and open Help Requests.
 

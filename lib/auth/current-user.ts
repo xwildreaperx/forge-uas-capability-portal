@@ -6,6 +6,7 @@ import { isDevUserSwitcherEnabled } from './config.ts';
 export { isDevUserSwitcherEnabled } from './config.ts';
 
 export const DEV_USER_COOKIE = 'forge_dev_user';
+export const USER_COOKIE = 'forge_user';
 export async function userContextById(
   id: number,
 ): Promise<CurrentUserContext | null> {
@@ -31,8 +32,14 @@ export async function userContextById(
 }
 
 export async function getCurrentUser(): Promise<CurrentUserContext | null> {
+  const cookieStore = await cookies();
+  const registered = Number(cookieStore.get(USER_COOKIE)?.value);
+  if (Number.isInteger(registered) && registered > 0) {
+    const registeredUser = await userContextById(registered);
+    if (registeredUser) return registeredUser;
+  }
   if (!isDevUserSwitcherEnabled()) return null;
-  const selected = Number((await cookies()).get(DEV_USER_COOKIE)?.value);
+  const selected = Number(cookieStore.get(DEV_USER_COOKIE)?.value);
   if (Number.isInteger(selected) && selected > 0) {
     const selectedUser = await userContextById(selected);
     if (selectedUser) return selectedUser;
@@ -46,6 +53,13 @@ export async function getCurrentUser(): Promise<CurrentUserContext | null> {
 }
 
 export async function getRequestUser(request: Request) {
+  const registeredMatch = request.headers
+    .get('cookie')
+    ?.match(/(?:^|;\s*)forge_user=(\d+)/);
+  if (registeredMatch) {
+    const registeredUser = await userContextById(Number(registeredMatch[1]));
+    if (registeredUser) return registeredUser;
+  }
   if (!isDevUserSwitcherEnabled()) return null;
   const explicit = Number(request.headers.get('x-forge-dev-user'));
   if (Number.isInteger(explicit) && explicit > 0) {
