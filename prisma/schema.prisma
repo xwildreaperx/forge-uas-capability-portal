@@ -1,0 +1,621 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SolutionType {
+  ORGANIC_DEVELOPMENT
+  VENDOR_SOLUTION
+  TACTIC_TECHNIQUE
+  TRAINING
+  INTEGRATION_CONFIGURATION
+  PROCESS_POLICY
+  HYBRID
+}
+
+enum DocumentationAvailability {
+  AVAILABLE_IN_FORGE
+  EXTERNAL_REFERENCE
+  AVAILABLE_FROM_ORIGINATOR
+  CONTROLLED_ACCESS
+  METADATA_ONLY
+  NOT_YET_DOCUMENTED
+}
+
+enum UserRole {
+  CONTRIBUTOR
+  PROJECT_USER
+  UNIT_ADMIN
+  SYSTEM_ADMIN
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+enum ProjectMembershipRole {
+  PROJECT_LEAD
+  CONTRIBUTOR
+}
+
+enum ProjectOutcome {
+  SUCCESSFUL
+  PARTIALLY_SUCCESSFUL
+  UNSUCCESSFUL
+  INCONCLUSIVE
+  SUPERSEDED
+  CANCELLED
+}
+
+enum LessonType {
+  CONFIRMED_FINDING
+  WORKING_HYPOTHESIS
+  FAILED_APPROACH
+  RECOMMENDATION
+  UNRESOLVED_QUESTION
+}
+
+enum HelpRequestCategory {
+  TECHNICAL_EXPERTISE
+  HARDWARE
+  SOFTWARE_SUPPORT
+  TESTING_SUPPORT_LOCATION
+  FUNDING_RESOURCING
+  OPERATOR_FEEDBACK
+  DATA
+  MANUFACTURING
+  INTEGRATION
+  DOCUMENTATION
+  OTHER
+}
+
+enum HelpRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum ProblemSubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  DUPLICATE_LINKED
+  REJECTED
+  APPROVED_NEW
+}
+
+enum ProblemRelationshipType {
+  RELATED_TO
+  VARIANT_OF
+}
+
+model TrackingCounter {
+  entity String @id
+  value  Int    @default(0)
+}
+
+model Location {
+  id        Int               @id @default(autoincrement())
+  name      String
+  region    String?
+  latitude  Float
+  longitude Float
+  units     Unit[]
+  problems  ProblemLocation[]
+  projects  ProjectLocation[]
+}
+
+model Unit {
+  id                  Int                 @id @default(autoincrement())
+  trackingId          String              @unique
+  name                String              @unique
+  abbreviation        String
+  unitType            String
+  parentOrganization  String?
+  description         String?
+  locationId          Int?
+  location            Location?           @relation(fields: [locationId], references: [id])
+  leadProjects        Project[]           @relation("LeadUnit")
+  projectLinks        ProjectUnit[]
+  problemLinks        ProblemUnit[]
+  capabilities        UnitTag[]
+  lessons             LessonLearned[]
+  activities          ActivityEvent[]
+  primaryUsers        User[]              @relation("PrimaryUnit")
+  userMemberships     UnitMembership[]
+  submissions         ProblemSubmission[]
+  isActive            Boolean             @default(true)
+  forgePointOfContact String?
+}
+
+model User {
+  id                   Int                 @id @default(autoincrement())
+  trackingId           String              @unique
+  displayName          String
+  identifier           String              @unique
+  role                 UserRole            @default(CONTRIBUTOR)
+  status               AccountStatus       @default(PENDING)
+  title                String?
+  notes                String?
+  primaryUnitId        Int?
+  primaryUnit          Unit?               @relation("PrimaryUnit", fields: [primaryUnitId], references: [id])
+  unitMemberships      UnitMembership[]
+  projectMemberships   ProjectMembership[]
+  projectUpdates       ProjectUpdate[]
+  lessonsRecorded      LessonLearned[]     @relation("LessonAuthor")
+  projectsClosed       Project[]           @relation("ProjectCloser")
+  helpRequestsCreated  HelpRequest[]       @relation("HelpRequestCreator")
+  helpRequestsResolved HelpRequest[]       @relation("HelpRequestResolver")
+  helpRequestsContact  HelpRequest[]       @relation("HelpRequestContact")
+  createdProjects      Project[]           @relation("ProjectCreator")
+  submissions          ProblemSubmission[] @relation("ProblemSubmitter")
+  reviewedSubmissions  ProblemSubmission[] @relation("SubmissionReviewer")
+  submissionReviews    SubmissionReview[]
+  stewardedProblems    Problem[]           @relation("ProblemSteward")
+  activities           ActivityEvent[]     @relation("ActivityActor")
+  activitySubjects     ActivityEvent[]     @relation("ActivitySubject")
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  lastActivityAt       DateTime?
+}
+
+model UnitMembership {
+  userId    Int
+  unitId    Int
+  isPrimary Boolean @default(false)
+  isAdmin   Boolean @default(false)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unit      Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@id([userId, unitId])
+}
+
+model Problem {
+  id                    Int                   @id @default(autoincrement())
+  trackingId            String                @unique
+  title                 String
+  shortDescription      String
+  detailedDescription   String
+  problemStatement      String
+  category              String
+  priority              String
+  status                String
+  owner                 String?
+  impact                String?
+  stewardUserId         Int?
+  steward               User?                 @relation("ProblemSteward", fields: [stewardUserId], references: [id])
+  supersededById        Int?
+  supersededBy          Problem?              @relation("ProblemSupersession", fields: [supersededById], references: [id])
+  supersededProblems    Problem[]             @relation("ProblemSupersession")
+  visibility            String                @default("Internal")
+  dateIdentified        DateTime
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  projectLinks          ProblemProject[]
+  unitLinks             ProblemUnit[]
+  tags                  ProblemTag[]
+  locations             ProblemLocation[]
+  activities            ActivityEvent[]
+  acceptedSubmissions   ProblemSubmission[]
+  outgoingRelationships ProblemRelationship[] @relation("ProblemRelationshipSource")
+  incomingRelationships ProblemRelationship[] @relation("ProblemRelationshipTarget")
+}
+
+model ProblemSubmission {
+  id                Int                     @id @default(autoincrement())
+  trackingId        String                  @unique
+  title             String
+  description       String
+  category          String                  @default("Uncategorized")
+  operationalImpact String?
+  supportingContext String?
+  originatorContact String?
+  status            ProblemSubmissionStatus @default(SUBMITTED)
+  submitterId       Int
+  submitter         User                    @relation("ProblemSubmitter", fields: [submitterId], references: [id])
+  unitId            Int?
+  unit              Unit?                   @relation(fields: [unitId], references: [id])
+  reviewerId        Int?
+  reviewer          User?                   @relation("SubmissionReviewer", fields: [reviewerId], references: [id])
+  relatedProblemId  Int?
+  relatedProblem    Problem?                @relation(fields: [relatedProblemId], references: [id])
+  reviewNote        String?
+  createdAt         DateTime                @default(now())
+  reviewedAt        DateTime?
+  updatedAt         DateTime                @updatedAt
+  reviews           SubmissionReview[]
+}
+
+model SubmissionReview {
+  id           Int               @id @default(autoincrement())
+  submissionId Int
+  submission   ProblemSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId   Int
+  reviewer     User              @relation(fields: [reviewerId], references: [id])
+  stage        String
+  decision     String
+  note         String?
+  createdAt    DateTime          @default(now())
+
+  @@index([submissionId, createdAt])
+}
+
+model ProblemRelationship {
+  sourceProblemId Int
+  targetProblemId Int
+  relationship    ProblemRelationshipType
+  sourceProblem   Problem                 @relation("ProblemRelationshipSource", fields: [sourceProblemId], references: [id], onDelete: Cascade)
+  targetProblem   Problem                 @relation("ProblemRelationshipTarget", fields: [targetProblemId], references: [id], onDelete: Cascade)
+
+  @@id([sourceProblemId, targetProblemId, relationship])
+}
+
+model Project {
+  id                             Int                       @id @default(autoincrement())
+  trackingId                     String                    @unique
+  name                           String
+  executiveSummary               String
+  detailedDescription            String
+  solutionApproach               String
+  solutionType                   SolutionType              @default(ORGANIC_DEVELOPMENT)
+  documentationAvailability      DocumentationAvailability @default(AVAILABLE_IN_FORGE)
+  executiveSummaryPlainLanguage  String?
+  problemPlainLanguage           String?
+  solutionPlainLanguage          String?
+  impactPlainLanguage            String?
+  aiContextNotes                 String?
+  scope                          String?
+  outOfScope                     String?
+  intendedUsers                  String?
+  successCriteria                String?
+  constraints                    String?
+  assumptions                    String?
+  architectureSummary            String?
+  methodologySummary             String?
+  decisionsSummary               String?
+  openIssues                     String?
+  nextStep                       String?
+  keyRisk                        String?
+  leadershipAction               String?
+  originatorContact              String?
+  accessInstructions             String?
+  status                         String
+  maturity                       String
+  completion                     Int
+  outcome                        String?
+  outcomeDisposition             ProjectOutcome?
+  finalResult                    String?
+  whatWorked                     String?
+  whatDidNotWork                 String?
+  recommendedNextAction          String?
+  closedAt                       DateTime?
+  closedByUserId                 Int?
+  closedBy                       User?                     @relation("ProjectCloser", fields: [closedByUserId], references: [id])
+  successorProjectId             Int?
+  successorProject               Project?                  @relation("ProjectSuccessor", fields: [successorProjectId], references: [id])
+  supersededProjects             Project[]                 @relation("ProjectSuccessor")
+  keyAdvantage                   String?
+  keyLimitation                  String?
+  latestResult                   String?
+  startDate                      DateTime
+  expectedCompletionDate         DateTime?
+  createdAt                      DateTime                  @default(now())
+  updatedAt                      DateTime                  @updatedAt
+  lastMeaningfulActivityAt       DateTime?
+  leadUnitTransferPending        Boolean                   @default(false)
+  leadUnitTransferAcknowledgedAt DateTime?
+  leadUnitId                     Int
+  leadUnit                       Unit                      @relation("LeadUnit", fields: [leadUnitId], references: [id])
+  problemLinks                   ProblemProject[]
+  unitLinks                      ProjectUnit[]
+  tags                           ProjectTag[]
+  locations                      ProjectLocation[]
+  phases                         ProjectPhase[]
+  lessons                        LessonLearned[]
+  repositories                   RepositoryLink[]
+  activities                     ActivityEvent[]
+  helpRequests                   HelpRequest[]
+  vendorDetail                   VendorDetail?
+  tacticDetail                   TacticDetail?
+  trainingDetail                 TrainingDetail?
+  createdByUserId                Int?
+  createdBy                      User?                     @relation("ProjectCreator", fields: [createdByUserId], references: [id])
+  userMemberships                ProjectMembership[]
+  updates                        ProjectUpdate[]
+}
+
+model ProjectMembership {
+  userId    Int
+  projectId Int
+  role      ProjectMembershipRole @default(CONTRIBUTOR)
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+}
+
+model VendorDetail {
+  id                      Int     @id @default(autoincrement())
+  projectId               Int     @unique
+  project                 Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendorName              String
+  productName             String
+  productUrl              String?
+  commercialAvailability  String?
+  estimatedUnitCost       Float?
+  estimatedTotalCost      Float?
+  procurementStatus       String?
+  evaluationStatus        String?
+  quantityEvaluated       Int?
+  evaluationObjective     String?
+  integrationRequirements String?
+  sustainmentNotes        String?
+  evaluationResult        String?
+  recommendation          String?
+}
+
+model TacticDetail {
+  id                     Int     @id @default(autoincrement())
+  projectId              Int     @unique
+  project                Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  techniqueTitle         String
+  techniqueDescription   String
+  conditionsForUse       String?
+  preconditions          String?
+  requiredEquipment      String?
+  requiredTraining       String?
+  demonstratedEffect     String?
+  limitations            String?
+  validationEvent        String?
+  applicableEnvironments String?
+  recommendation         String?
+}
+
+model TrainingDetail {
+  id                 Int     @id @default(autoincrement())
+  projectId          Int     @unique
+  project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trainingObjective  String
+  intendedAudience   String
+  prerequisites      String?
+  trainingMethod     String?
+  trainingMaterials  String?
+  validationMethod   String?
+  observedEffect     String?
+  recurringFrequency String?
+}
+
+model ProblemProject {
+  problemId Int
+  projectId Int
+  isPrimary Boolean @default(false)
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, projectId])
+}
+
+model ProjectUnit {
+  projectId Int
+  unitId    Int
+  role      String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  unit      Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, unitId])
+}
+
+model ProblemUnit {
+  problemId    Int
+  unitId       Int
+  relationship String
+  problem      Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  unit         Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, unitId])
+}
+
+model Tag {
+  id       Int          @id @default(autoincrement())
+  name     String       @unique
+  problems ProblemTag[]
+  projects ProjectTag[]
+  units    UnitTag[]
+  lessons  LessonTag[]
+}
+
+model ProblemTag {
+  problemId Int
+  tagId     Int
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, tagId])
+}
+
+model ProjectTag {
+  projectId Int
+  tagId     Int
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tagId])
+}
+
+model UnitTag {
+  unitId Int
+  tagId  Int
+  unit   Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([unitId, tagId])
+}
+
+model LessonTag {
+  lessonId Int
+  tagId    Int
+  lesson   LessonLearned @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  tag      Tag           @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, tagId])
+}
+
+model ProblemLocation {
+  problemId  Int
+  locationId Int
+  problem    Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, locationId])
+}
+
+model ProjectLocation {
+  projectId  Int
+  locationId Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, locationId])
+}
+
+model ProjectPhase {
+  id               Int              @id @default(autoincrement())
+  projectId        Int
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseName        String
+  objective        String
+  status           String
+  completion       Int
+  executiveSummary String
+  technicalSummary String
+  result           String?
+  accomplishment   String?
+  blocker          String?
+  risk             String?
+  nextAction       String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  sortOrder        Int
+  lessons          LessonLearned[]
+  updates          ProjectUpdate[]
+  repositories     RepositoryLink[]
+  createdByUserId  Int?
+}
+
+model ProjectUpdate {
+  id                        Int             @id @default(autoincrement())
+  projectId                 Int
+  project                   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId                  Int
+  author                    User            @relation(fields: [authorId], references: [id])
+  phaseId                   Int?
+  phase                     ProjectPhase?   @relation(fields: [phaseId], references: [id])
+  occurredAt                DateTime
+  summary                   String
+  result                    String
+  nextStep                  String
+  blockerRisk               String?
+  statusAfter               String?
+  maturityAfter             String?
+  completionAfter           Int?
+  maturityEvidenceEvent     String?
+  maturityEvidenceDate      DateTime?
+  maturityEvidenceReference String?
+  lessons                   LessonLearned[]
+  createdAt                 DateTime        @default(now())
+  activity                  ActivityEvent?
+
+  @@index([projectId, occurredAt])
+}
+
+model LessonLearned {
+  id              Int            @id @default(autoincrement())
+  trackingId      String         @unique
+  title           String
+  finding         String
+  recommendation  String
+  lessonType      LessonType     @default(CONFIRMED_FINDING)
+  date            DateTime
+  projectId       Int
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phaseId         Int?
+  phase           ProjectPhase?  @relation(fields: [phaseId], references: [id])
+  unitId          Int?
+  unit            Unit?          @relation(fields: [unitId], references: [id])
+  tags            LessonTag[]
+  createdByUserId Int?
+  createdBy       User?          @relation("LessonAuthor", fields: [createdByUserId], references: [id])
+  sourceUpdateId  Int?
+  sourceUpdate    ProjectUpdate? @relation(fields: [sourceUpdateId], references: [id])
+  knowledgeStatus String         @default("ACTIVE")
+}
+
+model RepositoryLink {
+  id                        Int                       @id @default(autoincrement())
+  projectId                 Int
+  project                   Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                      String
+  url                       String
+  description               String
+  artifactType              String?
+  documentationAvailability DocumentationAvailability @default(EXTERNAL_REFERENCE)
+  includeInAiHandoff        Boolean                   @default(true)
+  createdByUserId           Int?
+  phaseId                   Int?
+  phase                     ProjectPhase?             @relation(fields: [phaseId], references: [id])
+  accessInstructions        String?
+}
+
+model ActivityEvent {
+  id              Int            @id @default(autoincrement())
+  timestamp       DateTime       @default(now())
+  eventType       String
+  description     String
+  actor           String?
+  problemId       Int?
+  problem         Problem?       @relation(fields: [problemId], references: [id])
+  projectId       Int?
+  project         Project?       @relation(fields: [projectId], references: [id])
+  unitId          Int?
+  unit            Unit?          @relation(fields: [unitId], references: [id])
+  userId          Int?
+  user            User?          @relation("ActivityActor", fields: [userId], references: [id])
+  subjectUserId   Int?
+  subjectUser     User?          @relation("ActivitySubject", fields: [subjectUserId], references: [id])
+  projectUpdateId Int?           @unique
+  projectUpdate   ProjectUpdate? @relation(fields: [projectUpdateId], references: [id], onDelete: SetNull)
+  entityType      String?
+  entityId        String?
+  entityHref      String?
+}
+
+model HelpRequest {
+  id                 Int                 @id @default(autoincrement())
+  projectId          Int
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title              String
+  category           HelpRequestCategory @default(OTHER)
+  description        String
+  contact            String?
+  contactUserId      Int?
+  contactUser        User?               @relation("HelpRequestContact", fields: [contactUserId], references: [id])
+  followsProjectLead Boolean             @default(true)
+  status             HelpRequestStatus   @default(OPEN)
+  createdAt          DateTime            @default(now())
+  createdByUserId    Int
+  createdBy          User                @relation("HelpRequestCreator", fields: [createdByUserId], references: [id])
+  resolutionSummary  String?
+  resolvedAt         DateTime?
+  resolvedByUserId   Int?
+  resolvedBy         User?               @relation("HelpRequestResolver", fields: [resolvedByUserId], references: [id])
+
+  @@index([status, category])
+  @@index([projectId, createdAt])
+}

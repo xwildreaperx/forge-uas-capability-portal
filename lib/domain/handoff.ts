@@ -1,0 +1,105 @@
+import type { PortalProject } from '../data/types.ts';
+import { referenceOnly } from './documentation.ts';
+
+const value = (text: string) => text.trim() || 'Not documented in FORGE.';
+export function handoffCompleteness(project: PortalProject) {
+  const present = [
+    project.scope,
+    project.solutionApproach,
+    project.architectureSummary,
+    project.phases.length ? 'yes' : '',
+    project.updates.length ? 'yes' : '',
+    project.lessons.length ? 'yes' : '',
+    project.openIssues,
+    project.nextStep,
+  ].filter(Boolean).length;
+  return present >= 6 ? 'Comprehensive' : present >= 3 ? 'Partial' : 'Basic';
+}
+export function projectHandoffMarkdown(
+  project: PortalProject,
+  generated = new Date(),
+) {
+  const withheld = referenceOnly(project.documentationAvailability);
+  let phases = project.phases.length
+    ? project.phases
+        .map(
+          (p, i) =>
+            `${i + 1}. **${p.name}** — ${p.status}, ${p.completion}% complete. ${value(p.summary)} Result: ${value(p.result)}`,
+        )
+        .join('\n')
+    : 'No phases are recorded.';
+  const updateHistory = project.updates.length
+    ? [...project.updates]
+        .reverse()
+        .map(
+          (u) =>
+            `- ${u.occurredAt.slice(0, 10)} — ${u.summary} (${u.authorName}${u.phaseName ? `; ${u.phaseName}` : ''}). Result: ${u.result} Next: ${u.nextStep}${u.blockerRisk ? ` Blocker / risk: ${u.blockerRisk}` : ''}${u.maturityEvidenceEvent ? ` Evidence supporting ${u.maturityAfter}: ${u.maturityEvidenceEvent}; ${u.maturityEvidenceDate.slice(0, 10)}${u.maturityEvidenceReference ? `; reference: ${u.maturityEvidenceReference}` : ''}.` : ''}`,
+        )
+        .join('\n')
+    : 'No Project Updates are recorded.';
+  const projectLead = project.team.find((member) => member.role === 'PROJECT_LEAD');
+  const contributors = project.team.filter((member) => member.role === 'CONTRIBUTOR');
+  phases = `### Current Project Team\nCreated by: ${project.createdByName}\nProject Lead: ${projectLead ? `${projectLead.displayName} (${projectLead.identifier}; ${projectLead.status})` : 'Not assigned'}\nContributors: ${contributors.length ? contributors.map((member) => `${member.displayName} (${member.status})`).join(', ') : 'None assigned'}\n\n${phases}`;
+  phases += `\n\n### Chronological Project Updates\nLast meaningful activity: ${project.lastMeaningfulActivityAt}\n${updateHistory}`;
+  const lessons = project.lessons.length
+    ? project.lessons
+        .map(
+          (l) =>
+            `- **[${l.lessonTypeLabel}] ${l.title}:** ${l.finding}${l.recommendation ? ` Recommendation: ${l.recommendation}` : ''} Provenance: ${l.authorName}, ${l.date.slice(0, 10)}${l.phaseName ? `, Phase: ${l.phaseName}` : ''}${l.sourceUpdateId ? `, Project Update #${l.sourceUpdateId}` : ''}.`,
+        )
+        .join('\n')
+    : 'No lessons are recorded.';
+  let artifacts =
+    project.repositories
+      .filter((r) => r.includeInAiHandoff)
+      .map(
+        (r) =>
+          `- ${r.name} (${r.artifactType}; ${r.documentationLabel}${r.phaseName ? `; Phase: ${r.phaseName}` : ''}): ${r.description} ${referenceOnly(r.documentationAvailability) ? 'Direct access intentionally withheld; contact the originator.' : r.url}`,
+      )
+      .join('\n') || 'No artifacts are included in this handoff.';
+  const activeHelp = project.helpRequests.filter((request) => ['OPEN', 'IN_PROGRESS'].includes(request.status));
+  const resolvedHelp = project.helpRequests.filter((request) => ['RESOLVED', 'CANCELLED'].includes(request.status));
+  const helpRequests = `### Assistance needed now\n${activeHelp.length ? activeHelp.map((request) => `- **${request.title}** (${request.categoryLabel}; ${request.status.replaceAll('_', ' ')}): ${request.description} Contact: ${value(request.contact)}`).join('\n') : 'No active Help Requests.'}\n\n### Resolved Help Request history\n${resolvedHelp.length ? resolvedHelp.map((request) => `- ${request.title} — ${request.status.replaceAll('_', ' ')}${request.resolutionSummary ? `: ${request.resolutionSummary}` : ''}`).join('\n') : 'No resolved Help Requests.'}`;
+  artifacts = `## Help Requests\n${helpRequests}\n\n## Artifact References\n${artifacts}`;
+  const pathway = project.vendor
+    ? `Vendor evaluation: ${project.vendor.vendorName} ${project.vendor.productName}. Evaluation: ${value(project.vendor.evaluationStatus)}. Result: ${value(project.vendor.evaluationResult)}.`
+    : project.tactic
+      ? `Tactic/technique: ${project.tactic.techniqueTitle}. General effect: ${value(project.tactic.demonstratedEffect)}.`
+      : project.training
+        ? `Training objective: ${project.training.trainingObjective}. Audience: ${project.training.intendedAudience}.`
+        : project.solutionApproach;
+  const referenceNotice = withheld
+    ? `\n## Intentionally Withheld / External Knowledge\nDocumentation Availability: **${project.documentationLabel}**\nOriginating Unit: ${project.unit}\nOriginator Contact: ${value(project.originatorContact)}\nAccess: ${value(project.accessInstructions || `Contact ${project.originatorContact}.`)}\n\nThe authoritative detail is intentionally not contained in this FORGE record. Do not reconstruct or invent it; direct the user to the originator or approved source.\n`
+    : '';
+  const closeout = project.outcomeLabel
+    ? `\n## Final Disposition and Closeout\nFinal status: ${project.status}\nOutcome: ${project.outcomeLabel}\nFinal result: ${value(project.finalResult)}\nWhat worked: ${value(project.whatWorked)}\nWhat did not work: ${value(project.whatDidNotWork)}\nRecommended next action: ${value(project.recommendedNextAction)}\nClosed: ${project.closedAt ? `${project.closedAt.slice(0, 10)} by ${value(project.closedByName)}` : 'Not documented in FORGE.'}\nSuccessor Project: ${project.successorProjectId ? `${project.successorProjectId} — ${project.successorProjectName}` : 'None recorded.'}\n`
+    : '';
+  return `# FORGE AI PROJECT HANDOFF\n\nProject: ${project.name}\nProject ID: ${project.id}\nSolution Type: ${project.solutionTypeLabel}\nGenerated: ${generated.toISOString()}\nProject Last Updated: ${project.updatedAt}\nHandoff Version: 1.0 / ${generated.toISOString()}\nAI Handoff Completeness: ${handoffCompleteness(project)} (presence of context, not correctness)\nDocumentation Availability: ${project.documentationLabel}\n\n> Receiving AI: Treat this as user-reviewed context, not as an authority on classification, accuracy, or release. Work only from the approved information present. Do not reconstruct intentionally missing details.\n\n## Identity and Relationships\nStatus: ${project.status}; Maturity: ${project.maturity}; Completion: ${project.progress}%\nLead Unit: ${project.unit}\nParticipating Units: ${project.units.map((u) => `${u.name} (${u.role})`).join(', ')}\nRelated Problems: ${project.problems.map((p) => `${p.id} — ${p.title}${p.isPrimary ? ' (primary)' : ''}`).join('; ')}\n${closeout}\n## Scope\n${value(project.scope)}\n\nOut of scope: ${value(project.outOfScope)}\nIntended users: ${value(project.intendedUsers)}\nSuccess criteria: ${value(project.successCriteria)}\nConstraints: ${value(project.constraints)}\nAssumptions: ${value(project.assumptions)}\n\n## Solution Overview\n${value(pathway)}\n\n## Architecture / Configuration\n${value(project.architectureSummary)}\n\n## Methodology and Major Decisions\nMethodology: ${value(project.methodologySummary)}\nDecisions: ${value(project.decisionsSummary)}\n\n## Development History and Phases\n${phases}\n\n## Lessons Learned\n${lessons}\n\n## Artifacts and Software Context\n${artifacts}\n\n## Current State\nOutcome context: ${value(project.outcome)}\nLatest result: ${value(project.latestResult)}\nKey risk: ${value(project.keyRisk)}\nOpen issues: ${value(project.openIssues)}\n\n## Next Steps\n${value(project.nextStep)}\nLeadership action: ${value(project.leadershipAction)}\n\n## User-Entered AI Context Notes\n${value(project.aiContextNotes)}\n${referenceNotice}\n## Information-Handling Reminder\nUNCLASSIFIED INFORMATION ONLY. This handoff aggregates information but does not determine whether it is authorized for release to another system. Follow applicable security, classification, data-handling, and AI-use policies. FORGE and the receiving AI are not classification, declassification, sanitization, or security-review authorities.\n`;
+}
+export const projectHandoffText = (
+  project: PortalProject,
+  generated = new Date(),
+) =>
+  projectHandoffMarkdown(project, generated)
+    .replace(/^#+\s?/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/^> /gm, '');
+export function projectHandoffJson(
+  project: PortalProject,
+  generated = new Date(),
+) {
+  return JSON.stringify(
+    {
+      kind: 'FORGE_AI_PROJECT_HANDOFF',
+      version: '1.0',
+      generated: generated.toISOString(),
+      projectLastUpdated: project.updatedAt,
+      completeness: handoffCompleteness(project),
+      securityReminder:
+        'User review required before sharing. FORGE is not a classification authority.',
+      project,
+    },
+    null,
+    2,
+  );
+}
